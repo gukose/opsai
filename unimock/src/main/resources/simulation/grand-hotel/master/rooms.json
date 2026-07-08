@@ -1,0 +1,8 @@
+{
+  "rooms": [
+    { "roomNumber": "101", "roomTypeCode": "STANDARD", "floorCode": "F1", "status": "VACANT", "isOutOfOrder": false },
+    { "roomNumber": "102", "roomTypeCode": "STANDARD", "floorCode": "F1", "status": "OCCUPIED", "isOutOfOrder": false },
+    { "roomNumber": "201", "roomTypeCode": "DELUXE", "floorCode": "F2", "status": "VACANT", "isOutOfOrder": false },
+    { "roomNumber": "202", "roomTypeCode": "DELUXE", "floorCode": "F2", "status": "VACANT", "isOutOfOrder": false }
+  ]
+}

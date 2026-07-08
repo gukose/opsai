@@ -1,0 +1,8 @@
+{
+  "departments": [
+    { "code": "FRONT_OFFICE", "name": "Front Office" },
+    { "code": "HOUSEKEEPING", "name": "Housekeeping" },
+    { "code": "MAINTENANCE", "name": "Maintenance" },
+    { "code": "FOOD_AND_BEVERAGE", "name": "Food and Beverage" }
+  ]
+}

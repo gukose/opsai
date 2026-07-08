@@ -1,0 +1,8 @@
+{
+  "roles": [
+    { "code": "FRONT_OFFICE_AGENT", "name": "Front Office Agent", "departmentCode": "FRONT_OFFICE", "permissionCodes": ["AUTH_VIEW"] },
+    { "code": "HOUSEKEEPER", "name": "Housekeeper", "departmentCode": "HOUSEKEEPING", "permissionCodes": ["TASK_VIEW", "TASK_UPDATE"] },
+    { "code": "MAINTENANCE_TECHNICIAN", "name": "Maintenance Technician", "departmentCode": "MAINTENANCE", "permissionCodes": ["TASK_VIEW", "TASK_UPDATE"] },
+    { "code": "SUPERVISOR", "name": "Supervisor", "departmentCode": "FRONT_OFFICE", "permissionCodes": ["AUTH_VIEW", "TASK_VIEW", "TASK_UPDATE"] }
+  ]
+}

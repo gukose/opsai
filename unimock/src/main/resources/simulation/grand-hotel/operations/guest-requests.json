@@ -1,0 +1,6 @@
+{
+  "guestRequests": [
+    { "requestId": "REQ-001", "roomNumber": "101", "description": "Need extra towels", "status": "OPEN" },
+    { "requestId": "REQ-002", "roomNumber": "102", "description": "Need a crib", "status": "OPEN" }
+  ]
+}

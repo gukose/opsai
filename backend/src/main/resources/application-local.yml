@@ -1,0 +1,15 @@
+ops:
+  ai:
+    database:
+      url: ${OPS_AI_DB_URL:jdbc:postgresql://localhost:5432/hotelopai}
+      username: ${OPS_AI_DB_USERNAME:hotelopai}
+      password: ${OPS_AI_DB_PASSWORD:hotelopai}
+      driver-class-name: ${OPS_AI_DB_DRIVER_CLASS_NAME:org.postgresql.Driver}
+      maximum-pool-size: ${OPS_AI_DB_MAXIMUM_POOL_SIZE:10}
+    unimock:
+      base-url: ${OPS_AI_UNIMOCK_BASE_URL:http://localhost:8090}
+    auth:
+      jwt:
+        secret: ${OPS_AI_AUTH_JWT_SECRET:hotel-opai-local-dev-secret-hotel-opai-local-dev-secret}
+      seed:
+        enabled: ${OPS_AI_AUTH_SEED_ENABLED:true}

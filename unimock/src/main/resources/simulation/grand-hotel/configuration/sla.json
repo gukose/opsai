@@ -1,0 +1,7 @@
+{
+  "slaRules": [
+    { "code": "NORMAL", "name": "Normal", "priority": "NORMAL", "responseMinutes": 30, "resolutionMinutes": 240 },
+    { "code": "URGENT", "name": "Urgent", "priority": "URGENT", "responseMinutes": 15, "resolutionMinutes": 120 },
+    { "code": "CRITICAL", "name": "Critical", "priority": "CRITICAL", "responseMinutes": 5, "resolutionMinutes": 60 }
+  ]
+}

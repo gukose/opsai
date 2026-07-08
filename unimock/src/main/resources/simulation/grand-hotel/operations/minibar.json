@@ -1,0 +1,6 @@
+{
+  "items": [
+    { "roomNumber": "101", "sku": "MINI-001", "name": "Water Bottle", "quantity": 4 },
+    { "roomNumber": "102", "sku": "MINI-002", "name": "Snack Bar", "quantity": 2 }
+  ]
+}

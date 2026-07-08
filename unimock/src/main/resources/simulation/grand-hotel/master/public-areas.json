@@ -1,0 +1,7 @@
+{
+  "publicAreas": [
+    { "code": "LOBBY", "name": "Lobby" },
+    { "code": "POOL", "name": "Pool Area" },
+    { "code": "RESTAURANT", "name": "Restaurant" }
+  ]
+}

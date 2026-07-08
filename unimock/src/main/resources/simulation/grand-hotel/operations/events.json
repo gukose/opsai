@@ -1,0 +1,6 @@
+{
+  "events": [
+    { "eventId": "EVT-001", "type": "CHECK_IN", "occurredAt": "2026-07-08T06:00:00Z" },
+    { "eventId": "EVT-002", "type": "ROOM_READY", "occurredAt": "2026-07-08T07:00:00Z" }
+  ]
+}

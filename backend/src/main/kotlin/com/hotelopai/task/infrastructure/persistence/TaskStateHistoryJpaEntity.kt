@@ -1,0 +1,39 @@
+package com.hotelopai.task.infrastructure.persistence
+
+import com.hotelopai.infrastructure.persistence.AuditedJpaEntity
+import com.hotelopai.task.domain.TaskStatus
+import com.hotelopai.task.domain.TaskTransition
+import jakarta.persistence.Column
+import jakarta.persistence.Entity
+import jakarta.persistence.EnumType
+import jakarta.persistence.Enumerated
+import jakarta.persistence.Table
+import java.util.UUID
+
+@Entity
+@Table(name = "task_state_history")
+class TaskStateHistoryJpaEntity : AuditedJpaEntity() {
+    @Column(name = "task_id", nullable = false, columnDefinition = "uuid")
+    var taskId: UUID? = null
+
+    @Column(name = "hotel_id", nullable = false, columnDefinition = "uuid")
+    var hotelId: UUID? = null
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "from_status")
+    var fromStatus: TaskStatus? = null
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "to_status", nullable = false)
+    var toStatus: TaskStatus = TaskStatus.CREATED
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "operation", nullable = false)
+    var operation: TaskTransition = TaskTransition.CREATE
+
+    @Column(name = "note")
+    var note: String? = null
+
+    @Column(name = "correlation_id")
+    var correlationId: String? = null
+}

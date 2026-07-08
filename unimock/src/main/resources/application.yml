@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: unimock
+  profiles:
+    default: local
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    create-schemas: true
+    default-schema: unimock
+    schemas:
+      - unimock
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+ops:
+  ai:
+    unimock:
+      seed:
+        path: ${OPS_AI_UNIMOCK_SEED_PATH:classpath:/simulation/grand-hotel}
+
+server:
+  port: ${SERVER_PORT:8090}

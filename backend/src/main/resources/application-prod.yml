@@ -1,0 +1,15 @@
+ops:
+  ai:
+    database:
+      url: ${OPS_AI_DB_URL}
+      username: ${OPS_AI_DB_USERNAME}
+      password: ${OPS_AI_DB_PASSWORD}
+      driver-class-name: ${OPS_AI_DB_DRIVER_CLASS_NAME:org.postgresql.Driver}
+      maximum-pool-size: ${OPS_AI_DB_MAXIMUM_POOL_SIZE:20}
+    unimock:
+      base-url: ${OPS_AI_UNIMOCK_BASE_URL}
+    auth:
+      jwt:
+        secret: ${OPS_AI_AUTH_JWT_SECRET}
+      seed:
+        enabled: false

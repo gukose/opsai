@@ -1,0 +1,8 @@
+{
+  "assets": [
+    { "assetId": "ASSET-101-A1", "roomNumber": "101", "name": "Television" },
+    { "assetId": "ASSET-101-A2", "roomNumber": "101", "name": "Air Conditioner" },
+    { "assetId": "ASSET-102-A1", "roomNumber": "102", "name": "Television" },
+    { "assetId": "ASSET-201-A1", "roomNumber": "201", "name": "Air Conditioner" }
+  ]
+}

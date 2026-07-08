@@ -1,0 +1,7 @@
+{
+  "roomStatuses": [
+    { "roomNumber": "101", "status": "OCCUPIED", "updatedAt": "2026-07-08T08:00:00Z" },
+    { "roomNumber": "102", "status": "OCCUPIED", "updatedAt": "2026-07-08T08:00:00Z" },
+    { "roomNumber": "201", "status": "VACANT", "updatedAt": "2026-07-08T08:00:00Z" }
+  ]
+}

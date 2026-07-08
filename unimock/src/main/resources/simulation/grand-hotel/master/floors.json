@@ -1,0 +1,6 @@
+{
+  "floors": [
+    { "code": "F1", "name": "First Floor" },
+    { "code": "F2", "name": "Second Floor" }
+  ]
+}

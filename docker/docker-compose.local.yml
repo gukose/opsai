@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hotel-opai-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: hotelopai
+      POSTGRES_USER: hotelopai
+      POSTGRES_PASSWORD: hotelopai
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

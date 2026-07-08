@@ -1,0 +1,7 @@
+{
+  "reservations": [
+    { "reservationId": "RES-101", "roomNumber": "101", "guestId": "GUEST-001", "status": "IN_HOUSE" },
+    { "reservationId": "RES-102", "roomNumber": "102", "guestId": "GUEST-002", "status": "IN_HOUSE" },
+    { "reservationId": "RES-201", "roomNumber": "201", "guestId": "GUEST-003", "status": "RESERVED" }
+  ]
+}

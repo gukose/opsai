@@ -1,0 +1,9 @@
+ops:
+  ai:
+    unimock:
+      database:
+        url: ${OPS_AI_UNIMOCK_DB_URL:jdbc:postgresql://localhost:5432/hotelopai}
+        username: ${OPS_AI_UNIMOCK_DB_USERNAME:hotelopai}
+        password: ${OPS_AI_UNIMOCK_DB_PASSWORD:hotelopai}
+        driver-class-name: ${OPS_AI_UNIMOCK_DB_DRIVER_CLASS_NAME:org.postgresql.Driver}
+        maximum-pool-size: ${OPS_AI_UNIMOCK_DB_MAXIMUM_POOL_SIZE:5}

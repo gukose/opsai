@@ -1,0 +1,7 @@
+{
+  "skills": [
+    { "code": "ROOM_CLEANING", "name": "Room Cleaning", "departmentCode": "HOUSEKEEPING" },
+    { "code": "HVAC_REPAIR", "name": "HVAC Repair", "departmentCode": "MAINTENANCE" },
+    { "code": "GUEST_RELATIONS", "name": "Guest Relations", "departmentCode": "FRONT_OFFICE" }
+  ]
+}

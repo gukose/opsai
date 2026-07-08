@@ -1,0 +1,7 @@
+{
+  "guests": [
+    { "guestId": "GUEST-001", "firstName": "Anna", "lastName": "Meyer" },
+    { "guestId": "GUEST-002", "firstName": "Ben", "lastName": "Schmidt" },
+    { "guestId": "GUEST-003", "firstName": "Clara", "lastName": "Weber" }
+  ]
+}

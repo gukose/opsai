@@ -1,0 +1,7 @@
+{
+  "issueTypes": [
+    { "code": "MAINTENANCE_AC", "name": "Air Conditioning Issue" },
+    { "code": "HOUSEKEEPING_CLEANING", "name": "Cleaning Request" },
+    { "code": "GUEST_REQUEST", "name": "Guest Request" }
+  ]
+}
