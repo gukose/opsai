@@ -23,7 +23,7 @@ class WebCorsConfigurationTest : PostgresIntegrationTestSupport() {
     @Test
     fun `preflight request from expo web origin is allowed`() {
         val request = HttpRequest.newBuilder()
-            .uri(URI.create("http://localhost:$port/api/assistant/conversations"))
+            .uri(URI.create("http://localhost:$port/api/v1/assistant/conversations"))
             .header("Origin", "http://localhost:8081")
             .header("Access-Control-Request-Method", "POST")
             .header("Access-Control-Request-Headers", "Content-Type,Authorization")

@@ -93,11 +93,11 @@ class AssistantConversationServiceTest {
     ): Fixtures {
         val conversationRepository = InMemoryConversationRepository()
         val taskConfirmationRepository = InMemoryTaskConfirmationRepository()
-        val taskLifecycleService = TaskLifecycleService(taskRepository)
+        val taskApplicationPort = TaskLifecycleService(taskRepository)
         val service = AssistantConversationService(
             conversationRepository = conversationRepository,
             stateMachine = ConversationStateMachine(),
-            taskLifecycleService = taskLifecycleService,
+            taskApplicationPort = taskApplicationPort,
             taskConfirmationRepository = taskConfirmationRepository
         )
 

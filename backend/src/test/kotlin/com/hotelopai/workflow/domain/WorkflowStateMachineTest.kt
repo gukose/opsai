@@ -1,7 +1,7 @@
 package com.hotelopai.workflow.domain
 
 import com.hotelopai.task.domain.TaskStatus
-import com.hotelopai.workflow.task.TaskWorkflowDefinition
+import com.hotelopai.task.domain.TaskWorkflowDefinition
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows

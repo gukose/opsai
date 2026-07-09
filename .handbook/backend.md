@@ -14,15 +14,19 @@ The backend is Kotlin with Spring Boot and PostgreSQL as the intended production
 
 ## Package Structure
 
-Use Clean Architecture boundaries:
+Use feature-first Clean Architecture boundaries. The canonical layout is defined in
+[Project Structure](project-structure.md) and the backend code must follow it:
 
-- `api` for controllers and DTOs
-- `application` for use cases and ports
-- `domain` for entities, value objects, and rules
-- `infrastructure` for repositories and external clients
-- `config` for bootstrapping and environment wiring
+- `assistant/api`, `assistant/application`, `assistant/domain`, `assistant/infrastructure`
+- `task/api`, `task/application`, `task/domain`, `task/infrastructure`
+- `workflow/domain` and `workflow/task` for workflow state definitions
+- `auth/api`, `auth/application`, `auth/domain`, `auth/infrastructure`
+- `hotel/application`, `hotel/domain`, `hotel/infrastructure`
+- `employee/application`, `employee/domain`, `employee/infrastructure`
+- `integration/openai` and `integration/unimock`
 - `shared` for cross-cutting business abstractions and shared kernel concepts
 - `common` for utilities, helpers, constants, and generic reusable code
+- `config` for bootstrapping and environment wiring
 
 ## Rules
 

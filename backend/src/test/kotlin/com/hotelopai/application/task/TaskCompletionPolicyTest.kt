@@ -1,13 +1,13 @@
 package com.hotelopai.task.application
 
-import com.hotelopai.integration.unimock.PmsMaintenanceUpdateRequest
-import com.hotelopai.integration.unimock.PmsUpdateResult
-import com.hotelopai.integration.unimock.UniMockClient
 import com.hotelopai.task.domain.Task
 import com.hotelopai.task.domain.TaskIntentType
 import com.hotelopai.task.domain.TaskPriority
 import com.hotelopai.task.domain.TaskSource
-import com.hotelopai.integration.unimock.UniMockClientException
+import com.hotelopai.shared.pms.MaintenanceCompletionPort
+import com.hotelopai.shared.pms.MaintenanceCompletionRequest
+import com.hotelopai.shared.pms.MaintenanceCompletionResult
+import com.hotelopai.shared.pms.PmsCompletionException
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
@@ -17,7 +17,7 @@ import java.util.UUID
 class TaskCompletionPolicyTest {
     @Test
     fun `maintenance task triggers PMS verification and returns verification id`() {
-        val client = RecordingUniMockClient()
+        val client = RecordingMaintenanceCompletionPort()
         val policy = TaskCompletionPolicy(client)
         val task = maintenanceTask()
 
@@ -31,7 +31,7 @@ class TaskCompletionPolicyTest {
 
     @Test
     fun `maintenance verification failures are wrapped`() {
-        val policy = TaskCompletionPolicy(FailingUniMockClient())
+        val policy = TaskCompletionPolicy(FailingMaintenanceCompletionPort())
         val task = maintenanceTask()
 
         assertThrows(TaskCompletionPolicyException::class.java) {
@@ -41,7 +41,7 @@ class TaskCompletionPolicyTest {
 
     @Test
     fun `non maintenance tasks do not require PMS verification`() {
-        val policy = TaskCompletionPolicy(RecordingUniMockClient())
+        val policy = TaskCompletionPolicy(RecordingMaintenanceCompletionPort())
         val task = Task.create(
             hotelId = UUID.fromString("018f6b7a-4f22-7caa-8f60-9e4b0f7f1003"),
             intentType = TaskIntentType.GUEST_REQUEST,
@@ -71,67 +71,25 @@ class TaskCompletionPolicyTest {
             createdAt = Instant.parse("2026-07-08T10:00:00Z")
         )
 
-    private class RecordingUniMockClient : UniMockClient {
-        val request: PmsMaintenanceUpdateRequest
+    private class RecordingMaintenanceCompletionPort : MaintenanceCompletionPort {
+        val request: MaintenanceCompletionRequest
             get() = lastRequest ?: error("no request recorded")
-        val result = PmsUpdateResult(
+        val result = MaintenanceCompletionResult(
             verificationLogId = UUID.fromString("018f6b7a-4f22-7caa-8f60-9e4b0f7f2001"),
             entityId = "101",
             operation = "maintenance",
             status = "success"
         )
-        private var lastRequest: PmsMaintenanceUpdateRequest? = null
+        private var lastRequest: MaintenanceCompletionRequest? = null
 
-        override fun updateMaintenance(request: PmsMaintenanceUpdateRequest): PmsUpdateResult {
+        override fun updateMaintenance(request: MaintenanceCompletionRequest): MaintenanceCompletionResult {
             lastRequest = request
             return result
         }
-
-        override fun getRoom(roomId: String) = null
-        override fun getRoomStatus(roomNumber: String) = null
-        override fun getRoomOccupancy(roomNumber: String) = null
-        override fun getRoomAssets(roomNumber: String) = emptyList<com.hotelopai.integration.unimock.PmsAsset>()
-        override fun listRooms() = emptyList<com.hotelopai.integration.unimock.PmsRoom>()
-        override fun getAsset(assetId: String) = null
-        override fun listIssueTypes() = emptyList<com.hotelopai.integration.unimock.PmsIssueType>()
-        override fun getGuestRequest(guestRequestId: String) = null
-        override fun updateGuestRequestStatus(
-            guestRequestId: String,
-            request: com.hotelopai.integration.unimock.PmsGuestRequestStatusUpdateRequest
-        ) = throw UnsupportedOperationException()
-
-        override fun updateRoomStatus(
-            roomNumber: String,
-            request: com.hotelopai.integration.unimock.PmsRoomStatusUpdateRequest
-        ) = throw UnsupportedOperationException()
-
-        override fun createEvent(request: com.hotelopai.integration.unimock.PmsEventCreateRequest) =
-            throw UnsupportedOperationException()
     }
 
-    private class FailingUniMockClient : UniMockClient {
-        override fun updateMaintenance(request: PmsMaintenanceUpdateRequest): PmsUpdateResult =
-            throw UniMockClientException("UniMock down")
-
-        override fun getRoom(roomId: String) = null
-        override fun getRoomStatus(roomNumber: String) = null
-        override fun getRoomOccupancy(roomNumber: String) = null
-        override fun getRoomAssets(roomNumber: String) = emptyList<com.hotelopai.integration.unimock.PmsAsset>()
-        override fun listRooms() = emptyList<com.hotelopai.integration.unimock.PmsRoom>()
-        override fun getAsset(assetId: String) = null
-        override fun listIssueTypes() = emptyList<com.hotelopai.integration.unimock.PmsIssueType>()
-        override fun getGuestRequest(guestRequestId: String) = null
-        override fun updateGuestRequestStatus(
-            guestRequestId: String,
-            request: com.hotelopai.integration.unimock.PmsGuestRequestStatusUpdateRequest
-        ) = throw UnsupportedOperationException()
-
-        override fun updateRoomStatus(
-            roomNumber: String,
-            request: com.hotelopai.integration.unimock.PmsRoomStatusUpdateRequest
-        ) = throw UnsupportedOperationException()
-
-        override fun createEvent(request: com.hotelopai.integration.unimock.PmsEventCreateRequest) =
-            throw UnsupportedOperationException()
+    private class FailingMaintenanceCompletionPort : MaintenanceCompletionPort {
+        override fun updateMaintenance(request: MaintenanceCompletionRequest): MaintenanceCompletionResult =
+            throw PmsCompletionException("UniMock down")
     }
 }

@@ -37,7 +37,7 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
         )
 
         val startResponse = post(
-            path = "/api/assistant/conversations",
+            path = "/api/v1/assistant/conversations",
             body = """{"hotelId":"${hotel.id}","userId":"user-1"}"""
         )
 
@@ -46,7 +46,7 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
         val conversationId = extractConversationId(startResponse.body())
 
         val messageResponse = post(
-            path = "/api/assistant/conversations/$conversationId/messages",
+            path = "/api/v1/assistant/conversations/$conversationId/messages",
             body = """{"text":"Room 101 AC not working","inputType":"TEXT"}"""
         )
 
@@ -57,7 +57,7 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
         assertContains(messageResponse.body(), """"roomNumber":"101"""")
 
         val confirmResponse = post(
-            path = "/api/assistant/conversations/$conversationId/confirm",
+            path = "/api/v1/assistant/conversations/$conversationId/confirm",
             body = """{"idempotencyKey":"confirm-101"}"""
         )
 
@@ -74,7 +74,7 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
         assertContains(taskResponse.body(), """"intentType":"MAINTENANCE"""")
 
         val resetResponse = post(
-            path = "/api/assistant/conversations/$conversationId/reset",
+            path = "/api/v1/assistant/conversations/$conversationId/reset",
             body = ""
         )
 
@@ -94,13 +94,13 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
 
         val conversationId = extractConversationId(
             post(
-                path = "/api/assistant/conversations",
+                path = "/api/v1/assistant/conversations",
                 body = """{"hotelId":"${hotel.id}","userId":"user-1"}"""
             ).body()
         )
 
         val imageResponse = post(
-            path = "/api/assistant/conversations/$conversationId/messages",
+            path = "/api/v1/assistant/conversations/$conversationId/messages",
             body = """
                 {
                   "text":"",
@@ -136,13 +136,13 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
 
         val conversationId = extractConversationId(
             post(
-                path = "/api/assistant/conversations",
+                path = "/api/v1/assistant/conversations",
                 body = """{"hotelId":"${hotel.id}","userId":"user-1"}"""
             ).body()
         )
 
         val messageResponse = post(
-            path = "/api/assistant/conversations/$conversationId/messages",
+            path = "/api/v1/assistant/conversations/$conversationId/messages",
             body = """{"text":"Guest needs towels","inputType":"TEXT"}"""
         )
 
