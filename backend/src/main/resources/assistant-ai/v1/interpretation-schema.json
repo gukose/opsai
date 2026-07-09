@@ -1,0 +1,129 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "promptVersion",
+    "schemaVersion",
+    "intentCode",
+    "confidence",
+    "detectedLanguage",
+    "extractedFields",
+    "missingRequiredFields",
+    "followUpQuestion",
+    "assistantMessage",
+    "taskPreviewCandidate",
+    "prioritySuggestion",
+    "slaPolicyKey",
+    "requiredSkillCode",
+    "departmentCode",
+    "pmsUpdateType",
+    "requiresPmsUpdate",
+    "providerName",
+    "providerModel"
+  ],
+  "properties": {
+    "promptVersion": { "type": "string" },
+    "schemaVersion": { "type": "integer" },
+    "intentCode": {
+      "type": "string",
+      "enum": [
+        "GUEST_REQUEST",
+        "MAINTENANCE",
+        "HOUSEKEEPING",
+        "DAMAGE_REPORT",
+        "LOST_AND_FOUND",
+        "TRAY_REMOVAL",
+        "LAUNDRY",
+        "MINIBAR",
+        "FLASH_TASK",
+        "SHIFT_HANDOVER",
+        "PUBLIC_AREA",
+        "INVENTORY",
+        "DELIVERIES",
+        "UNKNOWN"
+      ]
+    },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "detectedLanguage": { "type": ["string", "null"] },
+    "extractedFields": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "roomNumber",
+        "description",
+        "requestType"
+      ],
+      "properties": {
+        "roomNumber": { "type": ["string", "null"] },
+        "description": { "type": ["string", "null"] },
+        "requestType": { "type": ["string", "null"] }
+      }
+    },
+    "missingRequiredFields": {
+      "type": "array",
+      "items": { "type": ["string", "null"] }
+    },
+    "followUpQuestion": { "type": ["string", "null"] },
+    "assistantMessage": { "type": ["string", "null"] },
+    "taskPreviewCandidate": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": [
+        "intentCode",
+        "title",
+        "description",
+        "roomNumber",
+        "publicAreaId",
+        "assetId",
+        "assignedTeam",
+        "priority",
+        "slaMinutes",
+        "requiresPmsUpdate",
+        "requiredSkillCode",
+        "departmentCode",
+        "pmsUpdateType"
+      ],
+      "properties": {
+        "intentCode": {
+          "type": "string",
+          "enum": [
+            "GUEST_REQUEST",
+            "MAINTENANCE",
+            "HOUSEKEEPING",
+            "DAMAGE_REPORT",
+            "LOST_AND_FOUND",
+            "TRAY_REMOVAL",
+            "LAUNDRY",
+            "MINIBAR",
+            "FLASH_TASK",
+            "SHIFT_HANDOVER",
+            "PUBLIC_AREA",
+            "INVENTORY",
+            "DELIVERIES",
+            "UNKNOWN"
+          ]
+        },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "roomNumber": { "type": ["string", "null"] },
+        "publicAreaId": { "type": ["string", "null"] },
+        "assetId": { "type": ["string", "null"] },
+        "assignedTeam": { "type": ["string", "null"] },
+        "priority": { "type": ["string", "null"] },
+        "slaMinutes": { "type": ["integer", "null"] },
+        "requiresPmsUpdate": { "type": "boolean" },
+        "requiredSkillCode": { "type": ["string", "null"] },
+        "departmentCode": { "type": ["string", "null"] },
+        "pmsUpdateType": { "type": ["string", "null"] }
+      }
+    },
+    "prioritySuggestion": { "type": ["string", "null"] },
+    "slaPolicyKey": { "type": ["string", "null"] },
+    "requiredSkillCode": { "type": ["string", "null"] },
+    "departmentCode": { "type": ["string", "null"] },
+    "pmsUpdateType": { "type": ["string", "null"] },
+    "requiresPmsUpdate": { "type": "boolean" },
+    "providerName": { "type": ["string", "null"] },
+    "providerModel": { "type": ["string", "null"] }
+  }
+}

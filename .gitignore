@@ -46,3 +46,22 @@ node_modules/
 
 # Logs
 start.log
+
+# Local secrets
+.env
+.env.*
+.env.example
+!.env.example
+/scripts/.run/backend/backend.log
+/scripts/.run/backend/backend.pid
+/.gradle-local/wrapper/dists/gradle-9.5.1-bin/iq79hdu3mqx29lgffhp8bfmx/gradle-9.5.1-bin.zip.lck
+/.gradle-local/wrapper/dists/gradle-9.5.1-bin/iq79hdu3mqx29lgffhp8bfmx/gradle-9.5.1-bin.zip.part
+/scripts/.run/backend/mobile.log
+/scripts/.run/backend/mobile.pid
+/scripts/restart.sh
+/scripts/start.sh
+/scripts/status.sh
+/scripts/stop.sh
+/scripts/.run/backend/unimock.log
+/scripts/.run/backend/unimock.pid
+/scripts/apps.sh

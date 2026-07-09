@@ -13,3 +13,16 @@ ops:
         secret: ${OPS_AI_AUTH_JWT_SECRET:hotel-opai-test-secret-hotel-opai-test-secret}
       seed:
         enabled: ${OPS_AI_AUTH_SEED_ENABLED:true}
+
+assistant:
+  ai:
+    provider: ${ASSISTANT_AI_PROVIDER:deterministic}
+    fallback-enabled: ${ASSISTANT_AI_FALLBACK_ENABLED:true}
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com}
+      model: ${OPENAI_MODEL:}
+      request-timeout: ${OPENAI_REQUEST_TIMEOUT:PT5S}
+      max-output-tokens: ${OPENAI_MAX_OUTPUT_TOKENS:128}
+      temperature: ${OPENAI_TEMPERATURE:0.0}
+      retries: ${OPENAI_RETRIES:1}

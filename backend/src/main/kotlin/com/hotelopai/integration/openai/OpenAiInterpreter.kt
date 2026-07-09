@@ -3,12 +3,12 @@ package com.hotelopai.integration.openai
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.hotelopai.assistant.application.AiInterpreter
+import com.hotelopai.assistant.application.AssistantInterpretationRequest
+import com.hotelopai.assistant.application.AssistantPromptCatalog
 import com.hotelopai.assistant.application.ConversationInterpreterPromptBuilder
-import com.hotelopai.assistant.application.DeterministicConversationInterpreter
 import com.hotelopai.assistant.application.InterpretationResult
-import com.hotelopai.assistant.application.MockAiInterpreter
-import com.hotelopai.assistant.domain.Conversation
-import com.hotelopai.assistant.domain.IntentType
+import com.hotelopai.assistant.application.StructuredInterpretationPayload
+import com.hotelopai.assistant.application.StructuredInterpretationValidator
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.net.URI
@@ -20,57 +20,63 @@ import kotlin.math.min
 class OpenAiInterpreter(
     private val properties: OpenAiProperties,
     private val objectMapper: ObjectMapper,
-    private val fallbackInterpreter: MockAiInterpreter = MockAiInterpreter()
+    private val fallbackInterpreter: AiInterpreter? = null,
+    private val fallbackEnabled: Boolean = false,
+    private val validator: StructuredInterpretationValidator = StructuredInterpretationValidator()
 ) : AiInterpreter {
     private val logger = LoggerFactory.getLogger(OpenAiInterpreter::class.java)
     private val httpClient: HttpClient = HttpClient.newBuilder()
         .connectTimeout(properties.requestTimeout)
         .build()
-    private val schemaNode: JsonNode = objectMapper.readTree(INTERPRETATION_SCHEMA_JSON)
+    private val schemaNode: JsonNode = objectMapper.readTree(AssistantPromptCatalog.current.schemaJson)
 
-    override fun interpret(conversation: Conversation, userText: String): InterpretationResult {
-        if (properties.apiKey.isBlank()) {
-            logger.warn("OpenAI API key is missing; falling back to deterministic interpreter.")
-            return fallbackInterpreter.interpret(conversation, userText)
+    override fun interpret(request: AssistantInterpretationRequest): InterpretationResult {
+        val openAiResult = runCatching {
+            interpretWithOpenAi(request)
         }
 
-        return runCatching {
-            interpretWithOpenAi(conversation, userText)
-        }.getOrElse { error ->
-            logger.warn(
-                "OpenAI interpretation failed; falling back to deterministic interpreter. reason={}",
-                error.message
-            )
-            fallbackInterpreter.interpret(conversation, userText)
+        return openAiResult.getOrElse { exception ->
+            val failure = normalizeFailure(exception)
+            if (shouldFallback(failure)) {
+                return fallbackInterpretation(request, failure)
+            }
+
+            throw failure
         }
     }
 
     private fun interpretWithOpenAi(
-        conversation: Conversation,
-        userText: String
+        request: AssistantInterpretationRequest
     ): InterpretationResult {
-        val request = buildRequest(conversation, userText)
-        val response = executeWithRetry(request)
+        ensureConfigIsValid()
+        val httpRequest = buildRequest(request)
+        val response = executeWithRetry(httpRequest)
         val payload = parsePayload(response)
-        validatePayload(payload)
+        return validator.validate(payload)
+    }
 
-        return payload.toInterpretation()
+    private fun ensureConfigIsValid() {
+        if (properties.apiKey.isBlank()) {
+            throw OpenAiConfigurationException("OpenAI API key is missing")
+        }
+        if (properties.model.isBlank()) {
+            throw OpenAiConfigurationException("OpenAI model is missing")
+        }
     }
 
     private fun buildRequest(
-        conversation: Conversation,
-        userText: String
+        request: AssistantInterpretationRequest
     ): HttpRequest {
         val requestBody = OpenAiChatCompletionRequestDto(
             model = properties.model,
             messages = listOf(
                 OpenAiMessageDto(
                     role = "system",
-                    content = systemPrompt()
+                    content = AssistantPromptCatalog.current.systemPrompt
                 ),
                 OpenAiMessageDto(
                     role = "user",
-                    content = ConversationInterpreterPromptBuilder.build(conversation, userText)
+                    content = ConversationInterpreterPromptBuilder.build(request)
                 )
             ),
             responseFormat = OpenAiResponseFormatDto(
@@ -80,7 +86,7 @@ class OpenAiInterpreter(
                     schema = schemaNode
                 )
             ),
-            maxCompletionTokens = properties.maxCompletionTokens,
+            maxCompletionTokens = properties.maxOutputTokens,
             temperature = properties.temperature,
             store = false
         )
@@ -107,13 +113,24 @@ class OpenAiInterpreter(
                     return response
                 }
 
-                if (!shouldRetry(response.statusCode(), attempt, maxAttempts)) {
-                    throw IllegalStateException("OpenAI request failed with status ${response.statusCode()}: ${response.body()}")
+                val failure = failureForStatus(response.statusCode())
+                if (failure is OpenAiAuthenticationException) {
+                    throw failure
                 }
+
+                if (!shouldRetryStatus(response.statusCode(), attempt, maxAttempts)) {
+                    throw failure
+                }
+                lastFailure = failure
             } catch (exception: Exception) {
                 lastFailure = exception
-                if (!shouldRetry(exception, attempt, maxAttempts)) {
-                    throw exception
+                val failure = normalizeFailure(exception)
+                if (failure is OpenAiAuthenticationException) {
+                    throw failure
+                }
+
+                if (!shouldRetryException(failure, attempt, maxAttempts)) {
+                    throw failure
                 }
             }
 
@@ -121,66 +138,98 @@ class OpenAiInterpreter(
             attempt += 1
         }
 
-        throw lastFailure ?: IllegalStateException("OpenAI request failed")
+        throw normalizeFailure(lastFailure ?: IllegalStateException("OpenAI request failed"))
     }
 
-    private fun parsePayload(response: HttpResponse<String>): OpenAiInterpretationPayloadDto {
-        val responseJson = objectMapper.readTree(response.body())
+    private fun parsePayload(response: HttpResponse<String>): StructuredInterpretationPayload {
+        val body = response.body()
+        if (body.isBlank()) {
+            throw OpenAiMalformedResponseException("OpenAI returned an empty response")
+        }
+
+        val responseJson = objectMapper.readTree(body)
         val messageNode = responseJson.path("choices").path(0).path("message")
         val refusal = messageNode.path("refusal")
         if (!refusal.isMissingNode && !refusal.isNull && refusal.asText().isNotBlank()) {
-            throw IllegalStateException("OpenAI refused to produce an interpretation")
+            throw OpenAiMalformedResponseException("OpenAI refused to produce an interpretation")
         }
 
         val content = messageNode.path("content").takeIf { !it.isMissingNode && !it.isNull }?.asText()
-            ?: throw IllegalStateException("OpenAI response did not include content")
+            ?: throw OpenAiMalformedResponseException("OpenAI response did not include content")
 
-        val contentJson = objectMapper.readTree(content)
-        return objectMapper.treeToValue(contentJson, OpenAiInterpretationPayloadDto::class.java)
-    }
+        if (content.isBlank()) {
+            throw OpenAiMalformedResponseException("OpenAI response content was blank")
+        }
 
-    private fun validatePayload(payload: OpenAiInterpretationPayloadDto) {
-        require(payload.confidence in 0.0..1.0) { "confidence must be between 0 and 1" }
-        require(payload.intent.isNotBlank()) { "intent is required" }
-        payload.extractedFields.forEach { (key, value) ->
-            require(key.isNotBlank()) { "extracted field key must not be blank" }
-            require(value.isNotBlank()) { "extracted field value must not be blank" }
-        }
-        payload.missingFields.forEach {
-            require(it.isNotBlank()) { "missing field keys must not be blank" }
-        }
-        payload.followUpQuestion?.let {
-            require(it.isNotBlank()) { "followUpQuestion must not be blank when present" }
+        return try {
+            objectMapper.treeToValue(objectMapper.readTree(content), StructuredInterpretationPayload::class.java)
+        } catch (exception: Exception) {
+            throw OpenAiMalformedResponseException("OpenAI structured output was malformed", exception)
         }
     }
 
-    private fun OpenAiInterpretationPayloadDto.toInterpretation(): InterpretationResult =
-        InterpretationResult(
-            intent = IntentType.entries.firstOrNull { it.name == intent } ?: IntentType.UNKNOWN,
-            fields = extractedFields.filterValues { it.isNotBlank() },
-            confidence = confidence,
-            language = language?.takeIf { it.isNotBlank() },
-            followUpQuestion = followUpQuestion?.takeIf { it.isNotBlank() },
-            missingFields = missingFields.filter { it.isNotBlank() }
-        )
+    private fun normalizeFailure(exception: Throwable): RuntimeException =
+        when (exception) {
+            is RuntimeException -> exception
+            else -> OpenAiProviderException("OpenAI request failed", exception)
+        }
 
-    private fun shouldRetry(
+    private fun failureForStatus(statusCode: Int): RuntimeException =
+        when (statusCode) {
+            401, 403 -> OpenAiAuthenticationException("OpenAI authentication failed with status $statusCode")
+            429 -> OpenAiRateLimitException("OpenAI rate limit exceeded", statusCode = statusCode)
+            in 500..599 -> OpenAiTransientProviderException("OpenAI service returned $statusCode", statusCode = statusCode)
+            else -> OpenAiProviderException("OpenAI request failed with status $statusCode")
+        }
+
+    private fun shouldRetryStatus(
         statusCode: Int,
         attempt: Int,
         maxAttempts: Int
     ): Boolean =
-        attempt < maxAttempts && (statusCode == 429 || statusCode >= 500)
+        attempt < maxAttempts && (statusCode == 429 || statusCode in 500..599)
 
-    private fun shouldRetry(
-        exception: Exception,
+    private fun shouldRetryException(
+        failure: RuntimeException,
         attempt: Int,
         maxAttempts: Int
     ): Boolean =
-        attempt < maxAttempts && (
-            exception is IOException ||
-                exception is java.net.http.HttpTimeoutException ||
-                exception is InterruptedException
-            )
+        attempt < maxAttempts && when (failure) {
+            is OpenAiTransientProviderException,
+            is OpenAiRateLimitException,
+            is OpenAiMalformedResponseException -> false
+            is OpenAiAuthenticationException,
+            is OpenAiConfigurationException -> false
+            else -> failure.cause is IOException ||
+                failure.cause is java.net.http.HttpTimeoutException ||
+                failure.cause is InterruptedException ||
+                failure is OpenAiProviderException && failure !is OpenAiMalformedResponseException
+        }
+
+    private fun shouldFallback(failure: RuntimeException): Boolean =
+        fallbackEnabled &&
+            fallbackInterpreter != null &&
+            when (failure) {
+                is OpenAiAuthenticationException,
+                is OpenAiConfigurationException -> false
+                else -> true
+            }
+
+    private fun fallbackInterpretation(
+        request: AssistantInterpretationRequest,
+        failure: RuntimeException
+    ): InterpretationResult {
+        if (!fallbackEnabled || fallbackInterpreter == null) {
+            throw failure
+        }
+
+        logger.warn(
+            "OpenAI interpretation failed; falling back to deterministic interpreter. reason={}, fallbackEnabled={}",
+            failure::class.java.simpleName,
+            fallbackEnabled
+        )
+        return fallbackInterpreter.interpret(request)
+    }
 
     private fun sleepBackoff(attempt: Int) {
         if (attempt >= properties.retries) {
@@ -194,70 +243,28 @@ class OpenAiInterpreter(
             Thread.currentThread().interrupt()
         }
     }
-
-    private fun systemPrompt(): String = """
-        You are the Hotel OpAI conversation interpreter.
-        Analyze multilingual hotel operations requests and return only JSON that matches the schema.
-        Rules:
-        - Detect the most likely intent from the supported hotel operations list.
-        - Extract any room, description, asset, area, minibar, or other operational fields from the latest user message and current conversation context.
-        - If confidence is low, provide a follow-up question instead of inventing a task.
-        - Never create tasks.
-        - Preserve the user language in follow-up questions when possible.
-        - Return compact, valid JSON only.
-    """.trimIndent()
-
-    private companion object {
-        val INTERPRETATION_SCHEMA_JSON = """
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["intent", "confidence", "language", "extractedFields", "missingFields", "followUpQuestion"],
-          "properties": {
-            "intent": {
-              "type": "string",
-              "enum": [
-                "GUEST_REQUEST",
-                "MAINTENANCE",
-                "HOUSEKEEPING",
-                "DAMAGE_REPORT",
-                "LOST_AND_FOUND",
-                "TRAY_REMOVAL",
-                "LAUNDRY",
-                "MINIBAR",
-                "FLASH_TASK",
-                "SHIFT_HANDOVER",
-                "PUBLIC_AREA",
-                "INVENTORY",
-                "DELIVERIES",
-                "UNKNOWN"
-              ]
-            },
-            "confidence": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 1
-            },
-            "language": {
-              "type": ["string", "null"]
-            },
-            "extractedFields": {
-              "type": "object",
-              "additionalProperties": {
-                "type": "string"
-              }
-            },
-            "missingFields": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "followUpQuestion": {
-              "type": ["string", "null"]
-            }
-          }
-        }
-        """.trimIndent()
-    }
 }
+
+open class OpenAiProviderException(
+    message: String,
+    cause: Throwable? = null
+) : RuntimeException(message, cause)
+
+class OpenAiConfigurationException(message: String) : OpenAiProviderException(message)
+
+class OpenAiAuthenticationException(message: String) : OpenAiProviderException(message)
+
+class OpenAiRateLimitException(
+    message: String,
+    val statusCode: Int
+) : OpenAiProviderException(message)
+
+class OpenAiTransientProviderException(
+    message: String,
+    val statusCode: Int
+) : OpenAiProviderException(message)
+
+class OpenAiMalformedResponseException(
+    message: String,
+    cause: Throwable? = null
+) : OpenAiProviderException(message, cause)

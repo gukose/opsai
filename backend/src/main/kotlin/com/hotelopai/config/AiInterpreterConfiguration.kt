@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Primary
 
 @Configuration
-@EnableConfigurationProperties(AiInterpreterProperties::class)
+@EnableConfigurationProperties(AssistantAiProperties::class)
 class AiInterpreterConfiguration {
     @Bean
     fun mockAiInterpreter(): MockAiInterpreter = MockAiInterpreter()
@@ -19,17 +19,28 @@ class AiInterpreterConfiguration {
     @Bean
     @Primary
     fun aiInterpreter(
-        properties: AiInterpreterProperties,
+        properties: AssistantAiProperties,
         objectMapper: ObjectMapper,
         mockAiInterpreter: MockAiInterpreter
     ): AiInterpreter =
-        when (properties.mode) {
-            AiInterpreterProperties.Mode.MOCK -> mockAiInterpreter
-            AiInterpreterProperties.Mode.OPENAI -> OpenAiInterpreter(
-                properties = properties.openai,
-                objectMapper = objectMapper,
-                fallbackInterpreter = mockAiInterpreter
-            )
+        when (properties.normalizedProvider()) {
+            AssistantAiProperties.Provider.DETERMINISTIC -> mockAiInterpreter
+            AssistantAiProperties.Provider.OPENAI -> {
+                val openAiProperties = properties.openai
+                if (openAiProperties.apiKey.isBlank()) {
+                    throw IllegalStateException("OpenAI provider requires OPENAI_API_KEY")
+                }
+                if (openAiProperties.model.isBlank()) {
+                    throw IllegalStateException("OpenAI provider requires OPENAI_MODEL")
+                }
+
+                OpenAiInterpreter(
+                    properties = openAiProperties,
+                    objectMapper = objectMapper,
+                    fallbackInterpreter = if (properties.fallbackEnabled) mockAiInterpreter else null,
+                    fallbackEnabled = properties.fallbackEnabled
+                )
+            }
         }
 
     @Bean

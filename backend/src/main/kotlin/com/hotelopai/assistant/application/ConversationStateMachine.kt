@@ -55,7 +55,13 @@ class ConversationStateMachine(
             .addMessage(userMessage, now)
             .analyzing(now)
 
-        val interpretation = interpreter.interpret(withUserMessage, transcript.orEmpty())
+        val interpretation = runCatching {
+            interpreter.interpret(
+                AssistantInterpretationRequest.of(withUserMessage, transcript.orEmpty())
+            )
+        }.getOrElse { exception ->
+            return clarificationTurn(withUserMessage, exception.message, now)
+        }
 
         val draftId = withUserMessage.activeDraftId ?: newDraftId()
         val draftVersion = if (withUserMessage.activeDraftId == null) {
@@ -72,9 +78,11 @@ class ConversationStateMachine(
         }
         val selectedFlow = activeFlow ?: flowRegistry.resolve(interpretedFlowIntent)
 
+        val collectedFields = withUserMessage.collectedFields + interpretation.fields
+
         val interpreted = withUserMessage.withInterpretation(
             intent = selectedFlow?.intent ?: interpretedFlowIntent,
-            collectedFields = interpretation.fields,
+            collectedFields = collectedFields,
             draftId = draftId,
             draftVersion = draftVersion,
             now = now
@@ -83,14 +91,10 @@ class ConversationStateMachine(
         val lowConfidence = interpretation.confidence < confidenceThreshold
 
         if (selectedFlow == null || (activeFlow == null && lowConfidence)) {
-            return ConversationTurnResult(
-                interpreted
-                    .requireFollowUp(
-                        listOf(MissingField(FieldKeys.REQUEST_TYPE, "Request type")),
-                        flowRegistry.buildClarificationQuestion(interpretation.followUpQuestion),
-                        now
-                    )
-                    .waitForUserAnswer(now)
+            return clarificationTurn(
+                conversation = interpreted,
+                aiPrompt = interpretation.followUpQuestion,
+                now = now
             )
         }
 
@@ -187,4 +191,22 @@ class ConversationStateMachine(
 
     private fun newDraftId(): String =
         "draft-${java.util.UUID.randomUUID()}"
+
+    private fun clarificationTurn(
+        conversation: Conversation,
+        aiPrompt: String?,
+        now: Instant
+    ): ConversationTurnResult {
+        val question = flowRegistry.buildClarificationQuestion(aiPrompt)
+
+        return ConversationTurnResult(
+            conversation
+                .requireFollowUp(
+                    listOf(MissingField(FieldKeys.REQUEST_TYPE, "Request type")),
+                    question,
+                    now
+                )
+                .waitForUserAnswer(now)
+        )
+    }
 }

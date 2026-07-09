@@ -5,19 +5,22 @@ import com.hotelopai.assistant.domain.ConversationMessage
 
 object ConversationInterpreterPromptBuilder {
     fun build(conversation: Conversation, userText: String): String =
+        build(AssistantInterpretationRequest.of(conversation, userText))
+
+    fun build(request: AssistantInterpretationRequest): String =
         buildString {
             appendLine("Conversation context:")
-            appendLine("State: ${conversation.state}")
-            appendLine("Current intent: ${conversation.intent}")
-            appendLine("Collected fields: ${formatMap(conversation.collectedFields)}")
-            appendLine("Missing fields: ${formatMissingFields(conversation.missingFields)}")
-            appendLine(
-                "Pending question: ${conversation.followUpQuestion?.prompt ?: "none"}"
-            )
+            appendLine("Prompt version: ${request.promptVersion}")
+            appendLine("Schema version: ${request.schemaVersion}")
+            appendLine("State: ${request.conversation.state}")
+            appendLine("Current intent: ${request.conversation.intent}")
+            appendLine("Collected fields: ${formatMap(request.conversation.collectedFields)}")
+            appendLine("Missing fields: ${formatMissingFields(request.conversation.missingFields)}")
+            appendLine("Pending question: ${request.conversation.followUpQuestion?.prompt ?: "none"}")
             appendLine("Recent messages:")
-            appendLine(formatMessages(conversation.messages.takeLast(6)))
+            appendLine(formatMessages(request.conversation.messages.takeLast(6)))
             appendLine("Latest user message:")
-            appendLine(userText.trim())
+            appendLine(request.userText.trim())
         }
 
     private fun formatMessages(messages: List<ConversationMessage>): String =

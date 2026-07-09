@@ -1,20 +1,16 @@
 package com.hotelopai.integration.openai
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.databind.JsonNode
 
-@JsonIgnoreProperties(ignoreUnknown = true)
 data class OpenAiChatCompletionResponseDto(
     val choices: List<OpenAiChatCompletionChoiceDto> = emptyList()
 )
 
-@JsonIgnoreProperties(ignoreUnknown = true)
 data class OpenAiChatCompletionChoiceDto(
     val message: OpenAiChatCompletionMessageDto
 )
 
-@JsonIgnoreProperties(ignoreUnknown = true)
 data class OpenAiChatCompletionMessageDto(
     val content: String? = null,
     val refusal: String? = null
@@ -46,14 +42,4 @@ data class OpenAiJsonSchemaDto(
     val name: String,
     val strict: Boolean = true,
     val schema: JsonNode
-)
-
-@JsonIgnoreProperties(ignoreUnknown = true)
-data class OpenAiInterpretationPayloadDto(
-    val intent: String,
-    val confidence: Double,
-    val language: String? = null,
-    val extractedFields: Map<String, String> = emptyMap(),
-    val missingFields: List<String> = emptyList(),
-    val followUpQuestion: String? = null
 )
