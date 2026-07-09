@@ -72,6 +72,15 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
         assertContains(confirmResponse.body(), """"createdTaskId":"$createdTaskId"""")
         assertContains(confirmResponse.body(), "Task ID: $createdTaskId")
 
+        val duplicateConfirmResponse = post(
+            path = "/api/v1/assistant/conversations/$conversationId/confirm",
+            body = """{"idempotencyKey":"confirm-101"}""",
+            bearerToken = accessToken
+        )
+
+        assertEquals(200, duplicateConfirmResponse.statusCode())
+        assertContains(duplicateConfirmResponse.body(), """"createdTaskId":"$createdTaskId"""")
+
         val taskResponse = get("/api/v1/tasks/$createdTaskId", accessToken)
         assertEquals(200, taskResponse.statusCode())
         assertContains(taskResponse.body(), """"id":"$createdTaskId"""")

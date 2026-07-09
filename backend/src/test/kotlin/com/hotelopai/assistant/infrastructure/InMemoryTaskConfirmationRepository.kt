@@ -2,10 +2,8 @@ package com.hotelopai.assistant.infrastructure
 
 import com.hotelopai.assistant.application.TaskConfirmationRecord
 import com.hotelopai.assistant.application.TaskConfirmationRepository
-import org.springframework.stereotype.Repository
 import java.util.concurrent.ConcurrentHashMap
 
-@Repository
 class InMemoryTaskConfirmationRepository : TaskConfirmationRepository {
     private val records = ConcurrentHashMap<String, TaskConfirmationRecord>()
 
