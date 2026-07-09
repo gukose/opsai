@@ -45,7 +45,12 @@ node_modules/
 **/node_modules/
 
 # Logs
+*.log
 start.log
+
+# Expo local state
+.expo/
+**/.expo/
 
 # Local secrets
 .env

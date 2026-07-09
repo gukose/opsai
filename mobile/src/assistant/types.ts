@@ -74,6 +74,7 @@ export type TaskPreviewMessage = {
   id: string;
   type: "taskPreview";
   task: {
+    intent: string;
     type: string;
     room: string;
     description: string;

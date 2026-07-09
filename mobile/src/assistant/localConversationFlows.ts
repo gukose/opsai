@@ -113,6 +113,7 @@ export const localConversationFlows: LocalConversationFlow[] = [
       };
     },
     buildPreview: (fields) => ({
+      intent: "Guest Request",
       type: "Guest Request",
       room: fields.roomNumber ?? "",
       description: fields.description ?? "",
@@ -217,6 +218,7 @@ export const localConversationFlows: LocalConversationFlow[] = [
       };
     },
     buildPreview: (fields) => ({
+      intent: "Maintenance",
       type: "Maintenance",
       room: fields.roomNumber ?? "",
       description: fields.description ?? "",

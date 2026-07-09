@@ -76,6 +76,7 @@ export const assistantConversation: ConversationItem[] = [
     id: "preview",
     type: "taskPreview",
     task: {
+      intent: "Guest Request",
       type: "Guest Request",
       room: "101",
       description: "AC not working",

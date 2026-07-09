@@ -1,7 +1,12 @@
 import { CurrentUserSnapshot } from "../session/sessionTypes";
 import { HttpAssistantApi } from "../api/assistant/AssistantApi";
 import { ApiClient } from "../api/client/ApiClient";
-import { mapAssistantConversationResponseToHomeState } from "../api/assistant/assistantMapper";
+import { AppApiError } from "../api/client/AppApiError";
+import {
+  assistantInterpretationFailureMessage,
+  isAssistantInterpretationFailureResponse,
+  mapAssistantConversationResponseToHomeState
+} from "../api/assistant/assistantMapper";
 import { AssistantDataSource } from "./assistantDataSource";
 import { AssistantHomeState } from "./homeState";
 
@@ -34,6 +39,7 @@ export class BackendAssistantDataSource implements AssistantDataSource {
       inputType: "TEXT",
       attachmentIds: []
     });
+    throwIfInterpretationFailed(response);
     return mapAssistantConversationResponseToHomeState(response);
   }
 
@@ -54,6 +60,7 @@ export class BackendAssistantDataSource implements AssistantDataSource {
       inputType: "VOICE",
       attachmentIds: []
     });
+    throwIfInterpretationFailed(response);
     return mapAssistantConversationResponseToHomeState(response);
   }
 
@@ -71,4 +78,16 @@ export class BackendAssistantDataSource implements AssistantDataSource {
 
     return mapAssistantConversationResponseToHomeState(response);
   }
+}
+
+function throwIfInterpretationFailed(
+  response: Parameters<typeof mapAssistantConversationResponseToHomeState>[0]
+) {
+  if (!isAssistantInterpretationFailureResponse(response)) {
+    return;
+  }
+
+  throw new AppApiError(assistantInterpretationFailureMessage(response), {
+    kind: "unknown"
+  });
 }

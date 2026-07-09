@@ -1,17 +1,52 @@
-import {
+import type {
   ActionQuestion,
   ConversationItem,
   ConversationAttachment,
   TaskPreviewMessage
 } from "../../assistant/types";
-import {
+import type {
   AssistantConversationResponseDto,
   AssistantConversationMessageDto,
   AssistantFollowUpQuestionDto,
   AssistantMessageAttachmentDto,
   AssistantTaskPreviewDto
 } from "./AssistantDtos";
-import { AssistantHomeState } from "../../assistant/homeState";
+import type { AssistantHomeState } from "../../assistant/homeState";
+
+const OPENAI_FAILURE_MARKERS = [
+  "openai request failed",
+  "openai authentication failed",
+  "openai rate limit exceeded",
+  "openai service returned",
+  "openai returned an empty response",
+  "openai refused to produce an interpretation",
+  "openai response did not include content",
+  "openai response content was blank",
+  "openai structured output was malformed",
+  "openai api key is missing",
+  "openai model is missing"
+];
+
+export function isAssistantInterpretationFailureResponse(
+  response: AssistantConversationResponseDto
+): boolean {
+  const assistantMessage = response.assistantMessage.trim().toLowerCase();
+
+  return (
+    response.intent === "UNKNOWN" &&
+    response.taskPreview == null &&
+    OPENAI_FAILURE_MARKERS.some((marker) => assistantMessage.includes(marker))
+  );
+}
+
+export function assistantInterpretationFailureMessage(
+  response: AssistantConversationResponseDto
+): string {
+  const details = response.assistantMessage.trim();
+  return details
+    ? `OpenAI interpretation failed. ${details}`
+    : "OpenAI interpretation failed. The task was not created.";
+}
 
 export function mapAssistantConversationResponseToHomeState(
   response: AssistantConversationResponseDto
@@ -64,7 +99,7 @@ function mapConversationItems(
     items.push({
       id: `task-preview-${response.conversationId}`,
       type: "taskPreview",
-      task: mapTaskPreview(response.taskPreview)
+      task: mapTaskPreview(response.taskPreview, response.intent)
     });
   }
 
@@ -153,8 +188,12 @@ function mapFollowUpQuestion(
   };
 }
 
-function mapTaskPreview(preview: AssistantTaskPreviewDto): TaskPreviewMessage["task"] {
+function mapTaskPreview(
+  preview: AssistantTaskPreviewDto,
+  intent: string
+): TaskPreviewMessage["task"] {
   return {
+    intent: intent && intent !== "UNKNOWN" ? humanize(intent) : "Pending",
     type: preview.title || humanize(preview.type),
     room:
       preview.roomNumber ||

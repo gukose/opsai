@@ -14,6 +14,7 @@ export function TaskPreview({ task, onCancel, onCreateTask, disabled }: TaskPrev
   return (
     <View style={styles.card}>
       <Text style={styles.title}>Task Preview</Text>
+      <PreviewRow label="Intent" value={task.intent} />
       <PreviewRow label="Type" value={task.type} />
       <PreviewRow label="Room" value={task.room} />
       <PreviewRow label="Description" value={task.description} />
