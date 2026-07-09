@@ -10,13 +10,15 @@ type AssistantCardProps = {
   onQuestionActionPress?: (action: ActionQuestion["actions"][number]) => void;
   onTaskPreviewCancel?: () => void;
   onTaskPreviewCreate?: () => void;
+  isActionDisabled?: boolean;
 };
 
 export function AssistantCard({
   items,
   onQuestionActionPress,
   onTaskPreviewCancel,
-  onTaskPreviewCreate
+  onTaskPreviewCreate,
+  isActionDisabled
 }: AssistantCardProps) {
   return (
     <View style={styles.card}>
@@ -38,6 +40,7 @@ export function AssistantCard({
         onQuestionActionPress={onQuestionActionPress}
         onTaskPreviewCancel={onTaskPreviewCancel}
         onTaskPreviewCreate={onTaskPreviewCreate}
+        isActionDisabled={isActionDisabled}
       />
     </View>
   );

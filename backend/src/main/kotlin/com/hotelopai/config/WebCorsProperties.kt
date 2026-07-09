@@ -19,7 +19,8 @@ data class WebCorsProperties(
     ),
     val allowedHeaders: List<String> = listOf(
         "Authorization",
-        "Content-Type"
+        "Content-Type",
+        "X-Correlation-Id"
     ),
     val maxAge: Duration = Duration.ofHours(1)
 )

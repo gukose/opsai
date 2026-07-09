@@ -64,6 +64,7 @@ class TaskPersistenceRepositoryIntegrationTest : PostgresIntegrationTestSupport(
             source = TaskSource.MANUAL,
             title = "AC not working",
             description = "Room 101 AC not working",
+            roomNumber = "101",
             priority = TaskPriority.HIGH,
             slaDeadline = Instant.parse("2026-07-08T12:00:00Z"),
             createdAt = Instant.parse("2026-07-08T10:00:00Z")
@@ -74,6 +75,7 @@ class TaskPersistenceRepositoryIntegrationTest : PostgresIntegrationTestSupport(
         assertThat(saved).isEqualTo(task)
         assertThat(saved.id.version()).isEqualTo(7)
         assertThat(taskRepository.findById(saved.id)).isEqualTo(saved)
+        assertThat(taskRepository.findById(saved.id)?.roomNumber).isEqualTo("101")
         assertThat(taskRepository.findAll()).contains(saved)
     }
 
@@ -87,6 +89,7 @@ class TaskPersistenceRepositoryIntegrationTest : PostgresIntegrationTestSupport(
                 source = TaskSource.ASSISTANT,
                 title = "AC not working",
                 description = "Room 101 AC not working",
+                roomNumber = "101",
                 priority = TaskPriority.HIGH,
                 slaDeadline = Instant.parse("2026-07-08T13:00:00Z")
             ),
@@ -124,6 +127,7 @@ class TaskPersistenceRepositoryIntegrationTest : PostgresIntegrationTestSupport(
                     source = TaskSource.MANUAL,
                     title = "Need towels",
                     description = "Guest needs towels",
+                    roomNumber = null,
                     priority = TaskPriority.MEDIUM,
                     slaDeadline = Instant.parse("2026-07-08T13:00:00Z")
                 ),
@@ -187,6 +191,7 @@ class TaskPersistenceRepositoryIntegrationTest : PostgresIntegrationTestSupport(
                         source = TaskSource.MANUAL,
                         title = "Broken AC",
                         description = "Room 404 AC not working",
+                        roomNumber = "404",
                         priority = TaskPriority.HIGH,
                         slaDeadline = Instant.parse("2026-07-08T12:00:00Z"),
                         createdAt = Instant.parse("2026-07-08T10:00:00Z")
@@ -240,6 +245,7 @@ class TaskPersistenceRepositoryIntegrationTest : PostgresIntegrationTestSupport(
                 source = TaskSource.MANUAL,
                 title = "Clean room",
                 description = "Room 202 needs cleaning",
+                roomNumber = "202",
                 priority = TaskPriority.MEDIUM,
                 slaDeadline = Instant.parse("2026-07-08T09:00:00Z"),
                 createdAt = Instant.parse("2026-07-08T08:00:00Z")

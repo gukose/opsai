@@ -1,14 +1,32 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Clock3, Play, ShoppingBasket } from "lucide-react-native";
+import { ArrowRight, Clock3, Play, RotateCcw, ShoppingBasket } from "lucide-react-native";
 
-import { AssignedTask } from "../../assistant/types";
 import { colors, radius, shadow, typography } from "../../theme/tokens";
+import { formatSlaCountdown } from "../../tasks/formatters";
+import { TaskSummary } from "../../tasks/types";
+import { getHomeTaskPresentation } from "../../tasks/taskBoardSelectors";
 
 type NextTaskCardProps = {
-  task: AssignedTask;
+  task: TaskSummary;
+  isActionInProgress?: boolean;
+  onStartTask?: () => void;
+  onResumeTask?: () => void;
+  onContinueTask?: () => void;
 };
 
-export function NextTaskCard({ task }: NextTaskCardProps) {
+export function NextTaskCard({
+  task,
+  isActionInProgress,
+  onStartTask,
+  onResumeTask,
+  onContinueTask
+}: NextTaskCardProps) {
+  const presentation = getHomeTaskPresentation(task);
+  const action = getActionForTask(task.status);
+  const actionHandler =
+    action === "start" ? onStartTask : action === "resume" ? onResumeTask : onContinueTask;
+  const actionLabel = presentation?.actionLabel ?? "Open Task";
+
   return (
     <View style={styles.card}>
       <View style={styles.iconWell}>
@@ -16,11 +34,17 @@ export function NextTaskCard({ task }: NextTaskCardProps) {
       </View>
 
       <View style={styles.details}>
-        <Text style={styles.kicker}>NEXT TASK</Text>
+        <Text style={styles.kicker}>{presentation?.bannerLabel ?? "NEXT TASK"}</Text>
         <Text style={styles.title} numberOfLines={1}>
           {task.title}
         </Text>
-        <Text style={styles.room}>{task.room}</Text>
+
+        <View style={styles.statusRow}>
+          <Text style={styles.statusLabel}>Status</Text>
+          <Text style={styles.statusValue}>{presentation?.statusLabel ?? task.status}</Text>
+        </View>
+
+        <Text style={styles.room}>{task.roomOrLocation ?? "No room assigned"}</Text>
         <View style={styles.priorityRow}>
           <View style={styles.priorityDot} />
           <Text style={styles.priority}>{task.priority}</Text>
@@ -31,17 +55,50 @@ export function NextTaskCard({ task }: NextTaskCardProps) {
         <Text style={styles.slaLabel}>SLA REMAINING</Text>
         <View style={styles.slaTimeRow}>
           <Clock3 color={colors.green} size={13} strokeWidth={2.35} />
-          <Text style={styles.slaTime}>{task.slaRemaining}</Text>
+          <Text style={styles.slaTime}>{formatSlaCountdown(task.slaDeadline)}</Text>
         </View>
         <Text style={styles.remaining}>remaining</Text>
       </View>
 
-      <Pressable accessibilityRole="button" style={styles.startButton}>
-        <Play color="#ffffff" size={9} strokeWidth={2.4} fill="#ffffff" />
-        <Text style={styles.startLabel}>Start Task</Text>
-      </Pressable>
+      {actionHandler ? (
+        <Pressable
+          accessibilityRole="button"
+          disabled={isActionInProgress}
+          onPress={actionHandler}
+          style={({ pressed }) => [
+            styles.startButton,
+            pressed && !isActionInProgress ? styles.startButtonPressed : null,
+            isActionInProgress ? styles.startButtonDisabled : null
+          ]}
+        >
+          {action === "resume" ? (
+            <RotateCcw color="#ffffff" size={10} strokeWidth={2.4} />
+          ) : action === "continue" ? (
+            <ArrowRight color="#ffffff" size={10} strokeWidth={2.4} />
+          ) : (
+            <Play color="#ffffff" size={9} strokeWidth={2.4} fill="#ffffff" />
+          )}
+          <Text style={styles.startLabel}>{actionLabel}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
+}
+
+function getActionForTask(status: string): "start" | "resume" | "continue" | "none" {
+  switch (status.trim().toUpperCase()) {
+    case "CREATED":
+    case "ASSIGNED":
+    case "OVERDUE":
+      return "start";
+    case "WAITING":
+      return "resume";
+    case "STARTED":
+    case "IN_PROGRESS":
+      return "continue";
+    default:
+      return "none";
+  }
 }
 
 const styles = StyleSheet.create({
@@ -84,6 +141,22 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 11,
     fontWeight: "800"
+  },
+  statusRow: {
+    marginTop: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5
+  },
+  statusLabel: {
+    color: colors.textMuted,
+    fontSize: 8,
+    fontWeight: "800"
+  },
+  statusValue: {
+    color: colors.text,
+    fontSize: 9,
+    fontWeight: "900"
   },
   room: {
     marginTop: 1,
@@ -137,7 +210,7 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   },
   startButton: {
-    width: 76,
+    width: 88,
     height: 34,
     flexDirection: "row",
     alignItems: "center",
@@ -145,6 +218,12 @@ const styles = StyleSheet.create({
     gap: 5,
     borderRadius: 13,
     backgroundColor: "#071432"
+  },
+  startButtonPressed: {
+    opacity: 0.88
+  },
+  startButtonDisabled: {
+    opacity: 0.6
   },
   startLabel: {
     color: "#ffffff",

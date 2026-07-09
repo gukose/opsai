@@ -1,3 +1,5 @@
+import { appApiBaseUrl, appEnvironment } from "./appConfig";
+
 export type AssistantDataSourceMode = "static-mock" | "local-mock" | "backend";
 
 function readFlag(name: string): string | undefined {
@@ -37,10 +39,6 @@ export const assistantLocalMockEnabled = assistantDataSourceMode === "local-mock
 export const assistantStaticMockEnabled = assistantDataSourceMode === "static-mock";
 
 export const assistantApiBaseUrl =
-  process.env.EXPO_PUBLIC_ASSISTANT_API_BASE_URL?.trim() || "http://localhost:8080";
+  process.env.EXPO_PUBLIC_ASSISTANT_API_BASE_URL?.trim() || appApiBaseUrl;
 
-export const assistantDefaultHotelId =
-  process.env.EXPO_PUBLIC_ASSISTANT_DEFAULT_HOTEL_ID?.trim() || "hotel-1";
-
-export const assistantDefaultUserId =
-  process.env.EXPO_PUBLIC_ASSISTANT_DEFAULT_USER_ID?.trim() || "user-1";
+export const currentAppEnvironment = appEnvironment;

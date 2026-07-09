@@ -1,6 +1,8 @@
 {
   "occupancy": [
     { "roomNumber": "101", "reservationId": "RES-101", "guestId": "GUEST-001", "occupied": true },
-    { "roomNumber": "102", "reservationId": "RES-102", "guestId": "GUEST-002", "occupied": true }
+    { "roomNumber": "102", "reservationId": "RES-102", "guestId": "GUEST-002", "occupied": true },
+    { "roomNumber": "605", "reservationId": null, "guestId": null, "occupied": false },
+    { "roomNumber": "805", "reservationId": null, "guestId": null, "occupied": false }
   ]
 }

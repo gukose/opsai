@@ -11,6 +11,7 @@ type IconButtonProps = {
   style?: ViewStyle;
   color?: string;
   size?: number;
+  disabled?: boolean;
 };
 
 export function IconButton({
@@ -19,17 +20,20 @@ export function IconButton({
   onPress,
   style,
   color = colors.blue,
-  size = 15
+  size = 15,
+  disabled
 }: IconButtonProps) {
   return (
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="button"
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
         style,
-        pressed && styles.pressed
+        pressed && !disabled ? styles.pressed : null,
+        disabled ? styles.disabled : null
       ]}
     >
       <Icon color={color} size={size} strokeWidth={2.2} />
@@ -48,5 +52,8 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.72
+  },
+  disabled: {
+    opacity: 0.45
   }
 });

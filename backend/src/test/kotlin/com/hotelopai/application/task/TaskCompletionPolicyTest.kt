@@ -30,6 +30,28 @@ class TaskCompletionPolicyTest {
     }
 
     @Test
+    fun `maintenance task uses structured room number when available`() {
+        val client = RecordingMaintenanceCompletionPort()
+        val policy = TaskCompletionPolicy(client)
+        val task = Task.create(
+            hotelId = UUID.fromString("018f6b7a-4f22-7caa-8f60-9e4b0f7f1002"),
+            intentType = TaskIntentType.MAINTENANCE,
+            source = TaskSource.ASSISTANT,
+            title = "Air conditioner not cooling",
+            description = "Guest reported the air conditioner is not cooling",
+            roomNumber = "101",
+            priority = TaskPriority.HIGH,
+            slaDeadline = Instant.parse("2026-07-08T11:30:00Z"),
+            createdAt = Instant.parse("2026-07-08T10:00:00Z")
+        )
+
+        val decision = policy.evaluate(task, Instant.parse("2026-07-08T10:30:00Z"))
+
+        assertEquals(true, decision.requiresPmsUpdate)
+        assertEquals("101", client.request.roomNumber)
+    }
+
+    @Test
     fun `maintenance verification failures are wrapped`() {
         val policy = TaskCompletionPolicy(FailingMaintenanceCompletionPort())
         val task = maintenanceTask()
@@ -37,6 +59,27 @@ class TaskCompletionPolicyTest {
         assertThrows(TaskCompletionPolicyException::class.java) {
             policy.evaluate(task, Instant.parse("2026-07-08T10:30:00Z"))
         }
+    }
+
+    @Test
+    fun `maintenance task without a room number fails validation`() {
+        val policy = TaskCompletionPolicy(RecordingMaintenanceCompletionPort())
+        val task = Task.create(
+            hotelId = UUID.fromString("018f6b7a-4f22-7caa-8f60-9e4b0f7f1003"),
+            intentType = TaskIntentType.MAINTENANCE,
+            source = TaskSource.ASSISTANT,
+            title = "Air conditioner not cooling",
+            description = "Guest reported the air conditioner is not cooling",
+            priority = TaskPriority.HIGH,
+            slaDeadline = Instant.parse("2026-07-08T11:30:00Z"),
+            createdAt = Instant.parse("2026-07-08T10:00:00Z")
+        )
+
+        val exception = assertThrows(TaskCompletionValidationException::class.java) {
+            policy.evaluate(task, Instant.parse("2026-07-08T10:30:00Z"))
+        }
+
+        assertEquals("Maintenance task requires a room number before completion", exception.message)
     }
 
     @Test
@@ -48,6 +91,7 @@ class TaskCompletionPolicyTest {
             source = TaskSource.ASSISTANT,
             title = "Need towels",
             description = "Guest needs towels",
+            roomNumber = null,
             priority = TaskPriority.MEDIUM,
             slaDeadline = Instant.parse("2026-07-08T11:30:00Z"),
             createdAt = Instant.parse("2026-07-08T10:00:00Z")
@@ -64,8 +108,9 @@ class TaskCompletionPolicyTest {
             hotelId = UUID.fromString("018f6b7a-4f22-7caa-8f60-9e4b0f7f1001"),
             intentType = TaskIntentType.MAINTENANCE,
             source = TaskSource.ASSISTANT,
-            title = "Room 101 AC not working",
-            description = "Room 101 AC not working",
+            title = "Air conditioner not cooling",
+            description = "Guest reported the air conditioner is not cooling",
+            roomNumber = "101",
             priority = TaskPriority.HIGH,
             slaDeadline = Instant.parse("2026-07-08T11:30:00Z"),
             createdAt = Instant.parse("2026-07-08T10:00:00Z")

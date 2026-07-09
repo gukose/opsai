@@ -18,6 +18,9 @@ data class CompletionDecision(
 class TaskCompletionPolicyException(message: String, cause: Throwable? = null) :
     RuntimeException(message, cause)
 
+class TaskCompletionValidationException(message: String) :
+    RuntimeException(message)
+
 @Service
 @Profile("test")
 class NoOpCompletionPolicy : CompletionPolicy {

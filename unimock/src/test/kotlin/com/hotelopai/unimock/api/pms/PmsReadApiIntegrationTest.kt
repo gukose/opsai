@@ -37,7 +37,7 @@ class PmsReadApiIntegrationTest : UnimockPostgresIntegrationTestSupport() {
     fun `list rooms`() {
         mockMvc.perform(get("/api/pms/rooms"))
             .andExpect(status().isOk)
-            .andExpect(jsonPath("$.length()").value(4))
+            .andExpect(jsonPath("$.length()").value(6))
             .andExpect(jsonPath("$[0].roomNumber").value("101"))
     }
 

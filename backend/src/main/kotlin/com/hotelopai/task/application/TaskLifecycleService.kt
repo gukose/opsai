@@ -41,6 +41,7 @@ class TaskLifecycleService @Autowired constructor(
             source = request.source,
             title = request.title,
             description = request.description,
+            roomNumber = request.roomNumber,
             priority = request.priority,
             slaDeadline = request.slaDeadline,
             createdAt = now
@@ -230,6 +231,7 @@ data class CreateTaskCommand(
     val source: TaskSource,
     val title: String,
     val description: String,
+    val roomNumber: String? = null,
     val priority: TaskPriority,
     val slaDeadline: Instant,
     val assignment: AssignmentCommand? = null

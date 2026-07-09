@@ -7,14 +7,15 @@ import { IconButton } from "../ui/IconButton";
 
 type ComposerProps = {
   onSend?: (text: string) => void | Promise<void>;
+  disabled?: boolean;
 };
 
-export function Composer({ onSend }: ComposerProps) {
+export function Composer({ onSend, disabled }: ComposerProps) {
   const [text, setText] = useState("");
 
   const handleSend = async () => {
     const message = text.trim();
-    if (!message) {
+    if (!message || disabled) {
       return;
     }
 
@@ -33,6 +34,7 @@ export function Composer({ onSend }: ComposerProps) {
         blurOnSubmit={false}
         returnKeyType="send"
         value={text}
+        editable={!disabled}
         style={styles.input}
       />
       <View style={styles.controls}>
@@ -50,6 +52,7 @@ export function Composer({ onSend }: ComposerProps) {
           icon={SendHorizontal}
           label="Send message"
           style={styles.sendButton}
+          disabled={disabled}
           color={colors.nav}
           size={16}
           onPress={handleSend}

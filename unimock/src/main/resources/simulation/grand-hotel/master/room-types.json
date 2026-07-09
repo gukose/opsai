@@ -1,6 +1,7 @@
 {
   "roomTypes": [
     { "code": "STANDARD", "name": "Standard Room" },
-    { "code": "DELUXE", "name": "Deluxe Room" }
+    { "code": "DELUXE", "name": "Deluxe Room" },
+    { "code": "SUITE", "name": "Suite" }
   ]
 }

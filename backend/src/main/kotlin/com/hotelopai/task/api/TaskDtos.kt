@@ -18,6 +18,7 @@ data class CreateTaskRequest(
     val source: TaskSource,
     val title: String,
     val description: String,
+    val roomNumber: String? = null,
     val priority: TaskPriority,
     val slaDeadline: Instant,
     val assignment: AssignmentRequest? = null
@@ -29,6 +30,7 @@ data class CreateTaskRequest(
             source = source,
             title = title,
             description = description,
+            roomNumber = roomNumber,
             priority = priority,
             slaDeadline = slaDeadline,
             assignment = assignment?.toCommand()
@@ -70,6 +72,7 @@ data class TaskResponse(
     val source: String,
     val title: String,
     val description: String,
+    val roomNumber: String? = null,
     val priority: String,
     val status: String,
     val slaDeadline: Instant,
@@ -90,6 +93,7 @@ data class TaskResponse(
                 source = task.source.name,
                 title = task.title,
                 description = task.description,
+                roomNumber = task.roomNumber,
                 priority = task.priority.name,
                 status = task.status.name,
                 slaDeadline = task.slaDeadline,

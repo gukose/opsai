@@ -79,6 +79,7 @@ class TaskLifecycleServiceCompletionTest {
             source = TaskSource.ASSISTANT,
             title = "Room 101 AC not working",
             description = "Room 101 AC not working",
+            roomNumber = "101",
             priority = TaskPriority.HIGH,
             slaDeadline = now.plusSeconds(5400)
         )

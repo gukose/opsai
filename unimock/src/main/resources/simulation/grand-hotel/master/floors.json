@@ -1,6 +1,8 @@
 {
   "floors": [
     { "code": "F1", "name": "First Floor" },
-    { "code": "F2", "name": "Second Floor" }
+    { "code": "F2", "name": "Second Floor" },
+    { "code": "F6", "name": "Sixth Floor" },
+    { "code": "F8", "name": "Eighth Floor" }
   ]
 }

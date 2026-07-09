@@ -7,19 +7,23 @@ import { ActionQuestion } from "../../assistant/types";
 type DropdownQuestionProps = {
   actions: ActionQuestion["actions"];
   onActionPress?: (action: ActionQuestion["actions"][number]) => void;
+  disabled?: boolean;
 };
 
-export function DropdownQuestion({ actions, onActionPress }: DropdownQuestionProps) {
+export function DropdownQuestion({ actions, onActionPress, disabled }: DropdownQuestionProps) {
   return (
     <View style={styles.row}>
       {actions.map((action) => (
         <Pressable
           key={action.id}
           accessibilityRole="button"
+          disabled={disabled}
           onPress={() => onActionPress?.(action)}
-          style={[
+          style={({ pressed }) => [
             styles.button,
-            action.variant === "confirm" ? styles.confirm : styles.secondary
+            action.variant === "confirm" ? styles.confirm : styles.secondary,
+            pressed && !disabled ? styles.pressed : null,
+            disabled ? styles.disabled : null
           ]}
         >
           <View style={styles.buttonContent}>
@@ -58,6 +62,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.pill,
     paddingHorizontal: 10
+  },
+  pressed: {
+    opacity: 0.88
+  },
+  disabled: {
+    opacity: 0.55
   },
   buttonContent: {
     flexDirection: "row",

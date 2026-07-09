@@ -1,6 +1,7 @@
 package com.hotelopai.task.api
 
 import com.hotelopai.task.application.TaskCompletionPolicyException
+import com.hotelopai.task.application.TaskCompletionValidationException
 import com.hotelopai.task.application.TaskNotFoundException
 import com.hotelopai.shared.error.ProblemDetailFactory
 import org.springframework.http.HttpStatus
@@ -27,6 +28,15 @@ class TaskApiExceptionHandler {
             title = "Task completion unavailable",
             detail = exception.message ?: "Task completion failed",
             type = URI.create("https://hotelopai.com/problems/task-completion-unavailable")
+        )
+
+    @ExceptionHandler(TaskCompletionValidationException::class)
+    fun handleCompletionValidation(exception: TaskCompletionValidationException): ProblemDetail =
+        ProblemDetailFactory.create(
+            status = HttpStatus.BAD_REQUEST,
+            title = "Task completion validation failed",
+            detail = exception.message ?: "Task completion validation failed",
+            type = URI.create("https://hotelopai.com/problems/task-completion-validation-failed")
         )
 
     @ExceptionHandler(IllegalArgumentException::class, IllegalStateException::class)

@@ -13,13 +13,15 @@ type ConversationListProps = {
   onQuestionActionPress?: (action: ActionQuestion["actions"][number]) => void;
   onTaskPreviewCancel?: () => void;
   onTaskPreviewCreate?: () => void;
+  isActionDisabled?: boolean;
 };
 
 export function ConversationList({
   items,
   onQuestionActionPress,
   onTaskPreviewCancel,
-  onTaskPreviewCreate
+  onTaskPreviewCreate,
+  isActionDisabled
 }: ConversationListProps) {
   return (
     <ScrollView
@@ -55,13 +57,18 @@ export function ConversationList({
             <IntentBadge label={item.label} tone={item.tone} />
           ) : null}
           {item.type === "question" ? (
-            <DropdownQuestion actions={item.actions} onActionPress={onQuestionActionPress} />
+            <DropdownQuestion
+              actions={item.actions}
+              onActionPress={onQuestionActionPress}
+              disabled={isActionDisabled}
+            />
           ) : null}
           {item.type === "taskPreview" ? (
             <TaskPreview
               task={item.task}
               onCancel={onTaskPreviewCancel}
               onCreateTask={onTaskPreviewCreate}
+              disabled={isActionDisabled}
             />
           ) : null}
         </View>

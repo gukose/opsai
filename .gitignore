@@ -33,6 +33,7 @@ out/
 /nbdist/
 /.nb-gradle/
 
+
 ### VS Code ###
 .vscode/
 
@@ -42,3 +43,6 @@ out/
 # Node
 node_modules/
 **/node_modules/
+
+# Logs
+start.log

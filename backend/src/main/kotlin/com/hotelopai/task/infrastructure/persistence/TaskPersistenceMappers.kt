@@ -17,6 +17,7 @@ internal object TaskPersistenceMapper {
             source = entity.source,
             title = entity.title,
             description = entity.description,
+            roomNumber = entity.roomNumber?.trim()?.takeIf { it.isNotBlank() },
             priority = entity.priority,
             slaDeadline = requireNotNull(entity.slaDeadline) { "task.slaDeadline must not be null" },
             status = entity.status,
@@ -58,6 +59,7 @@ internal object TaskPersistenceMapper {
         source = domain.source
         title = domain.title
         description = domain.description
+        roomNumber = domain.roomNumber?.trim()?.takeIf { it.isNotBlank() }
         priority = domain.priority
         status = domain.status
         slaDeadline = domain.slaDeadline

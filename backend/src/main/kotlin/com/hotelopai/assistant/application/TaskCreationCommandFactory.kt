@@ -19,6 +19,7 @@ fun TaskCreationCandidate.toCreateTaskCommand(
         source = TaskSource.ASSISTANT,
         title = preview.title,
         description = preview.description,
+        roomNumber = preview.roomNumber,
         priority = preview.priority.toTaskPriority(),
         slaDeadline = now.plusSeconds((preview.slaMinutes ?: 60).toLong() * 60)
     )

@@ -7,9 +7,10 @@ type TaskPreviewProps = {
   task: TaskPreviewMessage["task"];
   onCancel?: () => void;
   onCreateTask?: () => void;
+  disabled?: boolean;
 };
 
-export function TaskPreview({ task, onCancel, onCreateTask }: TaskPreviewProps) {
+export function TaskPreview({ task, onCancel, onCreateTask, disabled }: TaskPreviewProps) {
   return (
     <View style={styles.card}>
       <Text style={styles.title}>Task Preview</Text>
@@ -20,10 +21,28 @@ export function TaskPreview({ task, onCancel, onCreateTask }: TaskPreviewProps) 
       <PreviewRow label="Priority" value={task.priority} />
       <PreviewRow label="SLA" value={task.sla} />
       <View style={styles.actions}>
-        <Pressable accessibilityRole="button" onPress={onCancel} style={styles.cancelButton}>
+        <Pressable
+          accessibilityRole="button"
+          disabled={disabled}
+          onPress={onCancel}
+          style={({ pressed }) => [
+            styles.cancelButton,
+            pressed && !disabled ? styles.pressed : null,
+            disabled ? styles.disabled : null
+          ]}
+        >
           <Text style={styles.cancelLabel}>Cancel</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" onPress={onCreateTask} style={styles.createButton}>
+        <Pressable
+          accessibilityRole="button"
+          disabled={disabled}
+          onPress={onCreateTask}
+          style={({ pressed }) => [
+            styles.createButton,
+            pressed && !disabled ? styles.pressed : null,
+            disabled ? styles.disabled : null
+          ]}
+        >
           <Text style={styles.createLabel}>Create Task</Text>
         </Pressable>
       </View>
@@ -81,6 +100,12 @@ const styles = StyleSheet.create({
     marginTop: 7,
     flexDirection: "row",
     gap: 9
+  },
+  pressed: {
+    opacity: 0.9
+  },
+  disabled: {
+    opacity: 0.55
   },
   cancelButton: {
     flex: 1,

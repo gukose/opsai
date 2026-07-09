@@ -1,4 +1,4 @@
-import { assistantDefaultHotelId, assistantDefaultUserId } from "../config/assistantConfig";
+import { CurrentUserSnapshot } from "../session/sessionTypes";
 import { HttpAssistantApi } from "../api/assistant/AssistantApi";
 import { ApiClient } from "../api/client/ApiClient";
 import { mapAssistantConversationResponseToHomeState } from "../api/assistant/assistantMapper";
@@ -7,15 +7,22 @@ import { AssistantHomeState } from "./homeState";
 
 export class BackendAssistantDataSource implements AssistantDataSource {
   private readonly api: HttpAssistantApi;
+  private readonly currentUserProvider: () => CurrentUserSnapshot | null;
 
-  constructor(client: ApiClient) {
+  constructor(client: ApiClient, currentUserProvider: () => CurrentUserSnapshot | null) {
     this.api = new HttpAssistantApi(client);
+    this.currentUserProvider = currentUserProvider;
   }
 
   async loadHomeState(): Promise<AssistantHomeState> {
+    const currentUser = this.currentUserProvider();
+    if (!currentUser?.hotelId || !currentUser.userId) {
+      throw new Error("Current user session is missing hotel or user context.");
+    }
+
     const response = await this.api.startConversation({
-      hotelId: assistantDefaultHotelId,
-      userId: assistantDefaultUserId
+      hotelId: currentUser.hotelId,
+      userId: currentUser.userId
     });
 
     return mapAssistantConversationResponseToHomeState(response);

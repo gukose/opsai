@@ -37,6 +37,9 @@ class TaskJpaEntity : AuditedJpaEntity() {
     @Column(name = "description", nullable = false)
     var description: String = ""
 
+    @Column(name = "room_number")
+    var roomNumber: String? = null
+
     @Enumerated(EnumType.STRING)
     @Column(name = "priority", nullable = false)
     var priority: TaskPriority = TaskPriority.MEDIUM

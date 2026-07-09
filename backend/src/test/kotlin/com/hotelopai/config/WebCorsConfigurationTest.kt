@@ -26,7 +26,7 @@ class WebCorsConfigurationTest : PostgresIntegrationTestSupport() {
             .uri(URI.create("http://localhost:$port/api/v1/assistant/conversations"))
             .header("Origin", "http://localhost:8081")
             .header("Access-Control-Request-Method", "POST")
-            .header("Access-Control-Request-Headers", "Content-Type,Authorization")
+            .header("Access-Control-Request-Headers", "Content-Type,Authorization,X-Correlation-Id")
             .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
             .build()
 
@@ -43,6 +43,11 @@ class WebCorsConfigurationTest : PostgresIntegrationTestSupport() {
             response.headers().firstValue("access-control-allow-headers")
                 .orElse("")
                 .contains("Authorization")
+        )
+        assertTrue(
+            response.headers().firstValue("access-control-allow-headers")
+                .orElse("")
+                .contains("X-Correlation-Id")
         )
     }
 }

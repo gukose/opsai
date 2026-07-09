@@ -4,8 +4,11 @@ import { ComponentType } from "react";
 import { LucideProps } from "lucide-react-native";
 
 import { colors, radius, shadow, spacing, typography } from "../../theme/tokens";
+import { TaskBoardOverview } from "../../tasks/taskBoardSelectors";
 
-export function OverviewStrip() {
+type OverviewStripProps = TaskBoardOverview;
+
+export function OverviewStrip({ taskCount, urgentCount, completionPercent }: OverviewStripProps) {
   return (
     <View style={styles.wrap}>
       <Text style={styles.title}>Today's Overview</Text>
@@ -15,20 +18,20 @@ export function OverviewStrip() {
           iconColor={colors.blue}
           iconBackground="#e9f1ff"
           title="Tasks"
-          value="0"
+          value={String(taskCount)}
         />
         <OverviewCard
           icon={TriangleAlert}
           iconColor="#f97316"
           iconBackground="#fff1e6"
           title="Urgent"
-          value="0"
+          value={String(urgentCount)}
         />
         <View style={styles.progressCard}>
           <View style={styles.track}>
-            <View style={styles.progress} />
+            <View style={[styles.progress, { width: `${Math.max(0, Math.min(100, completionPercent))}%` }]} />
           </View>
-          <Text style={styles.percent}>0%</Text>
+          <Text style={styles.percent}>{completionPercent}%</Text>
         </View>
       </View>
     </View>
@@ -138,7 +141,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#e4e7ee"
   },
   progress: {
-    width: 2,
     height: 6,
     borderRadius: radius.pill,
     backgroundColor: "#d1d5db"

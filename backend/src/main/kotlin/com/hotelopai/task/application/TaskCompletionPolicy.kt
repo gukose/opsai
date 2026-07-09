@@ -19,7 +19,9 @@ class TaskCompletionPolicy(
         when (task.intentType) {
             TaskIntentType.MAINTENANCE -> {
                 val roomNumber = extractRoomNumber(task)
-                    ?: throw IllegalArgumentException("Maintenance task is missing a room number")
+                    ?: throw TaskCompletionValidationException(
+                        "Maintenance task requires a room number before completion"
+                    )
 
                 val result = try {
                     maintenanceCompletionPort.updateMaintenance(
@@ -52,9 +54,10 @@ class TaskCompletionPolicy(
     }
 
     private fun extractRoomNumber(task: Task): String? =
-        roomPattern.find("${task.title} ${task.description}")
-            ?.groupValues
-            ?.getOrNull(1)
+        task.roomNumber?.trim()?.takeIf { it.isNotBlank() }
+            ?: roomPattern.find("${task.title} ${task.description}")
+                ?.groupValues
+                ?.getOrNull(1)
 
     private companion object {
         const val MAINTENANCE_ISSUE_TYPE_CODE = "MAINTENANCE_AC"
