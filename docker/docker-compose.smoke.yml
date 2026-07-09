@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: hotelopai
+      POSTGRES_USER: hotelopai
+      POSTGRES_PASSWORD: hotelopai
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hotelopai -d hotelopai"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  unimock:
+    image: hotel-opai-unimock:ci
+    build:
+      context: ..
+      dockerfile: docker/unimock.Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      OPS_AI_UNIMOCK_DB_URL: jdbc:postgresql://postgres:5432/hotelopai
+      OPS_AI_UNIMOCK_DB_USERNAME: hotelopai
+      OPS_AI_UNIMOCK_DB_PASSWORD: hotelopai
+    ports:
+      - "8090:8090"
+
+  backend:
+    image: hotel-opai-backend:ci
+    build:
+      context: ..
+      dockerfile: docker/backend.Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      unimock:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      OPS_AI_DB_URL: jdbc:postgresql://postgres:5432/hotelopai
+      OPS_AI_DB_USERNAME: hotelopai
+      OPS_AI_DB_PASSWORD: hotelopai
+      OPS_AI_UNIMOCK_BASE_URL: http://unimock:8090
+      OPS_AI_AUTH_JWT_SECRET: hotel-opai-smoke-secret-hotel-opai-smoke-secret
+      OPS_AI_AUTH_SEED_ENABLED: "true"
+      ASSISTANT_AI_PROVIDER: deterministic
+      ASSISTANT_AI_FALLBACK_ENABLED: "false"
+      OPENAI_API_KEY: ""
+    ports:
+      - "8080:8080"

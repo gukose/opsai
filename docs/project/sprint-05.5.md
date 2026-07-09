@@ -32,10 +32,17 @@ Harden the platform before broader hotel experience expansion in Sprint 6.
 - Document production runbook and deployment checks.
 
 ## Approved implementation
-Only Sprint 5.5A is approved for implementation in this pass.
+Sprint 5.5A through 5.5E have been approved and implemented incrementally.
 
 ## Definition of Done for 5.5A
 - Backend exposes actuator health endpoints for health, liveness, and readiness.
 - Backend keeps existing local startup, ports, and environment defaults unchanged.
 - Health endpoint behavior is covered by backend tests.
 - Full backend test suite passes.
+
+## Definition of Done for 5.5E
+- CI validates backend and UniMock tests.
+- CI validates mobile type-checking and runs the assistant mapper test directly.
+- Backend and UniMock Docker images build successfully.
+- Smoke tests cover health, auth, task list compatibility, task pagination, deterministic assistant interpretation, confirmation, and created task lookup.
+- Azure readiness is documented without adding production deployment automation.
