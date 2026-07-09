@@ -43,6 +43,25 @@ assistant:
       temperature: ${OPENAI_TEMPERATURE:0.0}
       retries: ${OPENAI_RETRIES:1}
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
 logging:
   level:
     root: INFO
