@@ -1,5 +1,7 @@
 package com.hotelopai.assistant.application
 
+import com.hotelopai.task.application.TaskPage
+import com.hotelopai.task.application.TaskPageRequest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -122,5 +124,8 @@ class AssistantConversationServiceTest {
         override fun findById(id: UUID): com.hotelopai.task.domain.Task? = null
 
         override fun findAll(): List<com.hotelopai.task.domain.Task> = emptyList()
+
+        override fun findPage(request: TaskPageRequest): TaskPage<com.hotelopai.task.domain.Task> =
+            TaskPage(emptyList(), request.page, request.size, 0)
     }
 }

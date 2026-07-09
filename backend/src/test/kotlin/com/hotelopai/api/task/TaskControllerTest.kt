@@ -97,6 +97,44 @@ class TaskControllerTest : PostgresIntegrationTestSupport() {
         assertContains(cancelResponse.body(), """"status":"CANCELLED"""")
     }
 
+    @Test
+    fun `task list remains an array when pagination params are omitted`() {
+        val accessToken = loginAccessToken()
+
+        val response = get("/api/v1/tasks", accessToken)
+
+        assertEquals(200, response.statusCode())
+        assertTrue(response.body().trim().startsWith("["))
+    }
+
+    @Test
+    fun `task list returns paged envelope when pagination params are supplied`() {
+        val accessToken = loginAccessToken()
+        val hotel = hotelRepository.save(Hotel(code = "task-page-${UuidV7Generator.generate()}", name = "Task Page Hotel"))
+        createTask(accessToken, hotel.id.toString(), "Paged task one")
+        createTask(accessToken, hotel.id.toString(), "Paged task two")
+
+        val response = get("/api/v1/tasks?page=0&size=1", accessToken)
+
+        assertEquals(200, response.statusCode())
+        assertContains(response.body(), """"items":[{""")
+        assertContains(response.body(), """"page":0""")
+        assertContains(response.body(), """"size":1""")
+        assertContains(response.body(), """"totalItems":""")
+        assertContains(response.body(), """"totalPages":""")
+        assertContains(response.body(), """"hasNext":true""")
+        assertContains(response.body(), """"hasPrevious":false""")
+    }
+
+    @Test
+    fun `task list rejects invalid pagination params`() {
+        val accessToken = loginAccessToken()
+
+        assertEquals(400, get("/api/v1/tasks?page=-1&size=20", accessToken).statusCode())
+        assertEquals(400, get("/api/v1/tasks?page=0&size=0", accessToken).statusCode())
+        assertEquals(400, get("/api/v1/tasks?page=0&size=101", accessToken).statusCode())
+    }
+
     private fun post(path: String, body: String, bearerToken: String? = null): HttpResponse<String> {
         val builder = HttpRequest.newBuilder()
             .uri(URI.create("http://localhost:$port$path"))
@@ -133,6 +171,24 @@ class TaskControllerTest : PostgresIntegrationTestSupport() {
             ?.groupValues
             ?.get(1)
             ?: error("accessToken not found in response: ${response.body()}")
+    }
+
+    private fun createTask(accessToken: String, hotelId: String, title: String): String {
+        val response = post(
+            "/api/v1/tasks",
+            """{
+              "hotelId":"$hotelId",
+              "intentType":"MAINTENANCE",
+              "source":"MANUAL",
+              "title":"$title",
+              "description":"$title description",
+              "priority":"MEDIUM",
+              "slaDeadline":"${Instant.now().plusSeconds(3600)}"
+            }""",
+            accessToken
+        )
+        assertEquals(200, response.statusCode())
+        return extractId(response.body())
     }
 
     private fun extractId(body: String): String =

@@ -3,6 +3,7 @@ package com.hotelopai.task.api
 import com.hotelopai.task.application.AssignTaskCommand
 import com.hotelopai.task.application.AssignmentCommand
 import com.hotelopai.task.application.CreateTaskCommand
+import com.hotelopai.task.application.TaskPage
 import com.hotelopai.task.domain.Task
 import com.hotelopai.task.domain.TaskAssigneeType
 import com.hotelopai.task.domain.TaskIntentType
@@ -121,6 +122,29 @@ data class TaskAssignmentResponse(
                 assigneeId = assignment.assigneeId,
                 displayName = assignment.displayName,
                 assignedAt = assignment.assignedAt
+            )
+    }
+}
+
+data class TaskPageResponse(
+    val items: List<TaskResponse>,
+    val page: Int,
+    val size: Int,
+    val totalItems: Long,
+    val totalPages: Int,
+    val hasNext: Boolean,
+    val hasPrevious: Boolean
+) {
+    companion object {
+        fun from(page: TaskPage<Task>): TaskPageResponse =
+            TaskPageResponse(
+                items = page.items.map(TaskResponse::from),
+                page = page.page,
+                size = page.size,
+                totalItems = page.totalItems,
+                totalPages = page.totalPages,
+                hasNext = page.hasNext,
+                hasPrevious = page.hasPrevious
             )
     }
 }

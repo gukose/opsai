@@ -83,6 +83,9 @@ class TaskLifecycleService @Autowired constructor(
     fun listTasks(now: Instant = Instant.now()): List<Task> =
         taskRepository.findAll()
 
+    fun listTasksPage(request: TaskPageRequest, now: Instant = Instant.now()): TaskPage<Task> =
+        taskRepository.findPage(request)
+
     fun assignTask(taskId: String, request: AssignTaskCommand, now: Instant = Instant.now()): Task =
         mutate(
             taskId = taskId,

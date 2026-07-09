@@ -95,6 +95,13 @@ class TaskLifecycleServiceCompletionTest {
         override fun findById(id: UUID): com.hotelopai.task.domain.Task? = tasks[id]
 
         override fun findAll(): List<com.hotelopai.task.domain.Task> = tasks.values.sortedByDescending { it.updatedAt }
+
+        override fun findPage(request: TaskPageRequest): TaskPage<com.hotelopai.task.domain.Task> {
+            val sorted = findAll()
+            val fromIndex = (request.page * request.size).coerceAtMost(sorted.size)
+            val toIndex = (fromIndex + request.size).coerceAtMost(sorted.size)
+            return TaskPage(sorted.subList(fromIndex, toIndex), request.page, request.size, sorted.size.toLong())
+        }
     }
 
     private class RecordingTaskStateHistoryRepository : TaskStateHistoryRepository {

@@ -1,11 +1,13 @@
 package com.hotelopai.task.api
 
+import com.hotelopai.task.application.TaskPageRequest
 import com.hotelopai.task.application.TaskLifecycleService
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
@@ -22,8 +24,21 @@ class TaskController(
         TaskResponse.from(taskLifecycleService.getTask(taskId))
 
     @GetMapping
-    fun listTasks(): List<TaskResponse> =
-        taskLifecycleService.listTasks().map(TaskResponse::from)
+    fun listTasks(
+        @RequestParam(required = false) page: Int?,
+        @RequestParam(required = false) size: Int?
+    ): Any {
+        if (page == null && size == null) {
+            return taskLifecycleService.listTasks().map(TaskResponse::from)
+        }
+
+        val pageRequest = TaskPageRequest(
+            page = page ?: TaskPageRequest.DEFAULT_PAGE,
+            size = size ?: TaskPageRequest.DEFAULT_SIZE
+        )
+
+        return TaskPageResponse.from(taskLifecycleService.listTasksPage(pageRequest))
+    }
 
     @PostMapping("/{taskId}/assign")
     fun assignTask(
