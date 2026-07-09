@@ -22,6 +22,8 @@ import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.AuthenticationEntryPoint
 import org.springframework.security.web.access.AccessDeniedHandler
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter
+import org.springframework.security.web.header.writers.StaticHeadersWriter
 import java.time.Clock
 
 @Configuration
@@ -57,11 +59,39 @@ class AuthSecurityConfiguration(
                 it.authenticationEntryPoint(authenticationEntryPoint)
                 it.accessDeniedHandler(accessDeniedHandler)
             }
+            .headers {
+                it.contentTypeOptions { }
+                it.frameOptions { frameOptions -> frameOptions.deny() }
+                it.referrerPolicy { referrerPolicy ->
+                    referrerPolicy.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.NO_REFERRER)
+                }
+                it.contentSecurityPolicy { contentSecurityPolicy ->
+                    contentSecurityPolicy.policyDirectives(
+                        "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'"
+                    )
+                }
+                it.httpStrictTransportSecurity { hsts ->
+                    hsts.includeSubDomains(true).maxAgeInSeconds(31536000)
+                }
+                it.addHeaderWriter(
+                    StaticHeadersWriter(
+                        "Permissions-Policy",
+                        "camera=(), microphone=(), geolocation=()"
+                    )
+                )
+            }
             .authorizeHttpRequests {
+                it.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 it.requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
+                it.requestMatchers(
+                    HttpMethod.GET,
+                    "/actuator/health",
+                    "/actuator/health/**",
+                    "/actuator/info"
+                ).permitAll()
                 it.requestMatchers(HttpMethod.GET, "/api/v1/auth/me").authenticated()
                 it.requestMatchers(HttpMethod.POST, "/api/v1/auth/logout").authenticated()
-                it.anyRequest().permitAll()
+                it.anyRequest().authenticated()
             }
             .oauth2ResourceServer { resourceServer ->
                 resourceServer.jwt { jwt -> jwt.decoder(jwtDecoder) }

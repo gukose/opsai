@@ -29,6 +29,7 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
 
     @Test
     fun `assistant conversation endpoints support start message confirm and reset`() {
+        val accessToken = loginAccessToken()
         val hotel = hotelRepository.save(
             Hotel(
                 code = "assistant-hotel-${UuidV7Generator.generate()}",
@@ -38,7 +39,8 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
 
         val startResponse = post(
             path = "/api/v1/assistant/conversations",
-            body = """{"hotelId":"${hotel.id}","userId":"user-1"}"""
+            body = """{"hotelId":"${hotel.id}","userId":"user-1"}""",
+            bearerToken = accessToken
         )
 
         assertEquals(200, startResponse.statusCode())
@@ -47,7 +49,8 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
 
         val messageResponse = post(
             path = "/api/v1/assistant/conversations/$conversationId/messages",
-            body = """{"text":"Room 101 AC not working","inputType":"TEXT"}"""
+            body = """{"text":"Room 101 AC not working","inputType":"TEXT"}""",
+            bearerToken = accessToken
         )
 
         assertEquals(200, messageResponse.statusCode())
@@ -58,7 +61,8 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
 
         val confirmResponse = post(
             path = "/api/v1/assistant/conversations/$conversationId/confirm",
-            body = """{"idempotencyKey":"confirm-101"}"""
+            body = """{"idempotencyKey":"confirm-101"}""",
+            bearerToken = accessToken
         )
 
         assertEquals(200, confirmResponse.statusCode())
@@ -68,14 +72,15 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
         assertContains(confirmResponse.body(), """"createdTaskId":"$createdTaskId"""")
         assertContains(confirmResponse.body(), "Task ID: $createdTaskId")
 
-        val taskResponse = get("/api/v1/tasks/$createdTaskId")
+        val taskResponse = get("/api/v1/tasks/$createdTaskId", accessToken)
         assertEquals(200, taskResponse.statusCode())
         assertContains(taskResponse.body(), """"id":"$createdTaskId"""")
         assertContains(taskResponse.body(), """"intentType":"MAINTENANCE"""")
 
         val resetResponse = post(
             path = "/api/v1/assistant/conversations/$conversationId/reset",
-            body = ""
+            body = "",
+            bearerToken = accessToken
         )
 
         assertEquals(200, resetResponse.statusCode())
@@ -85,6 +90,7 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
 
     @Test
     fun `assistant conversation endpoints accept image attachments`() {
+        val accessToken = loginAccessToken()
         val hotel = hotelRepository.save(
             Hotel(
                 code = "assistant-hotel-${UuidV7Generator.generate()}",
@@ -95,7 +101,8 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
         val conversationId = extractConversationId(
             post(
                 path = "/api/v1/assistant/conversations",
-                body = """{"hotelId":"${hotel.id}","userId":"user-1"}"""
+                body = """{"hotelId":"${hotel.id}","userId":"user-1"}""",
+                bearerToken = accessToken
             ).body()
         )
 
@@ -116,7 +123,8 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
                     }
                   ]
                 }
-            """.trimIndent()
+            """.trimIndent(),
+            bearerToken = accessToken
         )
 
         assertEquals(200, imageResponse.statusCode())
@@ -127,6 +135,7 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
 
     @Test
     fun `assistant asks follow-up when required fields are missing`() {
+        val accessToken = loginAccessToken()
         val hotel = hotelRepository.save(
             Hotel(
                 code = "assistant-hotel-${UuidV7Generator.generate()}",
@@ -137,13 +146,15 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
         val conversationId = extractConversationId(
             post(
                 path = "/api/v1/assistant/conversations",
-                body = """{"hotelId":"${hotel.id}","userId":"user-1"}"""
+                body = """{"hotelId":"${hotel.id}","userId":"user-1"}""",
+                bearerToken = accessToken
             ).body()
         )
 
         val messageResponse = post(
             path = "/api/v1/assistant/conversations/$conversationId/messages",
-            body = """{"text":"Guest needs towels","inputType":"TEXT"}"""
+            body = """{"text":"Guest needs towels","inputType":"TEXT"}""",
+            bearerToken = accessToken
         )
 
         assertEquals(200, messageResponse.statusCode())
@@ -152,11 +163,18 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
         assertContains(messageResponse.body(), """"prompt":"Which room is this request for?"""")
     }
 
-    private fun post(path: String, body: String): HttpResponse<String> {
+    private fun post(
+        path: String,
+        body: String,
+        bearerToken: String? = null
+    ): HttpResponse<String> {
         val requestBuilder = HttpRequest.newBuilder()
             .uri(URI.create("http://localhost:$port$path"))
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(body))
+        if (bearerToken != null) {
+            requestBuilder.header("Authorization", "Bearer $bearerToken")
+        }
 
         return httpClient.send(
             requestBuilder.build(),
@@ -164,16 +182,35 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
         )
     }
 
-    private fun get(path: String): HttpResponse<String> {
-        val request = HttpRequest.newBuilder()
+    private fun get(path: String, bearerToken: String? = null): HttpResponse<String> {
+        val requestBuilder = HttpRequest.newBuilder()
             .uri(URI.create("http://localhost:$port$path"))
             .GET()
-            .build()
+        if (bearerToken != null) {
+            requestBuilder.header("Authorization", "Bearer $bearerToken")
+        }
 
         return httpClient.send(
-            request,
+            requestBuilder.build(),
             HttpResponse.BodyHandlers.ofString()
         )
+    }
+
+    private fun loginAccessToken(): String {
+        val response = post(
+            "/api/v1/auth/login",
+            """{
+              "hotelCode":"hotel-opai-demo",
+              "email":"admin@hotelopai.local",
+              "password":"admin123"
+            }"""
+        )
+        assertEquals(200, response.statusCode())
+        return Regex(""""accessToken":"([^"]+)"""")
+            .find(response.body())
+            ?.groupValues
+            ?.get(1)
+            ?: error("accessToken not found in response: ${response.body()}")
     }
 
     private fun extractConversationId(body: String): String =

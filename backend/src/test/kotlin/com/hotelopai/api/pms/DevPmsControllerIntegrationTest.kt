@@ -50,10 +50,12 @@ class DevPmsControllerIntegrationTest : PostgresIntegrationTestSupport() {
     private lateinit var objectMapper: ObjectMapper
 
     private val httpClient = HttpClient.newHttpClient()
+    private var accessToken: String? = null
 
     @BeforeEach
     fun resetServer() {
         mockUniMockServer.reset()
+        accessToken = null
     }
 
     @Test
@@ -283,6 +285,7 @@ class DevPmsControllerIntegrationTest : PostgresIntegrationTestSupport() {
     private fun get(path: String, correlationId: String? = null): HttpResponse<String> {
         val request = HttpRequest.newBuilder()
             .uri(URI.create("http://localhost:$port$path"))
+            .header("Authorization", "Bearer ${loginAccessToken()}")
         if (correlationId != null) {
             request.header("X-Correlation-Id", correlationId)
         }
@@ -299,11 +302,35 @@ class DevPmsControllerIntegrationTest : PostgresIntegrationTestSupport() {
         val request = HttpRequest.newBuilder()
             .uri(URI.create("http://localhost:$port$path"))
             .header("Content-Type", "application/json")
+            .header("Authorization", "Bearer ${loginAccessToken()}")
         if (correlationId != null) {
             request.header("X-Correlation-Id", correlationId)
         }
         request.POST(HttpRequest.BodyPublishers.ofString(body))
         return httpClient.send(request.build(), HttpResponse.BodyHandlers.ofString())
+    }
+
+    private fun loginAccessToken(): String {
+        accessToken?.let { return it }
+        val request = HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:$port/api/v1/auth/login"))
+            .header("Content-Type", "application/json")
+            .POST(
+                HttpRequest.BodyPublishers.ofString(
+                    """{
+                      "hotelCode":"hotel-opai-demo",
+                      "email":"admin@hotelopai.local",
+                      "password":"admin123"
+                    }"""
+                )
+            )
+            .build()
+        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        assertThat(response.statusCode()).isEqualTo(200)
+        val token = json(response.body()).path("accessToken").asText()
+        assertThat(token).isNotBlank()
+        accessToken = token
+        return token
     }
 
     private fun json(value: String): JsonNode = objectMapper.readTree(value)

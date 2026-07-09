@@ -39,10 +39,10 @@ class ActuatorHealthIntegrationTest : PostgresIntegrationTestSupport() {
     }
 
     @Test
-    fun `metrics endpoint is not exposed over web`() {
+    fun `metrics endpoint is not public`() {
         val response = get("/actuator/metrics")
 
-        assertThat(response.statusCode()).isEqualTo(404)
+        assertThat(response.statusCode()).isEqualTo(401)
     }
 
     private fun get(path: String): HttpResponse<String> {
