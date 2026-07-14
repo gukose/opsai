@@ -1,0 +1,90 @@
+package com.hotelopai.application.task
+
+import com.hotelopai.hotel.application.HotelRepository
+import com.hotelopai.hotel.domain.Hotel
+import com.hotelopai.notification.application.NotificationRepository
+import com.hotelopai.notification.domain.NotificationRecipient
+import com.hotelopai.shared.kernel.UuidV7Generator
+import com.hotelopai.support.PostgresIntegrationTestSupport
+import com.hotelopai.task.application.AssignmentCommand
+import com.hotelopai.task.application.CreateTaskCommand
+import com.hotelopai.task.application.TaskLifecycleService
+import com.hotelopai.task.domain.TaskAssigneeType
+import com.hotelopai.task.domain.TaskIntentType
+import com.hotelopai.task.domain.TaskPriority
+import com.hotelopai.task.domain.TaskSource
+import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Test
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.test.context.ActiveProfiles
+import java.time.Instant
+
+@SpringBootTest
+@ActiveProfiles("test")
+class TaskNotificationIntegrationTest : PostgresIntegrationTestSupport() {
+    @Autowired
+    private lateinit var hotelRepository: HotelRepository
+
+    @Autowired
+    private lateinit var taskLifecycleService: TaskLifecycleService
+
+    @Autowired
+    private lateinit var notificationRepository: NotificationRepository
+
+    @Test
+    fun `creating a task creates exactly one persisted notification`() {
+        val hotel = hotelRepository.save(
+            Hotel(code = "task-notification-${UuidV7Generator.generate()}", name = "Task Notification Hotel")
+        )
+        val created = taskLifecycleService.createTask(
+            CreateTaskCommand(
+                hotelId = hotel.id,
+                intentType = TaskIntentType.MAINTENANCE,
+                source = TaskSource.MANUAL,
+                title = "AC not working",
+                description = "Room 101 AC not working",
+                priority = TaskPriority.HIGH,
+                slaDeadline = Instant.now().plusSeconds(3600)
+            )
+        )
+
+        assertThat(notificationRepository.countBySourceTaskId(created.id)).isEqualTo(1)
+    }
+
+    @Test
+    fun `task created notification targets assigned user when task is created with user assignment`() {
+        val hotel = hotelRepository.save(
+            Hotel(code = "task-user-notification-${UuidV7Generator.generate()}", name = "Task User Notification Hotel")
+        )
+        val assignedUserId = UuidV7Generator.generate()
+        val created = taskLifecycleService.createTask(
+            CreateTaskCommand(
+                hotelId = hotel.id,
+                intentType = TaskIntentType.GUEST_REQUEST,
+                source = TaskSource.MANUAL,
+                title = "Extra towels",
+                description = "Guest needs extra towels",
+                priority = TaskPriority.MEDIUM,
+                slaDeadline = Instant.now().plusSeconds(3600),
+                assignment = AssignmentCommand(
+                    assigneeType = TaskAssigneeType.USER,
+                    assigneeId = assignedUserId.toString(),
+                    displayName = "Assigned User"
+                )
+            )
+        )
+
+        val accessible = notificationRepository.findAccessible(
+            hotelId = hotel.id,
+            userId = assignedUserId,
+            roleCodes = emptySet()
+        )
+
+        assertThat(notificationRepository.countBySourceTaskId(created.id)).isEqualTo(1)
+        assertThat(accessible).hasSize(1)
+        val notification = accessible.single()
+        assertThat(notification.sourceTaskId).isEqualTo(created.id)
+        assertThat(notification.recipient).isEqualTo(NotificationRecipient.User(assignedUserId))
+    }
+}

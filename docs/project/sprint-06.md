@@ -3,6 +3,43 @@
 ## Goal
 Expand the hotel experience surface with notifications, dashboard, reporting, search, filters, offline support, attachments, voice, and image understanding.
 
+## Scope split
+
+### Sprint 6A - Notifications Foundation
+- Add persisted, hotel-scoped notifications.
+- Emit exactly one task-created notification from the existing Task Engine creation flow.
+- Add authenticated notification list and mark-as-read APIs.
+- Keep mobile changes minimal and avoid broad UI redesign.
+
+### Sprint 6B - Manager Dashboard
+- Add manager summary APIs.
+- Add workload and overdue widgets.
+- Reuse task and notification data instead of adding separate operational state.
+
+### Sprint 6C - Search and Filters
+- Add task search and filter contracts.
+- Keep pagination behavior consistent with existing task list pagination.
+- Add focused mobile filters without changing task ownership rules.
+
+### Sprint 6D - Attachments
+- Add attachment metadata contracts.
+- Add pending, failed, and attached UI states.
+- Avoid binary storage decisions until upload/storage boundaries are explicit.
+
+### Sprint 6E - Voice and Image Understanding
+- Route voice transcripts and image-derived observations through existing assistant message contracts.
+- Keep OpenAI behind `AiInterpreter`.
+- Preserve validation and task confirmation requirements.
+
+### Sprint 6F - Offline and Failure Handling
+- Harden mobile retry and recovery behavior.
+- Make assistant/task flows resilient to transient API failures.
+- Preserve task confirmation idempotency.
+
+### Sprint 6G - Reporting Baseline
+- Add basic operational reporting by task type, status, hotel, and SLA.
+- Avoid replacing dashboard APIs with report-specific query models unless needed.
+
 ## Business value
 Broadens Hotel OpAI from core task handling into a richer operational platform for hotel teams.
 

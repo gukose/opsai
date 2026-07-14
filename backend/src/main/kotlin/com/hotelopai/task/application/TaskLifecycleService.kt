@@ -21,14 +21,16 @@ class TaskLifecycleService @Autowired constructor(
     private val taskStateHistoryRepository: TaskStateHistoryRepository = NoOpTaskStateHistoryRepository,
     private val taskLogRepository: TaskLogRepository = NoOpTaskLogRepository,
     private val taskLogRecorder: TaskLogRecorder = TaskLogRecorder(NoOpTaskLogRepository),
-    private val completionPolicy: CompletionPolicy
+    private val completionPolicy: CompletionPolicy,
+    private val taskNotificationPublisher: TaskNotificationPublisher = NoOpTaskNotificationPublisher
 ) : TaskApplicationPort {
     constructor(taskRepository: TaskRepository) : this(
         taskRepository = taskRepository,
         taskStateHistoryRepository = NoOpTaskStateHistoryRepository,
         taskLogRepository = NoOpTaskLogRepository,
         taskLogRecorder = TaskLogRecorder(NoOpTaskLogRepository),
-        completionPolicy = NoOpCompletionPolicy()
+        completionPolicy = NoOpCompletionPolicy(),
+        taskNotificationPublisher = NoOpTaskNotificationPublisher
     )
 
     fun createTask(request: CreateTaskCommand): Task =
@@ -62,8 +64,7 @@ class TaskLifecycleService @Autowired constructor(
             message = "Task created",
             now = now
         )
-
-        return if (request.assignment != null) {
+        val created = if (request.assignment != null) {
             mutate(
                 taskId = saved.id.toString(),
                 operation = TaskTransition.ASSIGN,
@@ -75,6 +76,8 @@ class TaskLifecycleService @Autowired constructor(
         } else {
             saved
         }
+        taskNotificationPublisher.taskCreated(created, now)
+        return created
     }
 
     fun getTask(taskId: String, now: Instant = Instant.now()): Task =
@@ -264,6 +267,10 @@ private object NoOpTaskStateHistoryRepository : TaskStateHistoryRepository {
 
 private object NoOpTaskLogRepository : TaskLogRepository {
     override fun append(entry: TaskLogEntry) = Unit
+}
+
+private object NoOpTaskNotificationPublisher : TaskNotificationPublisher {
+    override fun taskCreated(task: Task, now: Instant) = Unit
 }
 
 private fun String.toTaskId(): UUID = UUID.fromString(this)
