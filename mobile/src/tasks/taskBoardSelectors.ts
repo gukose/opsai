@@ -13,6 +13,8 @@ export type TaskBoardOverview = {
   taskCount: number;
   urgentCount: number;
   completionPercent: number;
+  unreadNotificationCount?: number;
+  dueSoonCount?: number;
 };
 
 const ACTIVE_STATUS_RANK: Record<string, number> = {

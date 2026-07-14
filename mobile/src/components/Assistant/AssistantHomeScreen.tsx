@@ -10,6 +10,7 @@ import { AssistantHeader } from "./AssistantHeader";
 import { NextTaskCard } from "./NextTaskCard";
 import { OverviewStrip } from "./OverviewStrip";
 import { useAssistantHomeState } from "../../assistant/useAssistantHomeState";
+import { useDashboardSummaryState } from "../../dashboard/useDashboardSummaryState";
 import { useTaskBoardState } from "../../tasks/useTaskBoardState";
 import { TaskEmptyState } from "../Tasks/TaskEmptyState";
 import { TasksScreen } from "../Tasks/TasksScreen";
@@ -52,6 +53,8 @@ export function AssistantHomeScreen({ accessToken, currentUser, onLogout }: Assi
     startHomeTask,
     resumeHomeTask
   } = useTaskBoardState(accessToken);
+  const { summary: dashboardSummary, refreshDashboard } = useDashboardSummaryState(accessToken);
+  const overviewForDisplay = dashboardSummary?.overview ?? overview;
   const assistantActionDisabled = isSending || isConfirming;
   const isHomeSurface = activeSection === "home" || activeSection === "assistant";
 
@@ -68,7 +71,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, onLogout }: Assi
         />
         {isHomeSurface ? (
           <>
-            <OverviewStrip {...overview} />
+            <OverviewStrip {...overviewForDisplay} />
             {assistantErrorMessage ? <TaskErrorBanner title="Assistant sync issue" message={assistantErrorMessage} /> : null}
             {errorMessage ? <TaskErrorBanner title="Task sync issue" message={errorMessage} /> : null}
             {homeTask ? (
@@ -104,6 +107,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, onLogout }: Assi
                 const createdTaskId = await confirmTask();
                 if (createdTaskId) {
                   await refreshTasks();
+                  await refreshDashboard();
                 }
               }}
               isActionDisabled={assistantActionDisabled}

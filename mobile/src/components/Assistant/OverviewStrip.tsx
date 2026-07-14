@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
-import { ClipboardCheck, TriangleAlert } from "lucide-react-native";
+import { Bell, ClipboardCheck, TriangleAlert } from "lucide-react-native";
 import { ComponentType } from "react";
 import { LucideProps } from "lucide-react-native";
 
@@ -8,7 +8,12 @@ import { TaskBoardOverview } from "../../tasks/taskBoardSelectors";
 
 type OverviewStripProps = TaskBoardOverview;
 
-export function OverviewStrip({ taskCount, urgentCount, completionPercent }: OverviewStripProps) {
+export function OverviewStrip({
+  taskCount,
+  urgentCount,
+  completionPercent,
+  unreadNotificationCount
+}: OverviewStripProps) {
   return (
     <View style={styles.wrap}>
       <Text style={styles.title}>Today's Overview</Text>
@@ -27,6 +32,15 @@ export function OverviewStrip({ taskCount, urgentCount, completionPercent }: Ove
           title="Urgent"
           value={String(urgentCount)}
         />
+        {typeof unreadNotificationCount === "number" ? (
+          <OverviewCard
+            icon={Bell}
+            iconColor="#0f766e"
+            iconBackground="#e6f7f4"
+            title="Unread"
+            value={String(unreadNotificationCount)}
+          />
+        ) : null}
         <View style={styles.progressCard}>
           <View style={styles.track}>
             <View style={[styles.progress, { width: `${Math.max(0, Math.min(100, completionPercent))}%` }]} />
