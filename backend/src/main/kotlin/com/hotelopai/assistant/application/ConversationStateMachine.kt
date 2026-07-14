@@ -20,15 +20,18 @@ class ConversationStateMachine(
         now: Instant = Instant.now()
     ): ConversationTurnResult {
         val transcript = when {
+            command.voiceTranscriptMetadata?.transcript?.isNotBlank() == true -> command.voiceTranscriptMetadata.transcript
             command.voiceTranscript?.isNotBlank() == true -> command.voiceTranscript
             command.inputType == com.hotelopai.assistant.domain.InputType.VOICE -> command.text
             else -> command.text
         }
 
         require(
-            transcript.isNullOrBlank().not() || command.attachments.isNotEmpty()
+            transcript.isNullOrBlank().not() ||
+                command.attachments.isNotEmpty() ||
+                command.imageObservations.any { it.semanticText.isNotBlank() }
         ) {
-            "User message requires text, transcript or an attachment"
+            "User message requires text, transcript, observation or an attachment"
         }
 
         val voiceTranscript = if (
@@ -46,8 +49,10 @@ class ConversationStateMachine(
             inputType = command.inputType,
             text = command.text.ifBlank { null },
             voiceTranscript = voiceTranscript,
+            voiceTranscriptMetadata = command.voiceTranscriptMetadata,
             audioMetadata = command.audioMetadata,
             attachments = command.attachments,
+            imageObservations = command.imageObservations,
             createdAt = now
         )
 
@@ -57,7 +62,7 @@ class ConversationStateMachine(
 
         val interpretation = runCatching {
             interpreter.interpret(
-                AssistantInterpretationRequest.of(withUserMessage, transcript.orEmpty())
+                AssistantInterpretationRequest.of(withUserMessage, SemanticInputNormalizer.normalize(userMessage))
             )
         }.getOrElse { exception ->
             return clarificationTurn(withUserMessage, exception.message, now)

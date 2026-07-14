@@ -48,3 +48,42 @@ export type DashboardSummaryDto = {
     unassigned: number;
   };
 };
+
+export type DashboardReportBucketDto = {
+  key: string;
+  count: number;
+};
+
+export type TaskReportingDto = {
+  hotelId: string;
+  range: string;
+  generatedAt: string;
+  window: {
+    startInclusive: string;
+    endExclusive: string;
+    timeBasis: string;
+  };
+  createdInRange: {
+    total: number;
+    byType: DashboardReportBucketDto[];
+    byStatus: DashboardReportBucketDto[];
+    byPriority: DashboardReportBucketDto[];
+    sla: {
+      completedOnTime: number;
+      completedLate: number;
+      openWithinSla: number;
+      openOverdue: number;
+      cancelled: number;
+      breached: number;
+    };
+  };
+  currentSnapshot: {
+    active: number;
+    byStatus: DashboardReportBucketDto[];
+    byPriority: DashboardReportBucketDto[];
+    sla: {
+      dueSoon: number;
+      overdue: number;
+    };
+  };
+};

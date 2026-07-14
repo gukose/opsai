@@ -28,30 +28,8 @@ object ConversationInterpreterPromptBuilder {
             "none"
         } else {
             messages.joinToString(separator = "\n") { message ->
-                "- ${message.role.name.lowercase()}: ${message.text ?: attachmentSummary(message)}${observationSummary(message)}"
+                "- ${message.role.name.lowercase()}: ${SemanticInputNormalizer.normalize(message).ifBlank { "[empty]" }}"
             }
-        }
-
-    private fun attachmentSummary(message: ConversationMessage): String =
-        if (message.attachments.isEmpty()) {
-            "[empty]"
-        } else {
-            val names = message.attachments
-                .mapNotNull { it.originalFileName }
-                .take(3)
-                .joinToString()
-            if (names.isBlank()) {
-                "[attachments:${message.attachments.size}]"
-            } else {
-                "[attachments:${message.attachments.size}: $names]"
-            }
-        }
-
-    private fun observationSummary(message: ConversationMessage): String =
-        if (message.imageObservations.isEmpty()) {
-            ""
-        } else {
-            " [observations:${message.imageObservations.size}]"
         }
 
     private fun formatMap(values: Map<String, String>): String =

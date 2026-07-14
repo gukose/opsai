@@ -1,6 +1,7 @@
 package com.hotelopai.dashboard.application
 
 import com.hotelopai.dashboard.domain.DashboardWindow
+import com.hotelopai.dashboard.domain.DashboardTimeRange
 import java.time.Instant
 import java.util.UUID
 
@@ -24,4 +25,11 @@ interface DashboardReadRepository {
     ): DashboardNotificationSummary
 
     fun summarizeWorkload(hotelId: UUID): DashboardWorkloadSummary
+
+    fun taskReport(
+        hotelId: UUID,
+        range: DashboardTimeRange,
+        window: DashboardWindow,
+        generatedAt: Instant
+    ): TaskReportingSummary
 }

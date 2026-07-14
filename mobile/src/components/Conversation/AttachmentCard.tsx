@@ -7,10 +7,12 @@ type AttachmentCardProps = {
   imageUri?: string;
   filename: string;
   size: string;
+  type?: string;
+  storageStatus?: string;
   timestamp?: string;
 };
 
-export function AttachmentCard({ imageUri, filename, size, timestamp }: AttachmentCardProps) {
+export function AttachmentCard({ imageUri, filename, size, type, storageStatus, timestamp }: AttachmentCardProps) {
   return (
     <View style={styles.card}>
       {imageUri ? (
@@ -21,9 +23,9 @@ export function AttachmentCard({ imageUri, filename, size, timestamp }: Attachme
         </View>
       )}
       <View style={styles.meta}>
-        <Text style={styles.title}>Photo attached</Text>
+        <Text style={styles.title}>{type === "PDF" ? "PDF reference" : type === "DOCUMENT" ? "Document reference" : "Image reference"}</Text>
         <Text style={styles.filename}>{filename}</Text>
-        <Text style={styles.size}>{size}</Text>
+        <Text style={styles.size}>{size} · {storageStatus === "LOCAL_METADATA_ONLY" ? "Local metadata only" : "Metadata"}</Text>
       </View>
       {timestamp ? <Text style={styles.timestamp}>{timestamp}</Text> : null}
     </View>

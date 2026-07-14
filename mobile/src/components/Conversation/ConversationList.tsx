@@ -50,6 +50,8 @@ export function ConversationList({
               imageUri={item.attachment.imageUri}
               filename={item.attachment.filename}
               size={item.attachment.size}
+              type={item.attachment.type}
+              storageStatus={item.attachment.storageStatus}
               timestamp={item.timestamp}
             />
           ) : null}

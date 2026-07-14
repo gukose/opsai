@@ -10,6 +10,7 @@ import {
 import { SessionService, LoginCredentials } from "../auth/SessionService";
 import { createSessionStore } from "../session/createSessionStore";
 import { AppSessionSnapshot, CurrentUserSnapshot } from "../session/sessionTypes";
+import { defaultOfflineCache } from "../offline/offlineCache";
 import { AppLaunchState, AppStateSnapshot } from "./appState";
 
 type AppBootstrapContextValue = AppStateSnapshot & {
@@ -122,10 +123,16 @@ export function AppBootstrapProvider({ children }: { children: ReactNode }) {
       },
       logout: async () => {
         setStatus("loading");
+        const scope = session?.currentUser?.hotelId && session.currentUser.userId
+          ? { hotelId: session.currentUser.hotelId, userId: session.currentUser.userId }
+          : null;
 
         try {
           await sessionService.logout();
         } finally {
+          if (scope) {
+            await defaultOfflineCache.clearScope(scope);
+          }
           setSession(null);
           setStatus("unauthenticated");
         }

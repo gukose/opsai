@@ -3,7 +3,9 @@ package com.hotelopai.assistant.application
 import com.hotelopai.assistant.domain.Conversation
 import com.hotelopai.assistant.domain.ConversationAttachment
 import com.hotelopai.assistant.domain.AudioMetadata
+import com.hotelopai.assistant.domain.ImageObservation
 import com.hotelopai.assistant.domain.InputType
+import com.hotelopai.assistant.domain.VoiceTranscriptMetadata
 import com.hotelopai.task.application.TaskApplicationPort
 import org.springframework.stereotype.Service
 import java.util.UUID
@@ -34,10 +36,44 @@ class AssistantConversationService(
         text: String,
         inputType: InputType,
         voiceTranscript: String? = null,
+        voiceTranscriptMetadata: VoiceTranscriptMetadata? = null,
         audioMetadata: AudioMetadata? = null,
-        attachments: List<ConversationAttachment>
+        attachments: List<ConversationAttachment>,
+        imageObservations: List<ImageObservation> = emptyList()
     ): ConversationTurnResult {
-        val conversation = getConversation(conversationId)
+        validateAttachments(attachments)
+        validateImageObservations(imageObservations)
+        return handleMessage(getConversation(conversationId), text, inputType, voiceTranscript, voiceTranscriptMetadata, audioMetadata, attachments, imageObservations)
+    }
+
+    fun sendMessage(
+        conversationId: String,
+        hotelId: String,
+        userId: String,
+        text: String,
+        inputType: InputType,
+        voiceTranscript: String? = null,
+        voiceTranscriptMetadata: VoiceTranscriptMetadata? = null,
+        audioMetadata: AudioMetadata? = null,
+        attachments: List<ConversationAttachment>,
+        imageObservations: List<ImageObservation> = emptyList()
+    ): ConversationTurnResult {
+        validateAttachments(attachments)
+        validateImageObservations(imageObservations)
+        val conversation = getConversation(conversationId, hotelId, userId)
+        return handleMessage(conversation, text, inputType, voiceTranscript, voiceTranscriptMetadata, audioMetadata, attachments, imageObservations)
+    }
+
+    private fun handleMessage(
+        conversation: Conversation,
+        text: String,
+        inputType: InputType,
+        voiceTranscript: String?,
+        voiceTranscriptMetadata: VoiceTranscriptMetadata?,
+        audioMetadata: AudioMetadata?,
+        attachments: List<ConversationAttachment>,
+        imageObservations: List<ImageObservation>
+    ): ConversationTurnResult {
         val result = stateMachine.handleUserMessage(
             conversation = conversation,
             command = ConversationCommand(
@@ -45,8 +81,10 @@ class AssistantConversationService(
                 text = text,
                 inputType = inputType,
                 voiceTranscript = voiceTranscript,
+                voiceTranscriptMetadata = voiceTranscriptMetadata,
                 audioMetadata = audioMetadata,
-                attachments = attachments
+                attachments = attachments,
+                imageObservations = imageObservations
             )
         )
 
@@ -58,8 +96,23 @@ class AssistantConversationService(
     fun confirmTask(
         conversationId: String,
         idempotencyKey: String
+    ): ConversationTurnResult =
+        confirmTask(getConversation(conversationId), idempotencyKey)
+
+    fun confirmTask(
+        conversationId: String,
+        hotelId: String,
+        userId: String,
+        idempotencyKey: String
     ): ConversationTurnResult {
-        val conversation = getConversation(conversationId)
+        val conversation = getConversation(conversationId, hotelId, userId)
+        return confirmTask(conversation, idempotencyKey)
+    }
+
+    private fun confirmTask(
+        conversation: Conversation,
+        idempotencyKey: String
+    ): ConversationTurnResult {
         require(idempotencyKey.isNotBlank()) { "idempotencyKey must not be blank" }
 
         val existingConfirmation =
@@ -135,9 +188,33 @@ class AssistantConversationService(
         )
     }
 
+    fun resetConversation(conversationId: String, hotelId: String, userId: String): ConversationTurnResult {
+        val conversation = getConversation(conversationId, hotelId, userId)
+        val result = stateMachine.reset(conversation)
+
+        return result.copy(
+            conversation = conversationRepository.save(result.conversation)
+        )
+    }
+
     private fun getConversation(conversationId: String): Conversation =
         conversationRepository.findById(conversationId)
             ?: throw ConversationNotFoundException(conversationId)
+
+    private fun getConversation(conversationId: String, hotelId: String, userId: String): Conversation =
+        conversationRepository.findByIdAndHotelIdAndUserId(conversationId, hotelId, userId)
+            ?: throw ConversationNotFoundException(conversationId)
+
+    private fun validateAttachments(attachments: List<ConversationAttachment>) {
+        require(attachments.size <= 3) { "at most 3 attachments are allowed" }
+        val ids = attachments.map { it.id }
+        require(ids.size == ids.toSet().size) { "duplicate attachment ids are not allowed" }
+    }
+
+    private fun validateImageObservations(imageObservations: List<ImageObservation>) {
+        val ids = imageObservations.map { it.id }
+        require(ids.size == ids.toSet().size) { "duplicate image observation ids are not allowed" }
+    }
 
     private fun newId(prefix: String): String =
         "$prefix-${UUID.randomUUID()}"

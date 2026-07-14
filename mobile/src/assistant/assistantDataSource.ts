@@ -1,9 +1,20 @@
 import { AssistantHomeState } from "./homeState";
+import {
+  LocalAttachmentMetadata,
+  LocalImageObservationMetadata,
+  LocalVoiceTranscriptMetadata
+} from "./types";
 
 export interface AssistantDataSource {
   loadHomeState(): Promise<AssistantHomeState>;
 
-  sendTextMessage(conversationId: string, text: string): Promise<AssistantHomeState>;
+  sendTextMessage(
+    conversationId: string,
+    text: string,
+    attachments?: LocalAttachmentMetadata[],
+    voiceTranscript?: LocalVoiceTranscriptMetadata | null,
+    imageObservations?: LocalImageObservationMetadata[]
+  ): Promise<AssistantHomeState>;
 
   sendVoiceMessage(
     conversationId: string,

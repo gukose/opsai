@@ -24,6 +24,7 @@ const baseResponse = {
       inputType: "TEXT",
       text: "Room 502 has a leaking sink, please send maintenance.",
       voiceTranscript: null,
+      voiceTranscriptMetadata: null,
       audioMetadata: null,
       attachments: [],
       imageObservations: [],
@@ -77,6 +78,52 @@ test("maps successful OpenAI interpretation into intent and task preview details
   assert.equal(preview?.task.priority, "Medium");
   assert.equal(preview?.task.type, "Fix leaking sink");
   assert.equal(preview?.task.description, "Room 502 sink is leaking.");
+});
+
+test("maps persisted image observations as user-provided image notes", () => {
+  const state = mapAssistantConversationResponseToHomeState({
+    ...baseResponse,
+    messages: [
+      {
+        id: "message-attachment",
+        role: "USER",
+        inputType: "MIXED",
+        text: null,
+        voiceTranscript: null,
+        voiceTranscriptMetadata: null,
+        audioMetadata: null,
+        attachments: [
+          {
+            id: "att-1",
+            type: "IMAGE",
+            originalFileName: "sink.png",
+            mimeType: "image/png",
+            sizeBytes: 1234,
+            widthPx: 100,
+            heightPx: 100,
+            localReference: "local://sink.png",
+            storageStatus: "LOCAL_METADATA_ONLY"
+          }
+        ],
+        imageObservations: [
+          {
+            id: "obs-1",
+            attachmentId: "att-1",
+            text: "Water visible under the sink",
+            source: "USER_PROVIDED"
+          }
+        ],
+        attachmentIds: ["att-1"],
+        createdAt: "2026-07-10T09:15:00Z"
+      }
+    ]
+  });
+
+  const imageNote = state.conversationItems.find(
+    (item) => item.type === "text" && item.text === "Image note: Water visible under the sink"
+  );
+
+  assert.equal(imageNote?.author, "user");
 });
 
 test("detects OpenAI interpretation failure responses for UI error feedback", () => {

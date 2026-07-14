@@ -17,6 +17,8 @@ type TasksScreenProps = {
   isLoading: boolean;
   isRefreshing: boolean;
   errorMessage: string | null;
+  staleReason: string | null;
+  cachedAt: string | null;
   filters: TaskFilterState;
   onRefresh: () => Promise<void>;
   onFiltersChange: (filters: TaskFilterState) => void;
@@ -37,6 +39,8 @@ export function TasksScreen({
   isLoading,
   isRefreshing,
   errorMessage,
+  staleReason,
+  cachedAt,
   filters,
   onRefresh,
   onFiltersChange,
@@ -73,13 +77,19 @@ export function TasksScreen({
       </View>
 
       {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
+      {staleReason ? (
+        <Text style={styles.stale}>
+          {staleReason}
+          {cachedAt ? ` Last updated ${formatCacheTime(cachedAt)}.` : ""}
+        </Text>
+      ) : null}
       {isLoading ? <Text style={styles.loading}>Loading tasks...</Text> : null}
       <TaskFilterRow filters={filters} onChange={onFiltersChange} onClear={onClearFilters} />
 
       {!isLoading && tasks.length === 0 ? (
         <TaskEmptyState
-          title="No tasks yet"
-          message={`When real work arrives for ${hotelLabel}, the list will appear here.`}
+          title={staleReason ? "No saved data" : "No tasks yet"}
+          message={staleReason ? "No saved data is available offline." : `When real work arrives for ${hotelLabel}, the list will appear here.`}
         />
       ) : null}
 
@@ -244,6 +254,15 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
   );
 }
 
+function formatCacheTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "recently";
+  }
+
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -294,6 +313,13 @@ const styles = StyleSheet.create({
     color: colors.red,
     fontSize: typography.caption,
     fontWeight: "700"
+  },
+  stale: {
+    marginHorizontal: 2,
+    marginBottom: 5,
+    color: colors.textMuted,
+    fontSize: typography.tiny,
+    fontWeight: "800"
   },
   loading: {
     marginBottom: 8,

@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { assistantStaticMockEnabled } from "../config/assistantConfig";
 import { getAppApiErrorMessage } from "../api/client/AppApiError";
 import { nextAssignedTask } from "../assistant/sampleConversation";
+import { CurrentUserSnapshot } from "../session/sessionTypes";
+import { defaultOfflineCache, taskListCacheKey } from "../offline/offlineCache";
 import { TaskService } from "./TaskService";
 import {
   emptyTaskFilters,
@@ -21,6 +23,8 @@ type TaskBoardState = {
   isLoading: boolean;
   isRefreshing: boolean;
   errorMessage: string | null;
+  staleReason: string | null;
+  cachedAt: string | null;
   filters: TaskFilterState;
   homeTask: TaskSummary | null;
   overview: ReturnType<typeof buildTaskBoardOverview>;
@@ -39,7 +43,7 @@ type TaskBoardState = {
 
 type TaskCommand = (taskId: string) => Promise<TaskDetail>;
 
-export function useTaskBoardState(accessToken: string | null): TaskBoardState {
+export function useTaskBoardState(accessToken: string | null, currentUser?: CurrentUserSnapshot | null): TaskBoardState {
   const useMockTasks = assistantStaticMockEnabled;
   const service = useMemo(
     () =>
@@ -59,6 +63,8 @@ export function useTaskBoardState(accessToken: string | null): TaskBoardState {
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [staleReason, setStaleReason] = useState<string | null>(null);
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
   const [filters, setFilters] = useState<TaskFilterState>(emptyTaskFilters);
   const selectedTaskIdRef = useRef<string | null>(selectedTaskId);
   const homeTaskRef = useRef<TaskSummary | null>(useMockTasks ? mockTaskFromSample() : null);
@@ -114,6 +120,12 @@ export function useTaskBoardState(accessToken: string | null): TaskBoardState {
 
         const nextTasks = await service.listTasks(filtersRef.current);
         setTasks(nextTasks);
+        const cacheKey = scopedTaskCacheKey(currentUser, filtersRef.current);
+        if (cacheKey) {
+          void defaultOfflineCache.save(cacheKey, nextTasks);
+        }
+        setStaleReason(null);
+        setCachedAt(null);
         if (nextTasks.length === 0) {
           setSelectedTaskId(null);
           setSelectedTask(null);
@@ -136,7 +148,25 @@ export function useTaskBoardState(accessToken: string | null): TaskBoardState {
         const detail = await service.getTask(resolvedId);
         setSelectedTask(detail);
       } catch (error) {
-        setErrorMessage(getAppApiErrorMessage(error));
+        const message = getAppApiErrorMessage(error);
+        setErrorMessage(message);
+        const key = scopedTaskCacheKey(currentUser, filtersRef.current);
+        if (tasks.length === 0 && key) {
+          const cached = await defaultOfflineCache.load<TaskSummary[]>(key);
+          if (cached) {
+            setTasks(cached.data);
+            setCachedAt(cached.cachedAt);
+            setStaleReason("Refresh failed. Showing last saved data.");
+            const firstTask = cached.data[0];
+            setSelectedTaskId(firstTask?.id ?? null);
+            setSelectedTask(null);
+          } else {
+            setStaleReason("No saved data is available offline.");
+            setCachedAt(null);
+          }
+        } else if (tasks.length > 0) {
+          setStaleReason("Refresh failed. Showing last saved data.");
+        }
       } finally {
         if (!silent) {
           setIsLoading(false);
@@ -159,6 +189,7 @@ export function useTaskBoardState(accessToken: string | null): TaskBoardState {
 
       if (useMockTasks) {
         setSelectedTask(mockTaskDetailFromSample());
+        setStaleReason(null);
         return;
       }
 
@@ -253,7 +284,9 @@ export function useTaskBoardState(accessToken: string | null): TaskBoardState {
     selectedTaskId,
     isLoading,
     isRefreshing,
-    errorMessage,
+      errorMessage,
+      staleReason,
+      cachedAt,
     filters,
     homeTask,
     overview,
@@ -269,6 +302,20 @@ export function useTaskBoardState(accessToken: string | null): TaskBoardState {
     startHomeTask: async () => runHomeCommand((taskId) => service.startTask(taskId)),
     resumeHomeTask: async () => runHomeCommand((taskId) => service.resumeTask(taskId))
   };
+}
+
+function scopedTaskCacheKey(currentUser: CurrentUserSnapshot | null | undefined, filters: TaskFilterState): string | null {
+  if (!currentUser?.hotelId || !currentUser.userId) {
+    return null;
+  }
+
+  return taskListCacheKey(
+    {
+      hotelId: currentUser.hotelId,
+      userId: currentUser.userId
+    },
+    filters
+  );
 }
 
 function taskSummaryFromDetail(task: TaskDetail): TaskSummary {

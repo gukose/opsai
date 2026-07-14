@@ -10,13 +10,23 @@ import { CurrentUserSnapshot } from "../session/sessionTypes";
 import { createAssistantHomeDataSource } from "./assistantDataSourceFactory";
 import { AssistantHomeState, createEmptyAssistantHomeState } from "./homeState";
 import { ConversationItem } from "./types";
+import {
+  LocalAttachmentMetadata,
+  LocalImageObservationMetadata,
+  LocalVoiceTranscriptMetadata
+} from "./types";
 
 type AssistantHomeController = AssistantHomeState & {
   isBackendMode: boolean;
   isSending: boolean;
   isConfirming: boolean;
   errorMessage: string | null;
-  sendTextMessage: (text: string) => Promise<void>;
+  sendTextMessage: (
+    text: string,
+    attachments?: LocalAttachmentMetadata[],
+    voiceTranscript?: LocalVoiceTranscriptMetadata | null,
+    imageObservations?: LocalImageObservationMetadata[]
+  ) => Promise<boolean>;
   confirmTask: () => Promise<string | null>;
   resetConversation: () => Promise<void>;
 };
@@ -138,14 +148,20 @@ export function useAssistantHomeState({
   }, [applyState, dataSource, handleError]);
 
   const sendTextMessage = useCallback(
-    async (text: string) => {
+    async (
+      text: string,
+      attachments: LocalAttachmentMetadata[] = [],
+      voiceTranscript?: LocalVoiceTranscriptMetadata | null,
+      imageObservations: LocalImageObservationMetadata[] = []
+    ) => {
       const message = text.trim();
-      if (!message || assistantStaticMockEnabled) {
-        return;
+      const hasSemanticInput = Boolean(voiceTranscript?.transcript.trim()) || imageObservations.length > 0;
+      if ((!message && attachments.length === 0 && !hasSemanticInput) || assistantStaticMockEnabled) {
+        return false;
       }
 
       if (requestLockRef.current) {
-        return;
+        return false;
       }
 
       requestLockRef.current = "send";
@@ -157,19 +173,27 @@ export function useAssistantHomeState({
       try {
         const conversationId = await ensureConversation();
         if (!conversationId) {
-          return;
+          return false;
         }
 
         previousState = stateRef.current;
         if (assistantBackendEnabled) {
-          applyState(appendUserMessage(previousState, message));
+          applyState(appendUserMessage(previousState, message, voiceTranscript, imageObservations));
         }
 
-        const nextState = await dataSource.sendTextMessage(conversationId, message);
+        const nextState = await dataSource.sendTextMessage(
+          conversationId,
+          message,
+          attachments,
+          voiceTranscript,
+          imageObservations
+        );
         applyState(nextState);
+        return true;
       } catch (error) {
         console.warn("Assistant message send failed.", error);
         handleError(error, previousState ?? stateRef.current);
+        return false;
       } finally {
         requestLockRef.current = null;
         setIsSending(false);
@@ -263,17 +287,44 @@ function buildIdempotencyKey(): string {
   return `confirm-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function appendUserMessage(state: AssistantHomeState, text: string): AssistantHomeState {
-  const message: ConversationItem = {
-    id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    type: "text",
-    author: "user",
-    text,
-    timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-  };
+function appendUserMessage(
+  state: AssistantHomeState,
+  text: string,
+  voiceTranscript?: LocalVoiceTranscriptMetadata | null,
+  imageObservations: LocalImageObservationMetadata[] = []
+): AssistantHomeState {
+  const timestamp = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const messages: ConversationItem[] = [
+    ...(text
+      ? [{
+          id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          type: "text" as const,
+          author: "user" as const,
+          text,
+          timestamp
+        }]
+      : []),
+    ...(voiceTranscript
+      ? [{
+          id: `local-voice-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          type: "voice" as const,
+          author: "user" as const,
+          transcript: voiceTranscript.transcript,
+          duration: voiceTranscript.durationMs ? `${Math.round(voiceTranscript.durationMs / 1000)}s` : "0:00",
+          timestamp
+        }]
+      : []),
+    ...imageObservations.map((observation) => ({
+      id: `local-observation-${observation.id}`,
+      type: "text" as const,
+      author: "user" as const,
+      text: `Image note: ${observation.text}`,
+      timestamp
+    }))
+  ];
 
   return {
     ...state,
-    conversationItems: [...state.conversationItems, message]
+    conversationItems: [...state.conversationItems, ...messages]
   };
 }

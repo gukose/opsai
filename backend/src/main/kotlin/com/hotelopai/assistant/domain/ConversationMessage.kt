@@ -8,6 +8,7 @@ data class ConversationMessage(
     val inputType: InputType,
     val text: String?,
     val voiceTranscript: String? = null,
+    val voiceTranscriptMetadata: VoiceTranscriptMetadata? = null,
     val audioMetadata: AudioMetadata? = null,
     val attachments: List<ConversationAttachment> = emptyList(),
     val imageObservations: List<ImageObservation> = emptyList(),
@@ -20,11 +21,24 @@ data class ConversationMessage(
         require(
             text?.isNotBlank() == true ||
                 voiceTranscript?.isNotBlank() == true ||
-                attachments.isNotEmpty()
+                voiceTranscriptMetadata?.transcript?.isNotBlank() == true ||
+                attachments.isNotEmpty() ||
+                imageObservations.any { it.semanticText.isNotBlank() }
         ) {
-            "ConversationMessage requires text, transcript or at least one attachment"
+            "ConversationMessage requires text, transcript, observation or at least one attachment"
         }
     }
+}
+
+data class VoiceTranscriptMetadata(
+    val transcript: String,
+    val languageCode: String? = null,
+    val durationMs: Long? = null,
+    val source: VoiceTranscriptSource = VoiceTranscriptSource.CLIENT_TRANSCRIPT
+)
+
+enum class VoiceTranscriptSource {
+    CLIENT_TRANSCRIPT
 }
 
 data class AudioMetadata(

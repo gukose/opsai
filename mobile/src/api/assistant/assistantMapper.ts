@@ -131,13 +131,24 @@ function mapConversationMessage(message: AssistantConversationMessageDto): Conve
   }
 
   if (message.attachments.length > 0) {
-    return message.attachments.map((attachment, index) => ({
+    const attachmentItems: ConversationItem[] = message.attachments.map((attachment, index) => ({
       id: `${message.id}-${attachment.id || index}`,
       type: "attachment",
       author: message.role === "USER" ? "user" : "assistant",
       attachment: mapAttachment(attachment),
       timestamp: shortTime(message.createdAt)
     }));
+    const observationItems: ConversationItem[] = message.imageObservations
+      .map((observation) => observation.text ?? observation.description ?? "")
+      .filter((text) => text.trim().length > 0)
+      .map((text, index) => ({
+        id: `${message.id}-observation-${index}`,
+        type: "text" as const,
+        author: message.role === "USER" ? "user" as const : "assistant" as const,
+        text: `Image note: ${text}`,
+        timestamp: shortTime(message.createdAt)
+      }));
+    return [...attachmentItems, ...observationItems];
   }
 
   return [
@@ -154,12 +165,15 @@ function mapConversationMessage(message: AssistantConversationMessageDto): Conve
 function mapAttachment(attachment: AssistantMessageAttachmentDto): ConversationAttachment {
   return {
     id: attachment.id,
+    type: attachment.type ?? undefined,
     filename: attachment.originalFileName ?? attachment.id,
     size: formatFileSize(attachment.sizeBytes),
     mimeType: attachment.mimeType ?? undefined,
     imageUri: undefined,
     widthPx: attachment.widthPx ?? undefined,
-    heightPx: attachment.heightPx ?? undefined
+    heightPx: attachment.heightPx ?? undefined,
+    localReference: attachment.localReference ?? undefined,
+    storageStatus: attachment.storageStatus ?? undefined
   };
 }
 

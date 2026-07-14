@@ -1,5 +1,8 @@
 import {
   AssignedTask,
+  LocalAttachmentMetadata,
+  LocalImageObservationMetadata,
+  LocalVoiceTranscriptMetadata,
   ConversationItem,
   TextMessage,
   TaskPreviewMessage
@@ -30,20 +33,33 @@ export class LocalConversationEngine {
     return this.ensureSession().state;
   }
 
-  sendTextMessage(conversationId: string, text: string): AssistantHomeState {
+  sendTextMessage(
+    conversationId: string,
+    text: string,
+    attachments: LocalAttachmentMetadata[] = [],
+    voiceTranscript?: LocalVoiceTranscriptMetadata | null,
+    imageObservations: LocalImageObservationMetadata[] = []
+  ): AssistantHomeState {
     const session = this.ensureSession(conversationId);
-    const message = text.trim();
+    const semanticText = [text.trim(), voiceTranscript?.transcript.trim(), ...imageObservations.map((item) => item.text.trim())]
+      .filter(Boolean)
+      .join("\n");
 
-    if (!message) {
+    if (!semanticText && attachments.length === 0) {
       return session.state;
     }
 
-    const userMessage = buildMessage("user", message);
-    const conversationItems = [...session.state.conversationItems, userMessage];
+    const userItems: ConversationItem[] = [
+      ...(text.trim() ? [buildMessage("user", text.trim())] : []),
+      ...(voiceTranscript ? [buildMessage("user", `Client transcript: ${voiceTranscript.transcript}`)] : []),
+      ...imageObservations.map((observation) => buildMessage("user", `Image note: ${observation.text}`)),
+      ...attachments.map((attachment) => buildAttachmentMessage(attachment))
+    ];
+    const conversationItems = [...session.state.conversationItems, ...userItems];
     const currentFieldKey = session.stage === "collecting" ? session.pendingFieldKey : null;
 
     if (!session.activeFlow) {
-      const flow = this.pickFlow(message);
+      const flow = this.pickFlow(semanticText);
       if (!flow) {
         session.state = {
           ...session.state,
@@ -60,14 +76,14 @@ export class LocalConversationEngine {
       session.activeFlow = flow;
       session.fields = {
         ...session.fields,
-        ...flow.extractFields(message, currentFieldKey)
+        ...flow.extractFields(semanticText, currentFieldKey)
       };
       return this.continueFlow(session, conversationItems);
     }
 
     session.fields = {
       ...session.fields,
-      ...this.extractFields(session, message, currentFieldKey)
+      ...this.extractFields(session, semanticText, currentFieldKey)
     };
     return this.continueFlow(session, conversationItems);
   }
@@ -259,6 +275,26 @@ function buildAssistantMessage(text: string): ConversationItem {
   } as TextMessage;
 }
 
+function buildAttachmentMessage(attachment: LocalAttachmentMetadata): ConversationItem {
+  return {
+    id: `attachment-${attachment.id}`,
+    type: "attachment",
+    author: "user",
+    attachment: {
+      id: attachment.id,
+      type: attachment.type,
+      filename: attachment.originalFileName,
+      size: formatFileSize(attachment.sizeBytes),
+      mimeType: attachment.mimeType,
+      widthPx: attachment.widthPx,
+      heightPx: attachment.heightPx,
+      localReference: attachment.localReference,
+      storageStatus: "LOCAL_METADATA_ONLY"
+    },
+    timestamp: shortTime()
+  };
+}
+
 function buildTaskPreview(task: TaskPreviewMessage["task"]): TaskPreviewMessage {
   return {
     id: `preview-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -285,4 +321,14 @@ function questionPromptFor(flow: LocalConversationFlow, field: { key: string; la
 
 function shortTime(): string {
   return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatFileSize(sizeBytes: number): string {
+  if (sizeBytes >= 1_000_000) {
+    return `${(sizeBytes / 1_000_000).toFixed(1)} MB`;
+  }
+  if (sizeBytes >= 1_000) {
+    return `${Math.round(sizeBytes / 1_000)} KB`;
+  }
+  return `${sizeBytes} B`;
 }

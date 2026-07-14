@@ -1,6 +1,11 @@
 import { AssistantDataSource } from "./assistantDataSource";
 import { AssistantHomeState } from "./homeState";
 import { LocalConversationEngine } from "./localConversationEngine";
+import {
+  LocalAttachmentMetadata,
+  LocalImageObservationMetadata,
+  LocalVoiceTranscriptMetadata
+} from "./types";
 
 export class LocalInteractiveAssistantDataSource implements AssistantDataSource {
   private readonly engine = new LocalConversationEngine();
@@ -9,8 +14,14 @@ export class LocalInteractiveAssistantDataSource implements AssistantDataSource 
     return this.engine.loadHomeState();
   }
 
-  async sendTextMessage(conversationId: string, text: string): Promise<AssistantHomeState> {
-    return this.engine.sendTextMessage(conversationId, text);
+  async sendTextMessage(
+    conversationId: string,
+    text: string,
+    attachments: LocalAttachmentMetadata[] = [],
+    voiceTranscript?: LocalVoiceTranscriptMetadata | null,
+    imageObservations: LocalImageObservationMetadata[] = []
+  ): Promise<AssistantHomeState> {
+    return this.engine.sendTextMessage(conversationId, text, attachments, voiceTranscript, imageObservations);
   }
 
   async sendVoiceMessage(

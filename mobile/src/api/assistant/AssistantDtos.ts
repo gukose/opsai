@@ -1,5 +1,9 @@
 export type AssistantInputTypeDto = "TEXT" | "VOICE_TRANSCRIPT" | "VOICE" | "IMAGE" | "MIXED";
 export type AssistantMessageRoleDto = "USER" | "ASSISTANT" | "SYSTEM";
+export type AssistantAttachmentTypeDto = "IMAGE" | "PDF" | "DOCUMENT";
+export type AssistantAttachmentStorageStatusDto = "LOCAL_METADATA_ONLY";
+export type AssistantVoiceTranscriptSourceDto = "CLIENT_TRANSCRIPT";
+export type AssistantImageObservationSourceDto = "USER_PROVIDED";
 
 export type AssistantStartConversationRequestDto = {
   hotelId: string;
@@ -10,9 +14,11 @@ export type AssistantSendMessageRequestDto = {
   text: string;
   inputType: AssistantInputTypeDto;
   transcript?: string | null;
+  voiceTranscript?: AssistantVoiceTranscriptDto | null;
   audioMetadata?: AssistantAudioMetadataDto | null;
   attachments?: AssistantMessageAttachmentDto[] | null;
   attachmentIds?: string[];
+  imageObservations?: AssistantImageObservationDto[] | null;
 };
 
 export type AssistantConfirmTaskRequestDto = {
@@ -78,6 +84,7 @@ export type AssistantConversationMessageDto = {
   inputType: AssistantInputTypeDto;
   text: string | null;
   voiceTranscript: string | null;
+  voiceTranscriptMetadata?: AssistantVoiceTranscriptDto | null;
   audioMetadata: AssistantAudioMetadataDto | null;
   attachments: AssistantMessageAttachmentDto[];
   imageObservations: AssistantImageObservationDto[];
@@ -92,17 +99,30 @@ export type AssistantAudioMetadataDto = {
   sizeBytes?: number | null;
 };
 
+export type AssistantVoiceTranscriptDto = {
+  transcript: string;
+  languageCode?: string | null;
+  durationMs?: number | null;
+  source: AssistantVoiceTranscriptSourceDto;
+};
+
 export type AssistantMessageAttachmentDto = {
   id: string;
+  type?: AssistantAttachmentTypeDto | null;
   originalFileName?: string | null;
   mimeType?: string | null;
   sizeBytes?: number | null;
   widthPx?: number | null;
   heightPx?: number | null;
+  localReference?: string | null;
+  storageStatus?: AssistantAttachmentStorageStatusDto | null;
 };
 
 export type AssistantImageObservationDto = {
+  id?: string | null;
   attachmentId?: string | null;
-  description: string;
+  text?: string | null;
+  source?: AssistantImageObservationSourceDto | null;
+  description?: string | null;
   confidence?: number | null;
 };

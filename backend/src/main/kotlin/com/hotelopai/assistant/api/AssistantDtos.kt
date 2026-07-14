@@ -4,13 +4,19 @@ import com.hotelopai.assistant.application.ConversationTurnResult
 import com.hotelopai.assistant.domain.ConversationAttachment
 import com.hotelopai.assistant.domain.Conversation
 import com.hotelopai.assistant.domain.ConversationMessage
+import com.hotelopai.assistant.domain.AttachmentStorageStatus
+import com.hotelopai.assistant.domain.AttachmentType
 import com.hotelopai.assistant.domain.AudioMetadata
+import com.hotelopai.assistant.domain.ImageObservation
+import com.hotelopai.assistant.domain.ImageObservationSource
 import com.hotelopai.assistant.domain.FollowUpOption
 import com.hotelopai.assistant.domain.FollowUpQuestion
 import com.hotelopai.assistant.domain.InputType
 import com.hotelopai.assistant.domain.MissingField
 import com.hotelopai.assistant.domain.TaskCreationCandidate
 import com.hotelopai.assistant.domain.TaskPreview
+import com.hotelopai.assistant.domain.VoiceTranscriptMetadata
+import com.hotelopai.assistant.domain.VoiceTranscriptSource
 
 data class StartConversationRequest(
     val hotelId: String,
@@ -21,10 +27,32 @@ data class SendAssistantMessageRequest(
     val text: String = "",
     val inputType: InputType = InputType.TEXT,
     val transcript: String? = null,
+    val voiceTranscript: VoiceTranscriptDto? = null,
     val audioMetadata: AudioMetadataDto? = null,
     val attachments: List<MessageAttachmentDto>? = null,
-    val attachmentIds: List<String>? = null
-)
+    val attachmentIds: List<String>? = null,
+    val imageObservations: List<ImageObservationDto>? = null,
+    val hotelId: String? = null,
+    val userId: String? = null,
+    val audioBase64: String? = null,
+    val audioBytes: String? = null,
+    val audioUrl: String? = null,
+    val localAudioUri: String? = null,
+    val fileUri: String? = null,
+    val imageBase64: String? = null,
+    val imageBytes: String? = null,
+    val imageUrl: String? = null
+) {
+    fun rejectUnsafeOwnershipAndMediaFields() {
+        require(hotelId == null && userId == null) { "message ownership fields are not accepted" }
+        require(audioBase64 == null && audioBytes == null && audioUrl == null && localAudioUri == null && fileUri == null) {
+            "raw audio fields and audio URIs are not accepted"
+        }
+        require(imageBase64 == null && imageBytes == null && imageUrl == null) {
+            "raw image fields and image URLs are not accepted"
+        }
+    }
+}
 
 data class ConfirmTaskRequest(
     val idempotencyKey: String
@@ -176,6 +204,7 @@ data class ConversationMessageDto(
     val inputType: String,
     val text: String?,
     val voiceTranscript: String?,
+    val voiceTranscriptMetadata: VoiceTranscriptDto?,
     val audioMetadata: AudioMetadataDto?,
     val attachments: List<MessageAttachmentDto>,
     val imageObservations: List<ImageObservationDto>,
@@ -190,6 +219,7 @@ data class ConversationMessageDto(
                 inputType = message.inputType.name,
                 text = message.text,
                 voiceTranscript = message.voiceTranscript,
+                voiceTranscriptMetadata = message.voiceTranscriptMetadata?.let { VoiceTranscriptDto.from(it) },
                 audioMetadata = message.audioMetadata?.let { AudioMetadataDto.from(it) },
                 attachments = message.attachments.map { MessageAttachmentDto.from(it) },
                 imageObservations = message.imageObservations.map { ImageObservationDto.from(it) },
@@ -224,48 +254,218 @@ data class AudioMetadataDto(
         )
 }
 
+data class VoiceTranscriptDto(
+    val transcript: String?,
+    val languageCode: String? = null,
+    val durationMs: Long? = null,
+    val source: VoiceTranscriptSource? = null,
+    val audioBase64: String? = null,
+    val audioBytes: String? = null,
+    val audioUrl: String? = null,
+    val localAudioUri: String? = null,
+    val fileUri: String? = null
+) {
+    companion object {
+        private val LANGUAGE_CODE_PATTERN = Regex("^[a-zA-Z]{2,3}(-[a-zA-Z]{2})?$")
+
+        fun from(metadata: VoiceTranscriptMetadata): VoiceTranscriptDto =
+            VoiceTranscriptDto(
+                transcript = metadata.transcript,
+                languageCode = metadata.languageCode,
+                durationMs = metadata.durationMs,
+                source = metadata.source
+            )
+    }
+
+    fun toDomain(): VoiceTranscriptMetadata {
+        require(audioBase64 == null && audioBytes == null && audioUrl == null && localAudioUri == null && fileUri == null) {
+            "raw audio fields and audio URIs are not accepted"
+        }
+        val normalizedTranscript = transcript?.trim()
+            ?: throw IllegalArgumentException("voiceTranscript.transcript is required")
+        require(normalizedTranscript.isNotBlank()) { "voiceTranscript.transcript is required" }
+        require(normalizedTranscript.length <= 4_000) {
+            "voiceTranscript.transcript must be 4000 characters or fewer"
+        }
+
+        val normalizedLanguageCode = languageCode?.trim()?.takeIf(String::isNotBlank)
+        require(normalizedLanguageCode == null || LANGUAGE_CODE_PATTERN.matches(normalizedLanguageCode)) {
+            "voiceTranscript.languageCode must be BCP-47 compatible"
+        }
+
+        require(durationMs == null || durationMs in 1..600_000) {
+            "voiceTranscript.durationMs must be between 1 and 600000"
+        }
+        require((source ?: VoiceTranscriptSource.CLIENT_TRANSCRIPT) == VoiceTranscriptSource.CLIENT_TRANSCRIPT) {
+            "voiceTranscript.source must be CLIENT_TRANSCRIPT"
+        }
+
+        return VoiceTranscriptMetadata(
+            transcript = normalizedTranscript,
+            languageCode = normalizedLanguageCode,
+            durationMs = durationMs,
+            source = VoiceTranscriptSource.CLIENT_TRANSCRIPT
+        )
+    }
+}
+
 data class MessageAttachmentDto(
     val id: String,
+    val type: AttachmentType? = null,
     val originalFileName: String?,
     val mimeType: String?,
     val sizeBytes: Long?,
     val widthPx: Int?,
-    val heightPx: Int?
+    val heightPx: Int?,
+    val localReference: String? = null,
+    val storageStatus: AttachmentStorageStatus? = null,
+    val hotelId: String? = null,
+    val userId: String? = null,
+    val ownerId: String? = null
 ) {
     companion object {
         fun from(attachment: ConversationAttachment): MessageAttachmentDto =
             MessageAttachmentDto(
                 id = attachment.id,
+                type = attachment.type,
                 originalFileName = attachment.originalFileName,
                 mimeType = attachment.mimeType,
                 sizeBytes = attachment.sizeBytes,
                 widthPx = attachment.widthPx,
-                heightPx = attachment.heightPx
+                heightPx = attachment.heightPx,
+                localReference = attachment.localReference,
+                storageStatus = attachment.storageStatus
             )
     }
 
     fun toDomain(): ConversationAttachment =
         ConversationAttachment(
-            id = id,
-            originalFileName = originalFileName,
-            mimeType = mimeType,
-            sizeBytes = sizeBytes,
-            widthPx = widthPx,
-            heightPx = heightPx
-        )
+            id = normalizedId(),
+            type = requireNotNull(type) { "attachment type is required" },
+            originalFileName = normalizedFileName(),
+            mimeType = normalizedMimeType(),
+            sizeBytes = validSizeBytes(),
+            widthPx = validWidthPx(),
+            heightPx = validHeightPx(),
+            localReference = localReference?.trim()?.takeIf(String::isNotBlank),
+            storageStatus = storageStatus ?: AttachmentStorageStatus.LOCAL_METADATA_ONLY
+        ).also { validateOwnershipFields(); validateConsistency(it) }
+
+    private fun normalizedId(): String =
+        id.trim().also { require(it.isNotBlank()) { "attachment id is required" } }
+
+    private fun normalizedFileName(): String =
+        originalFileName?.trim()?.also {
+            require(it.isNotBlank()) { "attachment originalFileName is required" }
+            require(it.length <= 180) { "attachment originalFileName must be 180 characters or fewer" }
+        } ?: throw IllegalArgumentException("attachment originalFileName is required")
+
+    private fun normalizedMimeType(): String =
+        mimeType?.trim()?.lowercase()?.also {
+            require(it in SUPPORTED_MIME_TYPES) { "unsupported attachment mimeType: $it" }
+        } ?: throw IllegalArgumentException("attachment mimeType is required")
+
+    private fun validSizeBytes(): Long =
+        sizeBytes?.also {
+            require(it in 1..10_000_000) { "attachment sizeBytes must be between 1 and 10000000" }
+        } ?: throw IllegalArgumentException("attachment sizeBytes is required")
+
+    private fun validWidthPx(): Int? =
+        widthPx?.also {
+            require(it in 1..10_000) { "attachment widthPx must be between 1 and 10000" }
+        }
+
+    private fun validHeightPx(): Int? =
+        heightPx?.also {
+            require(it in 1..10_000) { "attachment heightPx must be between 1 and 10000" }
+        }
+
+    private fun validateOwnershipFields() {
+        require(hotelId == null && userId == null && ownerId == null) {
+            "attachment ownership fields are not accepted"
+        }
+    }
+
+    private fun validateConsistency(attachment: ConversationAttachment) {
+        require(attachment.storageStatus == AttachmentStorageStatus.LOCAL_METADATA_ONLY) {
+            "attachment storageStatus must be LOCAL_METADATA_ONLY"
+        }
+        when (attachment.type) {
+            AttachmentType.IMAGE -> require(attachment.mimeType in IMAGE_MIME_TYPES) {
+                "IMAGE attachments require an image MIME type"
+            }
+            AttachmentType.PDF -> {
+                require(attachment.mimeType == "application/pdf") { "PDF attachments require application/pdf" }
+                require(attachment.widthPx == null && attachment.heightPx == null) {
+                    "image dimensions are only accepted for image attachments"
+                }
+            }
+            AttachmentType.DOCUMENT -> {
+                require(attachment.mimeType == "text/plain") { "DOCUMENT attachments require text/plain" }
+                require(attachment.widthPx == null && attachment.heightPx == null) {
+                    "image dimensions are only accepted for image attachments"
+                }
+            }
+        }
+    }
 }
 
+private val IMAGE_MIME_TYPES = setOf("image/jpeg", "image/png", "image/webp")
+private val SUPPORTED_MIME_TYPES = IMAGE_MIME_TYPES + setOf("application/pdf", "text/plain")
+
 data class ImageObservationDto(
+    val id: String? = null,
     val attachmentId: String?,
-    val description: String,
-    val confidence: Double?
+    val text: String? = null,
+    val source: ImageObservationSource? = null,
+    val description: String? = null,
+    val confidence: Double? = null,
+    val imageBase64: String? = null,
+    val imageBytes: String? = null,
+    val imageUrl: String? = null
 ) {
     companion object {
-        fun from(observation: com.hotelopai.assistant.domain.ImageObservation): ImageObservationDto =
+        fun from(observation: ImageObservation): ImageObservationDto =
             ImageObservationDto(
+                id = observation.id,
                 attachmentId = observation.attachmentId,
+                text = observation.semanticText,
+                source = observation.source,
                 description = observation.description,
                 confidence = observation.confidence
             )
+    }
+
+    fun toDomain(attachments: List<ConversationAttachment>): ImageObservation {
+        require(imageBase64 == null && imageBytes == null && imageUrl == null) {
+            "raw image fields and image URLs are not accepted"
+        }
+
+        val normalizedId = id?.trim()?.also {
+            require(it.isNotBlank()) { "image observation id is required" }
+        } ?: throw IllegalArgumentException("image observation id is required")
+        val normalizedAttachmentId = attachmentId?.trim()?.also {
+            require(it.isNotBlank()) { "image observation attachmentId is required" }
+        } ?: throw IllegalArgumentException("image observation attachmentId is required")
+        val normalizedText = (text ?: description)?.trim()?.also {
+            require(it.isNotBlank()) { "image observation text is required" }
+            require(it.length <= 2_000) { "image observation text must be 2000 characters or fewer" }
+        } ?: throw IllegalArgumentException("image observation text is required")
+        require((source ?: ImageObservationSource.USER_PROVIDED) == ImageObservationSource.USER_PROVIDED) {
+            "image observation source must be USER_PROVIDED"
+        }
+
+        val attachment = attachments.firstOrNull { it.id == normalizedAttachmentId }
+            ?: throw IllegalArgumentException("image observation attachmentId must reference an attachment in the same message")
+        require(attachment.type == AttachmentType.IMAGE) {
+            "image observations can only reference IMAGE attachments"
+        }
+
+        return ImageObservation(
+            id = normalizedId,
+            attachmentId = normalizedAttachmentId,
+            text = normalizedText,
+            source = ImageObservationSource.USER_PROVIDED
+        )
     }
 }

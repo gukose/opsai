@@ -6,4 +6,7 @@ interface ConversationRepository {
     fun save(conversation: Conversation): Conversation
 
     fun findById(id: String): Conversation?
+
+    fun findByIdAndHotelIdAndUserId(id: String, hotelId: String, userId: String): Conversation? =
+        findById(id)?.takeIf { it.hotelId == hotelId && it.userId == userId }
 }

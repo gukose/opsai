@@ -3,6 +3,10 @@ export type ApiRequestOptions = {
   timeoutMs?: number;
   correlationId?: string;
   skipAuth?: boolean;
+  retry?: {
+    maxRetries: number;
+    delaysMs: number[];
+  };
 };
 
 export interface ApiClient {
@@ -13,6 +17,20 @@ export interface ApiClient {
     body: TBody,
     options?: ApiRequestOptions
   ): Promise<TResponse>;
+
+  put?<TResponse, TBody>(
+    path: string,
+    body: TBody,
+    options?: ApiRequestOptions
+  ): Promise<TResponse>;
+
+  patch?<TResponse, TBody>(
+    path: string,
+    body: TBody,
+    options?: ApiRequestOptions
+  ): Promise<TResponse>;
+
+  delete?<TResponse>(path: string, options?: ApiRequestOptions): Promise<TResponse>;
 }
 
 export type AccessTokenProvider = () => string | null | undefined;

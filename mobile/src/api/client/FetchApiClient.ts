@@ -1,29 +1,38 @@
-import { AppApiError, isProblemDetails, ProblemDetails } from "./AppApiError";
-import { AccessTokenProvider, ApiClient, ApiRequestOptions } from "./ApiClient";
+import { AppApiError, isProblemDetails } from "./AppApiError";
+import type { ProblemDetails } from "./AppApiError";
+import type { AccessTokenProvider, ApiClient, ApiRequestOptions } from "./ApiClient";
 import { createCorrelationId } from "./correlationId";
+import { defaultGetRetryPolicy, retryDelayMs, shouldRetryRequest, sleep } from "./retryPolicy";
+import type { HttpMethod } from "./retryPolicy";
 
 export type FetchApiClientOptions = {
   baseUrl: string;
   timeoutMs?: number;
   accessTokenProvider?: AccessTokenProvider;
   correlationIdProvider?: () => string;
+  refreshAccessToken?: () => Promise<string | null>;
+  delay?: (ms: number) => Promise<void>;
 };
 
 export class FetchApiClient implements ApiClient {
+  private readonly options: FetchApiClientOptions;
   private readonly timeoutMs: number;
   private readonly accessTokenProvider?: AccessTokenProvider;
   private readonly correlationIdProvider: () => string;
+  private readonly refreshAccessToken?: () => Promise<string | null>;
+  private readonly delay: (ms: number) => Promise<void>;
 
-  constructor(
-    private readonly options: FetchApiClientOptions
-  ) {
+  constructor(options: FetchApiClientOptions) {
+    this.options = options;
     this.timeoutMs = options.timeoutMs ?? 15_000;
     this.accessTokenProvider = options.accessTokenProvider;
     this.correlationIdProvider = options.correlationIdProvider ?? createCorrelationId;
+    this.refreshAccessToken = options.refreshAccessToken;
+    this.delay = options.delay ?? sleep;
   }
 
   async get<T>(path: string, options?: ApiRequestOptions): Promise<T> {
-    return this.request<T>(path, { method: "GET" }, options);
+    return this.requestWithRetry<T>("GET", path, { method: "GET" }, options);
   }
 
   async post<TResponse, TBody>(
@@ -31,7 +40,8 @@ export class FetchApiClient implements ApiClient {
     body: TBody,
     options?: ApiRequestOptions
   ): Promise<TResponse> {
-    return this.request<TResponse>(
+    return this.requestWithRetry<TResponse>(
+      "POST",
       path,
       {
         method: "POST",
@@ -39,6 +49,64 @@ export class FetchApiClient implements ApiClient {
       },
       options
     );
+  }
+
+  async put<TResponse, TBody>(
+    path: string,
+    body: TBody,
+    options?: ApiRequestOptions
+  ): Promise<TResponse> {
+    return this.requestWithRetry<TResponse>("PUT", path, { method: "PUT", body: JSON.stringify(body) }, options);
+  }
+
+  async patch<TResponse, TBody>(
+    path: string,
+    body: TBody,
+    options?: ApiRequestOptions
+  ): Promise<TResponse> {
+    return this.requestWithRetry<TResponse>("PATCH", path, { method: "PATCH", body: JSON.stringify(body) }, options);
+  }
+
+  async delete<TResponse>(path: string, options?: ApiRequestOptions): Promise<TResponse> {
+    return this.requestWithRetry<TResponse>("DELETE", path, { method: "DELETE" }, options);
+  }
+
+  private async requestWithRetry<T>(
+    method: HttpMethod,
+    path: string,
+    init: RequestInit,
+    options?: ApiRequestOptions
+  ): Promise<T> {
+    const policy = options?.retry ?? defaultGetRetryPolicy;
+    let attempt = 0;
+    let didRefresh = false;
+
+    while (true) {
+      try {
+        return await this.request<T>(path, init, options);
+      } catch (error) {
+        if (
+          error instanceof AppApiError &&
+          error.status === 401 &&
+          !options?.skipAuth &&
+          !didRefresh &&
+          this.refreshAccessToken &&
+          method === "GET"
+        ) {
+          didRefresh = true;
+          const refreshed = await this.refreshAccessToken();
+          if (refreshed) {
+            continue;
+          }
+        }
+
+        attempt += 1;
+        if (!shouldRetryRequest({ method, error, attempt, policy })) {
+          throw error;
+        }
+        await this.delay(retryDelayMs(attempt, policy));
+      }
+    }
   }
 
   private async request<T>(

@@ -9,6 +9,11 @@ import {
 } from "../api/assistant/assistantMapper";
 import { AssistantDataSource } from "./assistantDataSource";
 import { AssistantHomeState } from "./homeState";
+import {
+  LocalAttachmentMetadata,
+  LocalImageObservationMetadata,
+  LocalVoiceTranscriptMetadata
+} from "./types";
 
 export class BackendAssistantDataSource implements AssistantDataSource {
   private readonly api: HttpAssistantApi;
@@ -33,11 +38,42 @@ export class BackendAssistantDataSource implements AssistantDataSource {
     return mapAssistantConversationResponseToHomeState(response);
   }
 
-  async sendTextMessage(conversationId: string, text: string): Promise<AssistantHomeState> {
+  async sendTextMessage(
+    conversationId: string,
+    text: string,
+    attachments: LocalAttachmentMetadata[] = [],
+    voiceTranscript?: LocalVoiceTranscriptMetadata | null,
+    imageObservations: LocalImageObservationMetadata[] = []
+  ): Promise<AssistantHomeState> {
     const response = await this.api.sendMessage(conversationId, {
       text,
-      inputType: "TEXT",
-      attachmentIds: []
+      inputType: attachments.length > 0 || voiceTranscript || imageObservations.length > 0 ? "MIXED" : "TEXT",
+      voiceTranscript: voiceTranscript
+        ? {
+            transcript: voiceTranscript.transcript,
+            languageCode: voiceTranscript.languageCode ?? null,
+            durationMs: voiceTranscript.durationMs ?? null,
+            source: "CLIENT_TRANSCRIPT"
+          }
+        : null,
+      attachments: attachments.map((attachment) => ({
+        id: attachment.id,
+        type: attachment.type,
+        originalFileName: attachment.originalFileName,
+        mimeType: attachment.mimeType,
+        sizeBytes: attachment.sizeBytes,
+        widthPx: attachment.widthPx ?? null,
+        heightPx: attachment.heightPx ?? null,
+        localReference: attachment.localReference ?? null,
+        storageStatus: "LOCAL_METADATA_ONLY"
+      })),
+      attachmentIds: [],
+      imageObservations: imageObservations.map((observation) => ({
+        id: observation.id,
+        attachmentId: observation.attachmentId,
+        text: observation.text,
+        source: "USER_PROVIDED"
+      }))
     });
     throwIfInterpretationFailed(response);
     return mapAssistantConversationResponseToHomeState(response);
@@ -55,7 +91,12 @@ export class BackendAssistantDataSource implements AssistantDataSource {
   ): Promise<AssistantHomeState> {
     const response = await this.api.sendMessage(conversationId, {
       text: transcript,
-      transcript,
+      voiceTranscript: {
+        transcript,
+        languageCode: null,
+        durationMs: audioMetadata?.durationMs ?? null,
+        source: "CLIENT_TRANSCRIPT"
+      },
       audioMetadata,
       inputType: "VOICE",
       attachmentIds: []

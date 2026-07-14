@@ -8,6 +8,8 @@ export type TaskFilterState = {
   assignment: string | null;
   createdFrom?: string | null;
   createdTo?: string | null;
+  page?: number | null;
+  size?: number | null;
 };
 
 export type TaskSummary = {

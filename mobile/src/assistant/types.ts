@@ -44,12 +44,44 @@ export type AttachmentMessage = {
 
 export type ConversationAttachment = {
   id: string;
+  type?: "IMAGE" | "PDF" | "DOCUMENT";
   filename: string;
   size: string;
   mimeType?: string;
   imageUri?: string;
   widthPx?: number;
   heightPx?: number;
+  localReference?: string;
+  storageStatus?: "LOCAL_METADATA_ONLY";
+};
+
+export type LocalAttachmentMetadata = {
+  id: string;
+  type: "IMAGE" | "PDF" | "DOCUMENT";
+  originalFileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  widthPx?: number;
+  heightPx?: number;
+  localReference?: string;
+  storageStatus: "LOCAL_METADATA_ONLY";
+  state: "selected" | "sending" | "sent" | "failed";
+};
+
+export type LocalVoiceTranscriptMetadata = {
+  transcript: string;
+  languageCode?: string;
+  durationMs?: number;
+  source: "CLIENT_TRANSCRIPT";
+  state: "selected" | "sending" | "sent" | "failed";
+};
+
+export type LocalImageObservationMetadata = {
+  id: string;
+  attachmentId: string;
+  text: string;
+  source: "USER_PROVIDED";
+  state: "selected" | "sending" | "sent" | "failed";
 };
 
 export type IntentBadgeMessage = {

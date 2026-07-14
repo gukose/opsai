@@ -18,6 +18,7 @@ import com.hotelopai.assistant.domain.IntentType
 import com.hotelopai.assistant.domain.MessageRole
 import com.hotelopai.assistant.domain.MissingField
 import com.hotelopai.assistant.domain.TaskPreview
+import com.hotelopai.assistant.domain.VoiceTranscriptMetadata
 import com.hotelopai.shared.kernel.UuidV7Generator
 import org.springframework.dao.EmptyResultDataAccessException
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
@@ -121,6 +122,42 @@ class AssistantConversationPersistenceRepository(
                 where id = :id
                 """.trimIndent(),
                 mapOf("id" to id)
+            ) { rs, _ -> rs.toConversation(objectMapper) }
+        } catch (_: EmptyResultDataAccessException) {
+            null
+        }
+
+    override fun findByIdAndHotelIdAndUserId(id: String, hotelId: String, userId: String): Conversation? =
+        try {
+            jdbcTemplate.queryForObject(
+                """
+                select
+                    id,
+                    hotel_id,
+                    user_id,
+                    state,
+                    intent,
+                    collected_fields_json,
+                    missing_fields_json,
+                    follow_up_question_json,
+                    task_preview_json,
+                    messages_json,
+                    active_draft_id,
+                    draft_version,
+                    created_task_id,
+                    confirmation_idempotency_key,
+                    created_at,
+                    updated_at
+                from assistant_conversation
+                where id = :id
+                  and hotel_id = :hotelId
+                  and user_id = :userId
+                """.trimIndent(),
+                mapOf(
+                    "id" to id,
+                    "hotelId" to hotelId,
+                    "userId" to userId
+                )
             ) { rs, _ -> rs.toConversation(objectMapper) }
         } catch (_: EmptyResultDataAccessException) {
             null
@@ -267,6 +304,7 @@ private data class PersistedConversationMessage(
     val inputType: InputType,
     val text: String?,
     val voiceTranscript: String?,
+    val voiceTranscriptMetadata: VoiceTranscriptMetadata? = null,
     val audioMetadata: AudioMetadata?,
     val attachments: List<ConversationAttachment>,
     val imageObservations: List<ImageObservation>,
@@ -279,6 +317,7 @@ private data class PersistedConversationMessage(
             inputType = inputType,
             text = text,
             voiceTranscript = voiceTranscript,
+            voiceTranscriptMetadata = voiceTranscriptMetadata,
             audioMetadata = audioMetadata,
             attachments = attachments,
             imageObservations = imageObservations,
@@ -293,6 +332,7 @@ private data class PersistedConversationMessage(
                 inputType = message.inputType,
                 text = message.text,
                 voiceTranscript = message.voiceTranscript,
+                voiceTranscriptMetadata = message.voiceTranscriptMetadata,
                 audioMetadata = message.audioMetadata,
                 attachments = message.attachments,
                 imageObservations = message.imageObservations,

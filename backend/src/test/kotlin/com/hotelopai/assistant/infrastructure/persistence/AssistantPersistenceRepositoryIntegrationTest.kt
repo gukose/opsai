@@ -4,6 +4,8 @@ import com.hotelopai.assistant.application.ConversationRepository
 import com.hotelopai.assistant.application.TaskConfirmationRecord
 import com.hotelopai.assistant.application.TaskConfirmationRepository
 import com.hotelopai.assistant.domain.AudioMetadata
+import com.hotelopai.assistant.domain.AttachmentStorageStatus
+import com.hotelopai.assistant.domain.AttachmentType
 import com.hotelopai.assistant.domain.Conversation
 import com.hotelopai.assistant.domain.ConversationAttachment
 import com.hotelopai.assistant.domain.ConversationMessage
@@ -16,6 +18,8 @@ import com.hotelopai.assistant.domain.IntentType
 import com.hotelopai.assistant.domain.MessageRole
 import com.hotelopai.assistant.domain.MissingField
 import com.hotelopai.assistant.domain.TaskPreview
+import com.hotelopai.assistant.domain.VoiceTranscriptMetadata
+import com.hotelopai.assistant.domain.VoiceTranscriptSource
 import com.hotelopai.support.PostgresIntegrationTestSupport
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
@@ -49,6 +53,12 @@ class AssistantPersistenceRepositoryIntegrationTest : PostgresIntegrationTestSup
                     inputType = InputType.VOICE,
                     text = "Room 502 sink is leaking",
                     voiceTranscript = "Room 502 sink is leaking",
+                    voiceTranscriptMetadata = VoiceTranscriptMetadata(
+                        transcript = "Room 502 sink is leaking",
+                        languageCode = "en",
+                        durationMs = 1200,
+                        source = VoiceTranscriptSource.CLIENT_TRANSCRIPT
+                    ),
                     audioMetadata = AudioMetadata(
                         originalFileName = "request.m4a",
                         mimeType = "audio/mp4",
@@ -58,18 +68,21 @@ class AssistantPersistenceRepositoryIntegrationTest : PostgresIntegrationTestSup
                     attachments = listOf(
                         ConversationAttachment(
                             id = "attachment-1",
+                            type = AttachmentType.IMAGE,
                             originalFileName = "sink.jpg",
                             mimeType = "image/jpeg",
                             sizeBytes = 1024,
                             widthPx = 800,
-                            heightPx = 600
+                            heightPx = 600,
+                            localReference = "local://sink.jpg",
+                            storageStatus = AttachmentStorageStatus.LOCAL_METADATA_ONLY
                         )
                     ),
                     imageObservations = listOf(
                         ImageObservation(
+                            id = "observation-1",
                             attachmentId = "attachment-1",
-                            description = "Water visible under the sink",
-                            confidence = 0.86
+                            text = "Water visible under the sink"
                         )
                     ),
                     createdAt = Instant.parse("2026-07-10T10:00:00Z")
