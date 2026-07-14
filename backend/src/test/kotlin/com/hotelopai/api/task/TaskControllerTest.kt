@@ -1,12 +1,9 @@
 package com.hotelopai.task.api
 
 import com.hotelopai.support.PostgresIntegrationTestSupport
-import com.hotelopai.hotel.application.HotelRepository
-import com.hotelopai.hotel.domain.Hotel
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.test.context.ActiveProfiles
@@ -23,20 +20,16 @@ class TaskControllerTest : PostgresIntegrationTestSupport() {
     @LocalServerPort
     private var port: Int = 0
 
-    @Autowired
-    private lateinit var hotelRepository: HotelRepository
-
     private val httpClient = HttpClient.newHttpClient()
 
     @Test
     fun `task endpoints support create get list start pause resume complete and reject invalid transition`() {
-        val accessToken = loginAccessToken()
-        val hotel = hotelRepository.save(Hotel(code = "task-controller-${UuidV7Generator.generate()}", name = "Task Controller Hotel"))
+        val login = login()
         val firstDeadline = Instant.now().plusSeconds(3600)
         val createResponse = post(
             "/api/v1/tasks",
             """{
-              "hotelId":"${hotel.id}",
+              "hotelId":"${login.hotelId}",
               "intentType":"MAINTENANCE",
               "source":"ASSISTANT",
               "title":"AC not working",
@@ -44,28 +37,28 @@ class TaskControllerTest : PostgresIntegrationTestSupport() {
               "priority":"HIGH",
               "slaDeadline":"$firstDeadline"
             }""",
-            accessToken
+            login.accessToken
         )
 
         assertEquals(200, createResponse.statusCode())
         assertContains(createResponse.body(), """"status":"CREATED"""")
         val taskId = extractId(createResponse.body())
 
-        val getResponse = get("/api/v1/tasks/$taskId", accessToken)
+        val getResponse = get("/api/v1/tasks/$taskId", login.accessToken)
         assertEquals(200, getResponse.statusCode())
         assertContains(getResponse.body(), """"id":"$taskId"""")
         assertContains(getResponse.body(), """"title":"AC not working"""")
 
-        val listResponse = get("/api/v1/tasks", accessToken)
+        val listResponse = get("/api/v1/tasks", login.accessToken)
         assertEquals(200, listResponse.statusCode())
         assertTrue(listResponse.body().contains(taskId))
 
-        assertEquals(200, post("/api/v1/tasks/$taskId/start", "", accessToken).statusCode())
-        assertEquals(200, post("/api/v1/tasks/$taskId/pause", "", accessToken).statusCode())
-        assertEquals(200, post("/api/v1/tasks/$taskId/resume", "", accessToken).statusCode())
-        assertEquals(200, post("/api/v1/tasks/$taskId/complete", "", accessToken).statusCode())
+        assertEquals(200, post("/api/v1/tasks/$taskId/start", "", login.accessToken).statusCode())
+        assertEquals(200, post("/api/v1/tasks/$taskId/pause", "", login.accessToken).statusCode())
+        assertEquals(200, post("/api/v1/tasks/$taskId/resume", "", login.accessToken).statusCode())
+        assertEquals(200, post("/api/v1/tasks/$taskId/complete", "", login.accessToken).statusCode())
 
-        val invalid = post("/api/v1/tasks/$taskId/start", "", accessToken)
+        val invalid = post("/api/v1/tasks/$taskId/start", "", login.accessToken)
         assertEquals(400, invalid.statusCode())
         assertContains(invalid.body(), """"title":"Invalid task request"""")
         assertContains(invalid.body(), """"detail":"Invalid workflow transition from COMPLETED to STARTED"""")
@@ -73,13 +66,12 @@ class TaskControllerTest : PostgresIntegrationTestSupport() {
 
     @Test
     fun `task can be cancelled from created state`() {
-        val accessToken = loginAccessToken()
-        val hotel = hotelRepository.save(Hotel(code = "task-controller-${UuidV7Generator.generate()}", name = "Task Controller Hotel"))
+        val login = login()
         val deadline = Instant.now().plusSeconds(5400)
         val createResponse = post(
             "/api/v1/tasks",
             """{
-              "hotelId":"${hotel.id}",
+              "hotelId":"${login.hotelId}",
               "intentType":"GUEST_REQUEST",
               "source":"MANUAL",
               "title":"Extra towels",
@@ -87,11 +79,11 @@ class TaskControllerTest : PostgresIntegrationTestSupport() {
               "priority":"MEDIUM",
               "slaDeadline":"$deadline"
             }""",
-            accessToken
+            login.accessToken
         )
 
         val taskId = extractId(createResponse.body())
-        val cancelResponse = post("/api/v1/tasks/$taskId/cancel", "", accessToken)
+        val cancelResponse = post("/api/v1/tasks/$taskId/cancel", "", login.accessToken)
 
         assertEquals(200, cancelResponse.statusCode())
         assertContains(cancelResponse.body(), """"status":"CANCELLED"""")
@@ -99,9 +91,9 @@ class TaskControllerTest : PostgresIntegrationTestSupport() {
 
     @Test
     fun `task list remains an array when pagination params are omitted`() {
-        val accessToken = loginAccessToken()
+        val login = login()
 
-        val response = get("/api/v1/tasks", accessToken)
+        val response = get("/api/v1/tasks", login.accessToken)
 
         assertEquals(200, response.statusCode())
         assertTrue(response.body().trim().startsWith("["))
@@ -109,12 +101,11 @@ class TaskControllerTest : PostgresIntegrationTestSupport() {
 
     @Test
     fun `task list returns paged envelope when pagination params are supplied`() {
-        val accessToken = loginAccessToken()
-        val hotel = hotelRepository.save(Hotel(code = "task-page-${UuidV7Generator.generate()}", name = "Task Page Hotel"))
-        createTask(accessToken, hotel.id.toString(), "Paged task one")
-        createTask(accessToken, hotel.id.toString(), "Paged task two")
+        val login = login()
+        createTask(login.accessToken, login.hotelId, "Paged task one")
+        createTask(login.accessToken, login.hotelId, "Paged task two")
 
-        val response = get("/api/v1/tasks?page=0&size=1", accessToken)
+        val response = get("/api/v1/tasks?page=0&size=1", login.accessToken)
 
         assertEquals(200, response.statusCode())
         assertContains(response.body(), """"items":[{""")
@@ -128,11 +119,11 @@ class TaskControllerTest : PostgresIntegrationTestSupport() {
 
     @Test
     fun `task list rejects invalid pagination params`() {
-        val accessToken = loginAccessToken()
+        val login = login()
 
-        assertEquals(400, get("/api/v1/tasks?page=-1&size=20", accessToken).statusCode())
-        assertEquals(400, get("/api/v1/tasks?page=0&size=0", accessToken).statusCode())
-        assertEquals(400, get("/api/v1/tasks?page=0&size=101", accessToken).statusCode())
+        assertEquals(400, get("/api/v1/tasks?page=-1&size=20", login.accessToken).statusCode())
+        assertEquals(400, get("/api/v1/tasks?page=0&size=0", login.accessToken).statusCode())
+        assertEquals(400, get("/api/v1/tasks?page=0&size=101", login.accessToken).statusCode())
     }
 
     private fun post(path: String, body: String, bearerToken: String? = null): HttpResponse<String> {
@@ -156,7 +147,7 @@ class TaskControllerTest : PostgresIntegrationTestSupport() {
         return httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofString())
     }
 
-    private fun loginAccessToken(): String {
+    private fun login(): LoginSnapshot {
         val response = post(
             "/api/v1/auth/login",
             """{
@@ -166,11 +157,17 @@ class TaskControllerTest : PostgresIntegrationTestSupport() {
             }"""
         )
         assertEquals(200, response.statusCode())
-        return Regex(""""accessToken":"([^"]+)"""")
+        val accessToken = Regex(""""accessToken":"([^"]+)"""")
             .find(response.body())
             ?.groupValues
             ?.get(1)
             ?: error("accessToken not found in response: ${response.body()}")
+        val hotelId = Regex(""""hotelId":"([^"]+)"""")
+            .find(response.body())
+            ?.groupValues
+            ?.get(1)
+            ?: error("hotelId not found in response: ${response.body()}")
+        return LoginSnapshot(accessToken = accessToken, hotelId = hotelId)
     }
 
     private fun createTask(accessToken: String, hotelId: String, title: String): String {
@@ -204,4 +201,9 @@ class TaskControllerTest : PostgresIntegrationTestSupport() {
             "Expected response to contain $expected but was $value"
         )
     }
+
+    private data class LoginSnapshot(
+        val accessToken: String,
+        val hotelId: String
+    )
 }

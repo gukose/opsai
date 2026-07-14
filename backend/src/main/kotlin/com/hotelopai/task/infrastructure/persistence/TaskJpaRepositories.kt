@@ -1,10 +1,13 @@
 package com.hotelopai.task.infrastructure.persistence
 
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor
 import java.util.UUID
 
-interface TaskJpaRepository : JpaRepository<TaskJpaEntity, UUID> {
-    fun findAllByOrderByUpdatedAtDesc(): List<TaskJpaEntity>
+interface TaskJpaRepository : JpaRepository<TaskJpaEntity, UUID>, JpaSpecificationExecutor<TaskJpaEntity> {
+    fun findAllByHotelIdOrderByUpdatedAtDesc(hotelId: UUID): List<TaskJpaEntity>
+
+    fun findByIdAndHotelId(id: UUID, hotelId: UUID): TaskJpaEntity?
 }
 
 interface TaskStateHistoryJpaRepository : JpaRepository<TaskStateHistoryJpaEntity, UUID> {

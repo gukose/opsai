@@ -83,11 +83,20 @@ class TaskLifecycleService @Autowired constructor(
     fun getTask(taskId: String, now: Instant = Instant.now()): Task =
         taskRepository.findById(taskId.toTaskId()) ?: throw TaskNotFoundException(taskId.toTaskId())
 
+    fun getTaskForHotel(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task =
+        taskRepository.findByIdAndHotelId(taskId.toTaskId(), hotelId) ?: throw TaskNotFoundException(taskId.toTaskId())
+
     fun listTasks(now: Instant = Instant.now()): List<Task> =
         taskRepository.findAll()
 
+    fun listTasksForHotel(hotelId: UUID, now: Instant = Instant.now()): List<Task> =
+        taskRepository.findAllByHotelId(hotelId)
+
     fun listTasksPage(request: TaskPageRequest, now: Instant = Instant.now()): TaskPage<Task> =
         taskRepository.findPage(request)
+
+    fun searchTasks(query: TaskSearchQuery, now: Instant = Instant.now()): TaskPage<Task> =
+        taskRepository.findPage(query)
 
     fun assignTask(taskId: String, request: AssignTaskCommand, now: Instant = Instant.now()): Task =
         mutate(

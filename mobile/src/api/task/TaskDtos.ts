@@ -23,3 +23,13 @@ export type TaskResponseDto = {
   cancelledAt: string | null;
   overdueAt: string | null;
 };
+
+export type TaskPageResponseDto = {
+  items: TaskResponseDto[];
+  page: number;
+  size: number;
+  totalItems: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrevious: boolean;
+};

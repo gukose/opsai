@@ -1,4 +1,14 @@
-import { TaskResponseDto } from "../api/task/TaskDtos";
+import type { TaskListResponseDto } from "../api/task/TaskApi";
+import type { TaskResponseDto } from "../api/task/TaskDtos";
+
+export type TaskFilterState = {
+  q: string;
+  status: string[];
+  priority: string[];
+  assignment: string | null;
+  createdFrom?: string | null;
+  createdTo?: string | null;
+};
 
 export type TaskSummary = {
   id: string;
@@ -57,6 +67,37 @@ export function taskDetailFromResponse(task: TaskResponseDto): TaskDetail {
     assigneeId: task.assignment?.assigneeId ?? null,
     assignedAt: task.assignment?.assignedAt ?? null
   };
+}
+
+export function taskSummariesFromListResponse(response: TaskListResponseDto): TaskSummary[] {
+  const tasks = Array.isArray(response) ? response : response.items;
+  return tasks.map(taskSummaryFromResponse);
+}
+
+export function emptyTaskFilters(): TaskFilterState {
+  return {
+    q: "",
+    status: [],
+    priority: [],
+    assignment: null,
+    createdFrom: null,
+    createdTo: null
+  };
+}
+
+export function hasActiveTaskFilters(filters: TaskFilterState): boolean {
+  return Boolean(
+    filters.q.trim() ||
+      filters.status.length > 0 ||
+      filters.priority.length > 0 ||
+      filters.assignment ||
+      filters.createdFrom ||
+      filters.createdTo
+  );
+}
+
+export function shouldClearVisibleTasksBeforeLoad(filters: TaskFilterState): boolean {
+  return !hasActiveTaskFilters(filters);
 }
 
 function extractRoomOrLocation(title: string, description: string): string | null {

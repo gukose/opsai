@@ -29,18 +29,12 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
 
     @Test
     fun `assistant conversation endpoints support start message confirm and reset`() {
-        val accessToken = loginAccessToken()
-        val hotel = hotelRepository.save(
-            Hotel(
-                code = "assistant-hotel-${UuidV7Generator.generate()}",
-                name = "Assistant Hotel"
-            )
-        )
+        val login = login()
 
         val startResponse = post(
             path = "/api/v1/assistant/conversations",
-            body = """{"hotelId":"${hotel.id}","userId":"user-1"}""",
-            bearerToken = accessToken
+            body = """{"hotelId":"${login.hotelId}","userId":"user-1"}""",
+            bearerToken = login.accessToken
         )
 
         assertEquals(200, startResponse.statusCode())
@@ -50,7 +44,7 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
         val messageResponse = post(
             path = "/api/v1/assistant/conversations/$conversationId/messages",
             body = """{"text":"Room 101 AC not working","inputType":"TEXT"}""",
-            bearerToken = accessToken
+            bearerToken = login.accessToken
         )
 
         assertEquals(200, messageResponse.statusCode())
@@ -62,7 +56,7 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
         val confirmResponse = post(
             path = "/api/v1/assistant/conversations/$conversationId/confirm",
             body = """{"idempotencyKey":"confirm-101"}""",
-            bearerToken = accessToken
+            bearerToken = login.accessToken
         )
 
         assertEquals(200, confirmResponse.statusCode())
@@ -75,13 +69,13 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
         val duplicateConfirmResponse = post(
             path = "/api/v1/assistant/conversations/$conversationId/confirm",
             body = """{"idempotencyKey":"confirm-101"}""",
-            bearerToken = accessToken
+            bearerToken = login.accessToken
         )
 
         assertEquals(200, duplicateConfirmResponse.statusCode())
         assertContains(duplicateConfirmResponse.body(), """"createdTaskId":"$createdTaskId"""")
 
-        val taskResponse = get("/api/v1/tasks/$createdTaskId", accessToken)
+        val taskResponse = get("/api/v1/tasks/$createdTaskId", login.accessToken)
         assertEquals(200, taskResponse.statusCode())
         assertContains(taskResponse.body(), """"id":"$createdTaskId"""")
         assertContains(taskResponse.body(), """"intentType":"MAINTENANCE"""")
@@ -89,7 +83,7 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
         val resetResponse = post(
             path = "/api/v1/assistant/conversations/$conversationId/reset",
             body = "",
-            bearerToken = accessToken
+            bearerToken = login.accessToken
         )
 
         assertEquals(200, resetResponse.statusCode())
@@ -206,6 +200,10 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
     }
 
     private fun loginAccessToken(): String {
+        return login().accessToken
+    }
+
+    private fun login(): LoginSnapshot {
         val response = post(
             "/api/v1/auth/login",
             """{
@@ -215,11 +213,17 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
             }"""
         )
         assertEquals(200, response.statusCode())
-        return Regex(""""accessToken":"([^"]+)"""")
+        val accessToken = Regex(""""accessToken":"([^"]+)"""")
             .find(response.body())
             ?.groupValues
             ?.get(1)
             ?: error("accessToken not found in response: ${response.body()}")
+        val hotelId = Regex(""""hotelId":"([^"]+)"""")
+            .find(response.body())
+            ?.groupValues
+            ?.get(1)
+            ?: error("hotelId not found in response: ${response.body()}")
+        return LoginSnapshot(accessToken = accessToken, hotelId = hotelId)
     }
 
     private fun extractConversationId(body: String): String =
@@ -242,4 +246,9 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
             "Expected response to contain $expected but was $value"
         )
     }
+
+    private data class LoginSnapshot(
+        val accessToken: String,
+        val hotelId: String
+    )
 }

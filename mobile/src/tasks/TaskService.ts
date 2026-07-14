@@ -1,7 +1,7 @@
 import { appApiBaseUrl } from "../config/appConfig";
 import { FetchApiClient } from "../api/client/FetchApiClient";
-import { HttpTaskApi } from "../api/task/TaskApi";
-import { TaskDetail, taskDetailFromResponse, taskSummaryFromResponse, TaskSummary } from "./types";
+import { HttpTaskApi, TaskListFilters } from "../api/task/TaskApi";
+import { TaskDetail, TaskFilterState, taskDetailFromResponse, taskSummariesFromListResponse, TaskSummary } from "./types";
 
 export class TaskService {
   private readonly taskApi: HttpTaskApi;
@@ -15,9 +15,9 @@ export class TaskService {
     );
   }
 
-  async listTasks(): Promise<TaskSummary[]> {
-    const tasks = await this.taskApi.listTasks();
-    return tasks.map(taskSummaryFromResponse);
+  async listTasks(filters?: TaskFilterState): Promise<TaskSummary[]> {
+    const response = await this.taskApi.listTasks(filters ? toApiFilters(filters) : undefined);
+    return taskSummariesFromListResponse(response);
   }
 
   async getTask(taskId: string): Promise<TaskDetail> {
@@ -43,4 +43,15 @@ export class TaskService {
   async cancelTask(taskId: string): Promise<TaskDetail> {
     return taskDetailFromResponse(await this.taskApi.cancelTask(taskId));
   }
+}
+
+function toApiFilters(filters: TaskFilterState): TaskListFilters {
+  return {
+    q: filters.q,
+    status: filters.status,
+    priority: filters.priority,
+    assignment: filters.assignment,
+    createdFrom: filters.createdFrom,
+    createdTo: filters.createdTo
+  };
 }

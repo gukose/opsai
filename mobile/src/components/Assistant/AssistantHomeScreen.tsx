@@ -41,8 +41,11 @@ export function AssistantHomeScreen({ accessToken, currentUser, onLogout }: Assi
     isLoading,
     isRefreshing,
     errorMessage,
+    filters,
     homeTask,
     overview,
+    updateFilters,
+    clearFilters,
     selectTask,
     refreshTasks,
     startSelectedTask,
@@ -122,7 +125,10 @@ export function AssistantHomeScreen({ accessToken, currentUser, onLogout }: Assi
             isLoading={isLoading}
             isRefreshing={isRefreshing}
             errorMessage={errorMessage}
+            filters={filters}
             onRefresh={refreshTasks}
+            onFiltersChange={updateFilters}
+            onClearFilters={clearFilters}
             onSelectTask={selectTask}
             onStartTask={startSelectedTask}
             onPauseTask={pauseSelectedTask}

@@ -1,10 +1,10 @@
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { CircleCheckBig, ClipboardList } from "lucide-react-native";
 
 import { getCurrentUserDisplayName, getCurrentUserHotelLabel, getCurrentUserRoleCodes } from "../../auth/currentUserHelpers";
 import { colors, radius, shadow, spacing, typography } from "../../theme/tokens";
 import { CurrentUserSnapshot } from "../../session/sessionTypes";
-import { TaskDetail, TaskSummary } from "../../tasks/types";
+import { TaskDetail, TaskFilterState, TaskSummary, hasActiveTaskFilters } from "../../tasks/types";
 import { TaskListItem } from "./TaskListItem";
 import { TaskDetailCard } from "./TaskDetailCard";
 import { TaskEmptyState } from "./TaskEmptyState";
@@ -17,7 +17,10 @@ type TasksScreenProps = {
   isLoading: boolean;
   isRefreshing: boolean;
   errorMessage: string | null;
+  filters: TaskFilterState;
   onRefresh: () => Promise<void>;
+  onFiltersChange: (filters: TaskFilterState) => void;
+  onClearFilters: () => void;
   onSelectTask: (taskId: string) => Promise<void>;
   onStartTask: () => Promise<void>;
   onPauseTask: () => Promise<void>;
@@ -34,7 +37,10 @@ export function TasksScreen({
   isLoading,
   isRefreshing,
   errorMessage,
+  filters,
   onRefresh,
+  onFiltersChange,
+  onClearFilters,
   onSelectTask,
   onStartTask,
   onPauseTask,
@@ -68,6 +74,7 @@ export function TasksScreen({
 
       {errorMessage ? <Text style={styles.error}>{errorMessage}</Text> : null}
       {isLoading ? <Text style={styles.loading}>Loading tasks...</Text> : null}
+      <TaskFilterRow filters={filters} onChange={onFiltersChange} onClear={onClearFilters} />
 
       {!isLoading && tasks.length === 0 ? (
         <TaskEmptyState
@@ -143,6 +150,89 @@ export function TasksScreen({
   );
 }
 
+function TaskFilterRow({
+  filters,
+  onChange,
+  onClear
+}: {
+  filters: TaskFilterState;
+  onChange: (filters: TaskFilterState) => void;
+  onClear: () => void;
+}) {
+  const active = hasActiveTaskFilters(filters);
+
+  return (
+    <View style={styles.filterWrap}>
+      <TextInput
+        value={filters.q}
+        onChangeText={(q) => onChange({ ...filters, q })}
+        placeholder="Search tasks"
+        placeholderTextColor={colors.textSubtle}
+        style={styles.searchInput}
+      />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChips}>
+        <FilterChip
+          label="Open"
+          active={filters.status.includes("CREATED")}
+          onPress={() =>
+            onChange({
+              ...filters,
+              status: filters.status.includes("CREATED")
+                ? []
+                : ["CREATED", "ASSIGNED", "STARTED", "IN_PROGRESS", "WAITING", "OVERDUE"]
+            })
+          }
+        />
+        <FilterChip
+          label="Done"
+          active={filters.status.includes("COMPLETED")}
+          onPress={() =>
+            onChange({
+              ...filters,
+              status: filters.status.includes("COMPLETED") ? [] : ["COMPLETED"]
+            })
+          }
+        />
+        <FilterChip
+          label="High"
+          active={filters.priority.includes("HIGH")}
+          onPress={() =>
+            onChange({
+              ...filters,
+              priority: filters.priority.includes("HIGH") ? [] : ["HIGH", "URGENT"]
+            })
+          }
+        />
+        <FilterChip
+          label="Mine"
+          active={filters.assignment === "mine"}
+          onPress={() => onChange({ ...filters, assignment: filters.assignment === "mine" ? null : "mine" })}
+        />
+        <FilterChip
+          label="Unassigned"
+          active={filters.assignment === "unassigned"}
+          onPress={() =>
+            onChange({ ...filters, assignment: filters.assignment === "unassigned" ? null : "unassigned" })
+          }
+        />
+        {active ? <FilterChip label="Clear" active={false} onPress={onClear} /> : null}
+      </ScrollView>
+    </View>
+  );
+}
+
+function FilterChip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.filterChip, active && styles.filterChipActive, pressed && styles.filterChipPressed]}
+    >
+      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{label}</Text>
+    </Pressable>
+  );
+}
+
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.summaryCard}>
@@ -210,6 +300,48 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.caption,
     fontWeight: "700"
+  },
+  filterWrap: {
+    gap: 8,
+    marginBottom: 10
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    color: colors.text,
+    fontSize: typography.caption,
+    fontWeight: "700"
+  },
+  filterChips: {
+    gap: 6,
+    paddingRight: spacing.md
+  },
+  filterChip: {
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 6
+  },
+  filterChipActive: {
+    borderColor: colors.green,
+    backgroundColor: "#e9f7ef"
+  },
+  filterChipPressed: {
+    opacity: 0.82
+  },
+  filterChipText: {
+    color: colors.textMuted,
+    fontSize: typography.tiny,
+    fontWeight: "800"
+  },
+  filterChipTextActive: {
+    color: colors.green
   },
   list: {
     gap: 10,

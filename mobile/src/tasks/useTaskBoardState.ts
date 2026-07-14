@@ -4,7 +4,14 @@ import { assistantStaticMockEnabled } from "../config/assistantConfig";
 import { getAppApiErrorMessage } from "../api/client/AppApiError";
 import { nextAssignedTask } from "../assistant/sampleConversation";
 import { TaskService } from "./TaskService";
-import { TaskDetail, TaskSummary, taskDetailFromResponse } from "./types";
+import {
+  emptyTaskFilters,
+  shouldClearVisibleTasksBeforeLoad,
+  TaskDetail,
+  TaskFilterState,
+  TaskSummary,
+  taskDetailFromResponse
+} from "./types";
 import { buildTaskBoardOverview, selectHomeTask } from "./taskBoardSelectors";
 
 type TaskBoardState = {
@@ -14,8 +21,11 @@ type TaskBoardState = {
   isLoading: boolean;
   isRefreshing: boolean;
   errorMessage: string | null;
+  filters: TaskFilterState;
   homeTask: TaskSummary | null;
   overview: ReturnType<typeof buildTaskBoardOverview>;
+  updateFilters: (nextFilters: TaskFilterState) => void;
+  clearFilters: () => void;
   selectTask: (taskId: string) => Promise<void>;
   refreshTasks: () => Promise<void>;
   startSelectedTask: () => Promise<void>;
@@ -49,13 +59,19 @@ export function useTaskBoardState(accessToken: string | null): TaskBoardState {
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [filters, setFilters] = useState<TaskFilterState>(emptyTaskFilters);
   const selectedTaskIdRef = useRef<string | null>(selectedTaskId);
   const homeTaskRef = useRef<TaskSummary | null>(useMockTasks ? mockTaskFromSample() : null);
   const inFlightRef = useRef(false);
+  const filtersRef = useRef<TaskFilterState>(filters);
 
   useEffect(() => {
     selectedTaskIdRef.current = selectedTaskId;
   }, [selectedTaskId]);
+
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
 
   const homeTask = useMemo(() => selectHomeTask(tasks), [tasks]);
   const overview = useMemo(() => buildTaskBoardOverview(tasks), [tasks]);
@@ -75,7 +91,7 @@ export function useTaskBoardState(accessToken: string | null): TaskBoardState {
 
       if (!silent) {
         setIsLoading(true);
-        if (!useMockTasks) {
+        if (!useMockTasks && shouldClearVisibleTasksBeforeLoad(filtersRef.current)) {
           setTasks([]);
           setSelectedTask(null);
           setSelectedTaskId(null);
@@ -96,7 +112,7 @@ export function useTaskBoardState(accessToken: string | null): TaskBoardState {
           return;
         }
 
-        const nextTasks = await service.listTasks();
+        const nextTasks = await service.listTasks(filtersRef.current);
         setTasks(nextTasks);
         if (nextTasks.length === 0) {
           setSelectedTaskId(null);
@@ -134,7 +150,7 @@ export function useTaskBoardState(accessToken: string | null): TaskBoardState {
 
   useEffect(() => {
     void loadTasks();
-  }, [loadTasks]);
+  }, [loadTasks, filters]);
 
   const selectTask = useCallback(
     async (taskId: string) => {
@@ -223,6 +239,14 @@ export function useTaskBoardState(accessToken: string | null): TaskBoardState {
     await loadTasks(true);
   }, [loadTasks]);
 
+  const updateFilters = useCallback((nextFilters: TaskFilterState) => {
+    setFilters(nextFilters);
+  }, []);
+
+  const clearFilters = useCallback(() => {
+    setFilters(emptyTaskFilters());
+  }, []);
+
   return {
     tasks,
     selectedTask,
@@ -230,8 +254,11 @@ export function useTaskBoardState(accessToken: string | null): TaskBoardState {
     isLoading,
     isRefreshing,
     errorMessage,
+    filters,
     homeTask,
     overview,
+    updateFilters,
+    clearFilters,
     selectTask,
     refreshTasks,
     startSelectedTask: async () => runCommand((taskId) => service.startTask(taskId)),
