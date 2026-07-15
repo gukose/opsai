@@ -26,7 +26,9 @@ type ComposerProps = {
   attachmentError?: string | null;
   onTextChange?: (text: string) => void;
   onAddAttachment?: () => void;
+  onAddCameraImage?: () => void;
   onRemoveAttachment?: (attachmentId: string) => void;
+  onRetryAttachmentRegistration?: (attachmentId: string) => void;
   onAddVoiceTranscript?: () => void;
   onRemoveVoiceTranscript?: () => void;
   onAddImageObservation?: () => void;
@@ -44,7 +46,9 @@ export function Composer({
   attachmentError,
   onTextChange,
   onAddAttachment,
+  onAddCameraImage,
   onRemoveAttachment,
+  onRetryAttachmentRegistration,
   onAddVoiceTranscript,
   onRemoveVoiceTranscript,
   onAddImageObservation,
@@ -121,9 +125,24 @@ export function Composer({
                   {attachment.originalFileName}
                 </Text>
                 <Text style={styles.attachmentState} numberOfLines={1}>
-                  Local reference · {formatAttachmentSize(attachment.sizeBytes)} · {attachment.state}
+                  {attachmentStatusLabel(attachment)} · {formatAttachmentSize(attachment.sizeBytes)}
                 </Text>
+                {attachment.errorMessage ? (
+                  <Text style={styles.attachmentError} numberOfLines={1}>
+                    {attachment.errorMessage}
+                  </Text>
+                ) : null}
               </View>
+              {attachment.state === "REGISTRATION_FAILED" ? (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={disabled}
+                  onPress={() => onRetryAttachmentRegistration?.(attachment.id)}
+                  style={styles.retryAttachment}
+                >
+                  <Text style={styles.retryAttachmentText}>Retry</Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 accessibilityRole="button"
                 disabled={disabled}
@@ -142,7 +161,7 @@ export function Composer({
                   Image note
                 </Text>
                 <Text style={styles.attachmentState} numberOfLines={1}>
-                  User-provided · not uploaded for server vision · {observation.state}
+                  User-provided · not server vision · {observation.state}
                 </Text>
               </View>
               <Pressable
@@ -161,7 +180,7 @@ export function Composer({
       ) : null}
       <View style={styles.controls}>
         <View style={styles.leftActions}>
-          <IconButton icon={Camera} label="Add photo reference" style={styles.flatIcon} size={14} onPress={onAddAttachment} disabled={disabled} />
+          <IconButton icon={Camera} label="Add photo reference" style={styles.flatIcon} size={14} onPress={onAddCameraImage ?? onAddAttachment} disabled={disabled} />
           <IconButton icon={Grid2X2} label="Open templates" style={styles.flatIcon} size={14} />
           <IconButton icon={Paperclip} label="Attach local reference" style={styles.flatIcon} size={14} onPress={onAddAttachment} disabled={disabled} />
         </View>
@@ -189,6 +208,24 @@ export function Composer({
       </View>
     </View>
   );
+}
+
+function attachmentStatusLabel(attachment: LocalAttachmentMetadata): string {
+  switch (attachment.state) {
+    case "REGISTERING":
+      return "Registering metadata";
+    case "REGISTERED":
+      return "Registered metadata";
+    case "REGISTRATION_FAILED":
+      return "Registration failed · Retry";
+    case "MESSAGE_SENDING":
+      return "Sending message";
+    case "MESSAGE_SENT":
+      return "Message sent";
+    case "LOCAL_SELECTED":
+    default:
+      return "Local preview only";
+  }
 }
 
 const styles = StyleSheet.create({
@@ -241,6 +278,20 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: radius.pill,
     backgroundColor: colors.surface
+  },
+  retryAttachment: {
+    minWidth: 44,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.pill,
+    backgroundColor: colors.nav,
+    paddingHorizontal: 8
+  },
+  retryAttachmentText: {
+    color: colors.surface,
+    fontSize: typography.tiny,
+    fontWeight: "900"
   },
   attachmentError: {
     color: colors.red,

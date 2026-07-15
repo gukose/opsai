@@ -1,5 +1,5 @@
 import type { ApiClient } from "../client/ApiClient";
-import type { TaskPageResponseDto, TaskResponseDto } from "./TaskDtos";
+import type { TaskAttachmentResponseDto, TaskPageResponseDto, TaskResponseDto } from "./TaskDtos";
 
 export type TaskListFilters = {
   q?: string;
@@ -17,6 +17,7 @@ export type TaskListResponseDto = TaskResponseDto[] | TaskPageResponseDto;
 export interface TaskApi {
   listTasks(filters?: TaskListFilters): Promise<TaskListResponseDto>;
   getTask(taskId: string): Promise<TaskResponseDto>;
+  getTaskAttachments(taskId: string): Promise<TaskAttachmentResponseDto[]>;
   startTask(taskId: string): Promise<TaskResponseDto>;
   pauseTask(taskId: string): Promise<TaskResponseDto>;
   resumeTask(taskId: string): Promise<TaskResponseDto>;
@@ -37,6 +38,10 @@ export class HttpTaskApi implements TaskApi {
 
   getTask(taskId: string): Promise<TaskResponseDto> {
     return this.client.get(`/api/v1/tasks/${taskId}`);
+  }
+
+  getTaskAttachments(taskId: string): Promise<TaskAttachmentResponseDto[]> {
+    return this.client.get(`/api/v1/tasks/${taskId}/attachments`);
   }
 
   startTask(taskId: string): Promise<TaskResponseDto> {

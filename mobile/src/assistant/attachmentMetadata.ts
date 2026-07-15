@@ -14,6 +14,21 @@ export type AttachmentCandidate = {
   widthPx?: number;
   heightPx?: number;
   localReference?: string;
+  localUri?: string;
+};
+
+export type RegisteredAttachmentResponse = {
+  attachmentId: string;
+  conversationId: string;
+  type: "IMAGE" | "PDF" | "DOCUMENT";
+  originalFileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  widthPx?: number | null;
+  heightPx?: number | null;
+  storageStatus: "REGISTERED";
+  storageReference?: string | null;
+  createdAt: string;
 };
 
 export function createLocalAttachmentMetadata(
@@ -54,6 +69,7 @@ export function createLocalAttachmentMetadata(
 
   return {
     id,
+    localId: id,
     type,
     originalFileName,
     mimeType,
@@ -61,8 +77,57 @@ export function createLocalAttachmentMetadata(
     widthPx: candidate.widthPx,
     heightPx: candidate.heightPx,
     localReference: candidate.localReference?.trim() || undefined,
+    localUri: candidate.localUri?.trim() || candidate.localReference?.trim() || undefined,
     storageStatus: "LOCAL_METADATA_ONLY",
-    state: "selected"
+    state: "LOCAL_SELECTED"
+  };
+}
+
+export function applyRegisteredAttachment(
+  attachment: LocalAttachmentMetadata,
+  response: RegisteredAttachmentResponse
+): LocalAttachmentMetadata {
+  if (response.storageStatus !== "REGISTERED") {
+    throw new Error("Attachment registration did not return REGISTERED metadata.");
+  }
+  if (response.storageReference != null) {
+    throw new Error("Registered metadata must not include a storage reference.");
+  }
+
+  const serverAttachmentId = response.attachmentId.trim();
+  if (!serverAttachmentId) {
+    throw new Error("Registered attachment ID is required.");
+  }
+
+  return {
+    ...attachment,
+    id: serverAttachmentId,
+    serverAttachmentId,
+    type: response.type,
+    originalFileName: response.originalFileName,
+    mimeType: response.mimeType,
+    sizeBytes: response.sizeBytes,
+    widthPx: response.widthPx ?? undefined,
+    heightPx: response.heightPx ?? undefined,
+    storageStatus: "REGISTERED",
+    storageReference: null,
+    createdAt: response.createdAt,
+    state: "REGISTERED",
+    errorMessage: undefined
+  };
+}
+
+export function normalizeAttachmentState(attachment: LocalAttachmentMetadata): LocalAttachmentMetadata {
+  const isRegistered = attachment.storageStatus === "REGISTERED" && Boolean(attachment.serverAttachmentId ?? attachment.id);
+  const state = isRegistered ? "REGISTERED" : normalizeState(attachment.state);
+
+  return {
+    ...attachment,
+    localId: attachment.localId ?? attachment.id,
+    serverAttachmentId: isRegistered ? attachment.serverAttachmentId ?? attachment.id : undefined,
+    storageStatus: isRegistered ? "REGISTERED" : "LOCAL_METADATA_ONLY",
+    storageReference: isRegistered ? null : undefined,
+    state
   };
 }
 
@@ -111,5 +176,24 @@ function validateDimension(value: number | undefined, label: string) {
   }
   if (!Number.isFinite(value) || value < 1 || value > 10_000) {
     throw new Error(`Attachment ${label} must be between 1 and 10000 pixels.`);
+  }
+}
+
+function normalizeState(state: LocalAttachmentMetadata["state"] | string): LocalAttachmentMetadata["state"] {
+  switch (state) {
+    case "REGISTERED":
+      return "REGISTERED";
+    case "REGISTRATION_FAILED":
+      return "REGISTRATION_FAILED";
+    case "REGISTERING":
+      return "REGISTRATION_FAILED";
+    case "MESSAGE_SENDING":
+    case "MESSAGE_SENT":
+    case "sending":
+    case "sent":
+    case "selected":
+    case "LOCAL_SELECTED":
+    default:
+      return "LOCAL_SELECTED";
   }
 }

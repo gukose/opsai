@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { SafeAreaView, StatusBar, StyleSheet, Text, View } from "react-native";
 
 import { colors } from "../../theme/tokens";
+import { assistantBackendEnabled } from "../../config/assistantConfig";
 import {
   LocalAttachmentMetadata,
   LocalImageObservationMetadata,
   LocalVoiceTranscriptMetadata
 } from "../../assistant/types";
-import { sampleLocalImageAttachment } from "../../assistant/attachmentMetadata";
+import { applyRegisteredAttachment, sampleLocalImageAttachment } from "../../assistant/attachmentMetadata";
+import { selectImageFromCamera, selectImageFromGallery } from "../../assistant/imageSelection";
 import {
   createLocalImageObservationMetadata,
   createLocalVoiceTranscriptMetadata
@@ -53,6 +55,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
     conversationId,
     conversationItems,
     sendTextMessage,
+    registerAttachment,
     confirmTask,
     resetConversation,
     isSending,
@@ -154,6 +157,64 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
       imageObservations
     });
   }, [composerText, conversationId, draftHydrated, imageObservations, offlineScope, selectedAttachments, voiceTranscript]);
+
+  const registerSelectedAttachment = async (attachment: LocalAttachmentMetadata) => {
+    if (!assistantBackendEnabled) {
+      return;
+    }
+
+    setSelectedAttachments((current) =>
+      current.map((item) =>
+        item.id === attachment.id ? { ...item, state: "REGISTERING", errorMessage: undefined } : item
+      )
+    );
+
+    try {
+      const response = await registerAttachment(attachment);
+      if (!response) {
+        throw new Error("Attachment registration is unavailable.");
+      }
+      const registered = applyRegisteredAttachment(attachment, response);
+      setSelectedAttachments((current) =>
+        current.map((item) => (item.id === attachment.id ? registered : item))
+      );
+      setImageObservations((current) =>
+        current.map((observation) =>
+          observation.attachmentId === attachment.id
+            ? { ...observation, attachmentId: registered.id }
+            : observation
+        )
+      );
+    } catch (error) {
+      setSelectedAttachments((current) =>
+        current.map((item) =>
+          item.id === attachment.id
+            ? {
+                ...item,
+                state: "REGISTRATION_FAILED",
+                errorMessage: error instanceof Error ? error.message : "Registration failed."
+              }
+            : item
+        )
+      );
+    }
+  };
+
+  const addImageAttachment = async (source: "camera" | "gallery") => {
+    try {
+      const selected = source === "camera"
+        ? await selectImageFromCamera(selectedAttachments)
+        : await selectImageFromGallery(selectedAttachments);
+      if (!selected) {
+        return;
+      }
+      setSelectedAttachments((current) => [...current, selected]);
+      setAttachmentError(null);
+      void registerSelectedAttachment(selected);
+    } catch (error) {
+      setAttachmentError(error instanceof Error ? error.message : "Attachment could not be selected.");
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -264,7 +325,12 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
           {isHomeSurface ? (
             <Composer
               onSend={async (text, attachments, transcript, observations = []) => {
-                setSelectedAttachments((current) => current.map((attachment) => ({ ...attachment, state: "sending" })));
+                if (assistantBackendEnabled && attachments.some((attachment) => attachment.storageStatus !== "REGISTERED")) {
+                  setAttachmentError("Register attachment metadata before sending.");
+                  return false;
+                }
+                const previousAttachments = attachments;
+                setSelectedAttachments((current) => current.map((attachment) => ({ ...attachment, state: "MESSAGE_SENDING" })));
                 setVoiceTranscript((current) => current ? { ...current, state: "sending" } : null);
                 setImageObservations((current) => current.map((observation) => ({ ...observation, state: "sending" })));
                 const sent = await sendTextMessage(text, attachments, transcript, observations);
@@ -278,7 +344,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
                     void clearAssistantDraft(offlineScope, conversationId);
                   }
                 } else {
-                  setSelectedAttachments((current) => current.map((attachment) => ({ ...attachment, state: "failed" })));
+                  setSelectedAttachments(previousAttachments);
                   setVoiceTranscript((current) => current ? { ...current, state: "failed" } : null);
                   setImageObservations((current) => current.map((observation) => ({ ...observation, state: "failed" })));
                 }
@@ -293,16 +359,29 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
               attachmentError={attachmentError}
               onAddAttachment={() => {
                 try {
+                  if (assistantBackendEnabled) {
+                    void addImageAttachment("gallery");
+                    return;
+                  }
                   setSelectedAttachments((current) => [...current, sampleLocalImageAttachment(current)]);
                   setAttachmentError(null);
                 } catch (error) {
                   setAttachmentError(error instanceof Error ? error.message : "Attachment could not be selected.");
                 }
               }}
+              onAddCameraImage={() => {
+                void addImageAttachment("camera");
+              }}
               onRemoveAttachment={(attachmentId) => {
                 setSelectedAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId));
                 setImageObservations((current) => current.filter((observation) => observation.attachmentId !== attachmentId));
                 setAttachmentError(null);
+              }}
+              onRetryAttachmentRegistration={(attachmentId) => {
+                const attachment = selectedAttachments.find((item) => item.id === attachmentId);
+                if (attachment) {
+                  void registerSelectedAttachment(attachment);
+                }
               }}
               onAddVoiceTranscript={() => {
                 try {

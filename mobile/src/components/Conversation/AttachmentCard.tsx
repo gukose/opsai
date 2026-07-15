@@ -25,7 +25,9 @@ export function AttachmentCard({ imageUri, filename, size, type, storageStatus, 
       <View style={styles.meta}>
         <Text style={styles.title}>{type === "PDF" ? "PDF reference" : type === "DOCUMENT" ? "Document reference" : "Image reference"}</Text>
         <Text style={styles.filename}>{filename}</Text>
-        <Text style={styles.size}>{size} · {storageStatus === "LOCAL_METADATA_ONLY" ? "Local metadata only" : "Metadata"}</Text>
+        <Text style={styles.size}>
+          {size} · {storageStatus === "REGISTERED" ? "Registered metadata" : "Local metadata only"}
+        </Text>
       </View>
       {timestamp ? <Text style={styles.timestamp}>{timestamp}</Text> : null}
     </View>

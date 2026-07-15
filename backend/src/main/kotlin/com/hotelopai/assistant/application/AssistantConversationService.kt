@@ -8,6 +8,7 @@ import com.hotelopai.assistant.domain.InputType
 import com.hotelopai.assistant.domain.VoiceTranscriptMetadata
 import com.hotelopai.task.application.TaskApplicationPort
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
 import java.time.Instant
 
@@ -16,7 +17,8 @@ class AssistantConversationService(
     private val conversationRepository: ConversationRepository,
     private val stateMachine: ConversationStateMachine,
     private val taskApplicationPort: TaskApplicationPort,
-    private val taskConfirmationRepository: TaskConfirmationRepository
+    private val taskConfirmationRepository: TaskConfirmationRepository,
+    private val taskAttachmentLinker: ConfirmedTaskAttachmentLinker = NoOpConfirmedTaskAttachmentLinker
 ) {
     fun startConversation(
         hotelId: String,
@@ -93,12 +95,14 @@ class AssistantConversationService(
         )
     }
 
+    @Transactional
     fun confirmTask(
         conversationId: String,
         idempotencyKey: String
     ): ConversationTurnResult =
         confirmTask(getConversation(conversationId), idempotencyKey)
 
+    @Transactional
     fun confirmTask(
         conversationId: String,
         hotelId: String,
@@ -155,10 +159,17 @@ class AssistantConversationService(
             now = Instant.now()
         )
         val createdTask = taskApplicationPort.createTask(createCommand)
+        val now = Instant.now()
+        taskAttachmentLinker.linkConfirmedTask(
+            conversation = conversation,
+            taskId = createdTask.id,
+            now = now
+        )
 
         val confirmedConversation = conversation.taskCreated(
             taskId = createdTask.id.toString(),
-            idempotencyKey = idempotencyKey
+            idempotencyKey = idempotencyKey,
+            now = now
         )
 
         taskConfirmationRepository.save(

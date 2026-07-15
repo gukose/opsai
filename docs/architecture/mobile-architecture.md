@@ -114,8 +114,8 @@ Mobile should call backend APIs only. It should never call OpenAI or UniMock dir
 Mobile sends:
 
 - message text
-- voice recording metadata or upload reference
-- image attachment metadata or upload reference
+- voice recording metadata or approved backend reference
+- image attachment metadata and registered attachment IDs
 - selected follow-up answers
 - task confirmation actions
 
@@ -128,6 +128,9 @@ Mobile receives:
 - task creation result
 - next task
 - notification summaries
+- task attachment metadata/provenance
+
+Sprint 7 image handling is metadata registration, not binary upload. Local image previews are device/browser local only. The mobile app must not send local URIs, file/device URIs, base64, raw bytes, storage references, or provider URLs as durable backend media.
 
 ## UI Rendering Contract
 
@@ -149,9 +152,19 @@ Minimum production behavior:
 
 - composer disables send during active submission
 - failed message shows retry affordance
-- uploaded attachment has pending/failed state
+- metadata registration has registering/failed/registered state
 - task confirmation is idempotent
 - conversation can recover after app restart
+- reconnect and draft restoration do not replay registration or message-send writes automatically
+
+Attachment UI wording must distinguish:
+
+- `LOCAL_SELECTED`: local preview only
+- `REGISTERING`: registering metadata
+- `REGISTRATION_FAILED`: manual retry required
+- `REGISTERED`: registered metadata
+
+The UI must not say uploaded, stored, upload complete, available from server, or analyzed unless future approved binary storage or provider analysis is actually implemented.
 
 ## Performance
 

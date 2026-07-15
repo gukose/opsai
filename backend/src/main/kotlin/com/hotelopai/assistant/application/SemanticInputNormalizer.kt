@@ -1,6 +1,7 @@
 package com.hotelopai.assistant.application
 
 import com.hotelopai.assistant.domain.ConversationMessage
+import com.hotelopai.assistant.domain.ImageObservationSource
 
 object SemanticInputNormalizer {
     fun normalize(message: ConversationMessage): String {
@@ -11,11 +12,17 @@ object SemanticInputNormalizer {
             ?: message.voiceTranscript
                 ?.trim()
                 ?.takeIf(String::isNotBlank)
-        val observations = message.imageObservations
+        val userObservations = message.imageObservations
+            .filter { it.source == ImageObservationSource.USER_PROVIDED }
+            .map { it.semanticText.trim() }
+            .filter(String::isNotBlank)
+        val visionObservations = message.imageObservations
+            .filter { it.source == ImageObservationSource.VISION_ANALYSIS }
+            .sortedWith(compareBy(nullsLast()) { it.order })
             .map { it.semanticText.trim() }
             .filter(String::isNotBlank)
 
-        if (text != null && transcript == null && observations.isEmpty() && message.attachments.isEmpty()) {
+        if (text != null && transcript == null && userObservations.isEmpty() && visionObservations.isEmpty() && message.attachments.isEmpty()) {
             return text
         }
 
@@ -26,10 +33,17 @@ object SemanticInputNormalizer {
 
             transcript?.let { appendSection("Client-provided transcript", it) }
 
-            if (observations.isNotEmpty()) {
+            if (userObservations.isNotEmpty()) {
                 appendSection(
                     "User-provided image observations",
-                    observations.joinToString(separator = "\n") { "- $it" }
+                    userObservations.joinToString(separator = "\n") { "- $it" }
+                )
+            }
+
+            if (visionObservations.isNotEmpty()) {
+                appendSection(
+                    "Vision analysis - advisory provider observations",
+                    visionObservations.joinToString(separator = "\n") { "- $it" }
                 )
             }
 

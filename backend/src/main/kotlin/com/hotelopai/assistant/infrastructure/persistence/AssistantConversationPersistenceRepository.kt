@@ -51,6 +51,7 @@ class AssistantConversationPersistenceRepository(
                 task_preview_json,
                 messages_json,
                 active_draft_id,
+                active_draft_source_message_ids_json,
                 draft_version,
                 created_task_id,
                 confirmation_idempotency_key,
@@ -68,6 +69,7 @@ class AssistantConversationPersistenceRepository(
                 cast(:taskPreviewJson as jsonb),
                 cast(:messagesJson as jsonb),
                 :activeDraftId,
+                cast(:activeDraftSourceMessageIdsJson as jsonb),
                 :draftVersion,
                 :createdTaskId,
                 :confirmationIdempotencyKey,
@@ -85,6 +87,7 @@ class AssistantConversationPersistenceRepository(
                 task_preview_json = excluded.task_preview_json,
                 messages_json = excluded.messages_json,
                 active_draft_id = excluded.active_draft_id,
+                active_draft_source_message_ids_json = excluded.active_draft_source_message_ids_json,
                 draft_version = excluded.draft_version,
                 created_task_id = excluded.created_task_id,
                 confirmation_idempotency_key = excluded.confirmation_idempotency_key,
@@ -113,6 +116,7 @@ class AssistantConversationPersistenceRepository(
                     task_preview_json,
                     messages_json,
                     active_draft_id,
+                    active_draft_source_message_ids_json,
                     draft_version,
                     created_task_id,
                     confirmation_idempotency_key,
@@ -143,6 +147,7 @@ class AssistantConversationPersistenceRepository(
                     task_preview_json,
                     messages_json,
                     active_draft_id,
+                    active_draft_source_message_ids_json,
                     draft_version,
                     created_task_id,
                     confirmation_idempotency_key,
@@ -241,6 +246,7 @@ class AssistantTaskConfirmationPersistenceRepository(
 private val collectedFieldsType = object : TypeReference<Map<String, String>>() {}
 private val missingFieldsType = object : TypeReference<List<MissingField>>() {}
 private val messagesType = object : TypeReference<List<PersistedConversationMessage>>() {}
+private val stringListType = object : TypeReference<List<String>>() {}
 
 private fun ObjectMapper.persistenceCopy(): ObjectMapper =
     copy().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
@@ -258,6 +264,7 @@ private fun Conversation.toSqlParameters(objectMapper: ObjectMapper): MapSqlPara
         .addValue("taskPreviewJson", taskPreview?.let(objectMapper::writeValueAsString))
         .addValue("messagesJson", objectMapper.writeValueAsString(messages.map(PersistedConversationMessage::from)))
         .addValue("activeDraftId", activeDraftId)
+        .addValue("activeDraftSourceMessageIdsJson", objectMapper.writeValueAsString(activeDraftSourceMessageIds))
         .addValue("draftVersion", draftVersion)
         .addValue("createdTaskId", createdTaskId)
         .addValue("confirmationIdempotencyKey", confirmationIdempotencyKey)
@@ -280,6 +287,10 @@ private fun ResultSet.toConversation(objectMapper: ObjectMapper): Conversation =
         taskPreview = getString("task_preview_json")
             ?.let { objectMapper.readValue(it, TaskPreview::class.java) },
         activeDraftId = getString("active_draft_id"),
+        activeDraftSourceMessageIds = objectMapper.readValue(
+            getString("active_draft_source_message_ids_json") ?: "[]",
+            stringListType
+        ),
         draftVersion = getInt("draft_version"),
         createdTaskId = getString("created_task_id"),
         confirmationIdempotencyKey = getString("confirmation_idempotency_key"),

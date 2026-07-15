@@ -74,6 +74,11 @@ class ConversationStateMachine(
         } else {
             withUserMessage.draftVersion + 1
         }
+        val sourceMessageIds = if (withUserMessage.activeDraftId == null) {
+            listOf(userMessage.id)
+        } else {
+            withUserMessage.activeDraftSourceMessageIds + userMessage.id
+        }
 
         val activeFlow = flowRegistry.resolve(conversation.intent)
         val interpretedFlowIntent = if (flowRegistry.supports(interpretation.intent)) {
@@ -89,6 +94,7 @@ class ConversationStateMachine(
             intent = selectedFlow?.intent ?: interpretedFlowIntent,
             collectedFields = collectedFields,
             draftId = draftId,
+            sourceMessageIds = sourceMessageIds,
             draftVersion = draftVersion,
             now = now
         )

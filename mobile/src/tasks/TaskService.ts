@@ -1,7 +1,14 @@
 import { appApiBaseUrl } from "../config/appConfig";
 import { FetchApiClient } from "../api/client/FetchApiClient";
 import { HttpTaskApi, TaskListFilters } from "../api/task/TaskApi";
-import { TaskDetail, TaskFilterState, taskDetailFromResponse, taskSummariesFromListResponse, TaskSummary } from "./types";
+import {
+  TaskDetail,
+  TaskFilterState,
+  taskAttachmentFromResponse,
+  taskDetailFromResponse,
+  taskSummariesFromListResponse,
+  TaskSummary
+} from "./types";
 
 export class TaskService {
   private readonly taskApi: HttpTaskApi;
@@ -22,7 +29,16 @@ export class TaskService {
   }
 
   async getTask(taskId: string): Promise<TaskDetail> {
-    return taskDetailFromResponse(await this.taskApi.getTask(taskId));
+    const task = taskDetailFromResponse(await this.taskApi.getTask(taskId));
+    try {
+      const attachments = await this.taskApi.getTaskAttachments(taskId);
+      return {
+        ...task,
+        attachments: attachments.map(taskAttachmentFromResponse)
+      };
+    } catch {
+      return task;
+    }
   }
 
   async startTask(taskId: string): Promise<TaskDetail> {

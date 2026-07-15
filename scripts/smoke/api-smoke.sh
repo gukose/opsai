@@ -107,6 +107,14 @@ with open(sys.argv[1], "r", encoding="utf-8") as handle:
 if not isinstance(payload, list):
     raise SystemExit("expected /api/v1/tasks without pagination params to return an array")
 PY
+initial_task_count="$(python3 - "$tmp_dir/response.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    print(len(json.load(handle)))
+PY
+)"
 
 request GET "$BACKEND_URL/api/v1/tasks?page=0&size=10" "" "$access_token"
 expect_status 200 "task list page"
@@ -125,8 +133,43 @@ request POST "$BACKEND_URL/api/v1/assistant/conversations" "{\"hotelId\":\"$hote
 expect_status 200 "assistant conversation start"
 conversation_id="$(json_value conversationId)"
 
-request POST "$BACKEND_URL/api/v1/assistant/conversations/$conversation_id/messages" '{"text":"Room 101 AC not working","inputType":"TEXT"}' "$access_token"
-expect_status 200 "assistant message interpretation"
+request POST "$BACKEND_URL/api/v1/assistant/conversations/$conversation_id/attachments" '{"type":"IMAGE","originalFileName":"room-101-ac.jpg","mimeType":"image/jpeg","sizeBytes":204800,"widthPx":1280,"heightPx":720}'
+expect_status 401 "unauthenticated attachment registration rejected"
+
+request POST "$BACKEND_URL/api/v1/assistant/conversations/$conversation_id/attachments" '{"type":"IMAGE","originalFileName":"room-101-ac.jpg","mimeType":"image/jpeg","sizeBytes":204800,"widthPx":1280,"heightPx":720}' "$access_token"
+expect_status 200 "assistant attachment metadata registration"
+attachment_id="$(json_value attachmentId)"
+python3 - "$tmp_dir/response.json" <<'PY'
+import json
+import sys
+import uuid
+
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    payload = json.load(handle)
+uuid.UUID(payload["attachmentId"])
+if payload.get("storageStatus") != "REGISTERED":
+    raise SystemExit(f"expected REGISTERED storageStatus, got {payload.get('storageStatus')}")
+if payload.get("storageReference") is not None:
+    raise SystemExit("expected metadata-only registration to return null storageReference")
+for key in ("binary", "base64", "localUri", "localReference", "downloadUrl", "providerPayload", "providerSecret"):
+    if key in payload:
+        raise SystemExit(f"registration response exposed unsafe field: {key}")
+PY
+
+request GET "$BACKEND_URL/api/v1/tasks" "" "$access_token"
+expect_status 200 "task list after registration"
+python3 - "$tmp_dir/response.json" "$initial_task_count" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    payload = json.load(handle)
+if len(payload) != int(sys.argv[2]):
+    raise SystemExit("attachment registration created a task")
+PY
+
+request POST "$BACKEND_URL/api/v1/assistant/conversations/$conversation_id/messages" "{\"text\":\"Room 101 AC not working\",\"inputType\":\"MIXED\",\"attachmentIds\":[\"$attachment_id\"]}" "$access_token"
+expect_status 200 "assistant message interpretation with registered attachment"
 python3 - "$tmp_dir/response.json" <<'PY'
 import json
 import sys
@@ -144,7 +187,78 @@ request POST "$BACKEND_URL/api/v1/assistant/conversations/$conversation_id/confi
 expect_status 200 "assistant task confirmation"
 created_task_id="$(json_value createdTaskId)"
 
+request POST "$BACKEND_URL/api/v1/assistant/conversations/$conversation_id/confirm" '{"idempotencyKey":"smoke-confirm-101"}' "$access_token"
+expect_status 200 "assistant task confirmation idempotent retry"
+python3 - "$tmp_dir/response.json" "$created_task_id" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    payload = json.load(handle)
+if payload.get("createdTaskId") != sys.argv[2]:
+    raise SystemExit("idempotent confirmation did not return the original task")
+PY
+
 request GET "$BACKEND_URL/api/v1/tasks/$created_task_id" "" "$access_token"
 expect_status 200 "created task lookup"
+
+request GET "$BACKEND_URL/api/v1/tasks/$created_task_id/attachments" "" "$access_token"
+expect_status 200 "created task attachment lookup"
+python3 - "$tmp_dir/response.json" "$attachment_id" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    payload = json.load(handle)
+if not isinstance(payload, list):
+    raise SystemExit("expected task attachment response to be a list")
+if len(payload) != 1:
+    raise SystemExit(f"expected exactly one task attachment link, got {len(payload)}")
+attachment = payload[0]
+if attachment.get("attachmentId") != sys.argv[2]:
+    raise SystemExit("task attachment link did not reference the registered attachment")
+if attachment.get("storageStatus") != "REGISTERED":
+    raise SystemExit("task attachment did not preserve REGISTERED metadata status")
+if attachment.get("sourceType") != "ASSISTANT_MESSAGE":
+    raise SystemExit(f"expected ASSISTANT_MESSAGE provenance, got {attachment.get('sourceType')}")
+for key in ("binary", "base64", "localUri", "localReference", "storageReference", "downloadUrl", "providerPayload", "providerSecret"):
+    if key in attachment:
+        raise SystemExit(f"task attachment response exposed unsafe field: {key}")
+PY
+
+request GET "$BACKEND_URL/api/v1/tasks/$created_task_id/attachments" "" "$access_token"
+expect_status 200 "created task attachment lookup idempotency check"
+python3 - "$tmp_dir/response.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    payload = json.load(handle)
+if len(payload) != 1:
+    raise SystemExit("idempotent confirmation created duplicate attachment links")
+PY
+
+request POST "$BACKEND_URL/api/v1/assistant/conversations" "{\"hotelId\":\"$hotel_id\",\"userId\":\"$user_id\"}" "$access_token"
+expect_status 200 "legacy metadata-only conversation start"
+legacy_conversation_id="$(json_value conversationId)"
+
+request POST "$BACKEND_URL/api/v1/assistant/conversations/$legacy_conversation_id/messages" '{"text":"Room 102 sink leaking","inputType":"MIXED","attachments":[{"id":"local-only-attachment","type":"IMAGE","originalFileName":"sink.jpg","mimeType":"image/jpeg","sizeBytes":12345,"widthPx":640,"heightPx":480,"localReference":"device-local-only","storageStatus":"LOCAL_METADATA_ONLY"}]}' "$access_token"
+expect_status 200 "legacy metadata-only assistant message interpretation"
+
+request POST "$BACKEND_URL/api/v1/assistant/conversations/$legacy_conversation_id/confirm" '{"idempotencyKey":"smoke-confirm-local-metadata"}' "$access_token"
+expect_status 200 "legacy metadata-only task confirmation"
+legacy_task_id="$(json_value createdTaskId)"
+
+request GET "$BACKEND_URL/api/v1/tasks/$legacy_task_id/attachments" "" "$access_token"
+expect_status 200 "legacy metadata-only task attachment lookup"
+python3 - "$tmp_dir/response.json" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    payload = json.load(handle)
+if payload != []:
+    raise SystemExit("LOCAL_METADATA_ONLY attachment created a durable task attachment link")
+PY
 
 log "all smoke checks passed"

@@ -23,11 +23,7 @@ export function normalizeDraft(draft: Partial<AssistantDraftSnapshot> | null | u
     conversationId: typeof draft?.conversationId === "string" ? draft.conversationId : null,
     text: typeof draft?.text === "string" ? draft.text : "",
     attachments: Array.isArray(draft?.attachments)
-      ? draft.attachments.map((attachment) => ({
-          ...attachment,
-          storageStatus: "LOCAL_METADATA_ONLY",
-          state: attachment.state === "failed" ? "failed" : "selected"
-        }))
+      ? draft.attachments.map(normalizeDraftAttachment)
       : [],
     voiceTranscript: draft?.voiceTranscript
       ? {
@@ -44,6 +40,35 @@ export function normalizeDraft(draft: Partial<AssistantDraftSnapshot> | null | u
         }))
       : []
   };
+}
+
+function normalizeDraftAttachment(attachment: LocalAttachmentMetadata): LocalAttachmentMetadata {
+  const isRegistered = attachment.storageStatus === "REGISTERED" && Boolean(attachment.serverAttachmentId ?? attachment.id);
+  return {
+    ...attachment,
+    localId: attachment.localId ?? attachment.id,
+    serverAttachmentId: isRegistered ? attachment.serverAttachmentId ?? attachment.id : undefined,
+    storageStatus: isRegistered ? "REGISTERED" : "LOCAL_METADATA_ONLY",
+    storageReference: isRegistered ? null : undefined,
+    state: isRegistered ? "REGISTERED" : normalizeDraftAttachmentState(attachment.state)
+  };
+}
+
+function normalizeDraftAttachmentState(state: LocalAttachmentMetadata["state"] | string): LocalAttachmentMetadata["state"] {
+  switch (state) {
+    case "REGISTRATION_FAILED":
+      return "REGISTRATION_FAILED";
+    case "REGISTERING":
+      return "REGISTRATION_FAILED";
+    case "MESSAGE_SENDING":
+    case "MESSAGE_SENT":
+    case "sending":
+    case "sent":
+    case "selected":
+    case "LOCAL_SELECTED":
+    default:
+      return "LOCAL_SELECTED";
+  }
 }
 
 export function hasAssistantDraftContent(draft: AssistantDraftInput): boolean {

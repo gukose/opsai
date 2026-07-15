@@ -5,6 +5,7 @@ import com.hotelopai.task.application.AssignmentCommand
 import com.hotelopai.task.application.CreateTaskCommand
 import com.hotelopai.task.application.TaskPage
 import com.hotelopai.task.domain.Task
+import com.hotelopai.task.domain.TaskAttachmentLinkView
 import com.hotelopai.task.domain.TaskAssigneeType
 import com.hotelopai.task.domain.TaskIntentType
 import com.hotelopai.task.domain.TaskPriority
@@ -145,6 +146,41 @@ data class TaskPageResponse(
                 totalPages = page.totalPages,
                 hasNext = page.hasNext,
                 hasPrevious = page.hasPrevious
+            )
+    }
+}
+
+data class TaskAttachmentResponse(
+    val attachmentId: String,
+    val conversationId: String,
+    val type: String,
+    val originalFileName: String,
+    val declaredMimeType: String,
+    val declaredSizeBytes: Long,
+    val widthPx: Int?,
+    val heightPx: Int?,
+    val storageStatus: String,
+    val sourceType: String,
+    val analysisId: String?,
+    val analysisImportId: String?,
+    val createdAt: Instant
+) {
+    companion object {
+        fun from(link: TaskAttachmentLinkView): TaskAttachmentResponse =
+            TaskAttachmentResponse(
+                attachmentId = link.attachmentId.toString(),
+                conversationId = link.conversationId,
+                type = link.type,
+                originalFileName = link.originalFileName,
+                declaredMimeType = link.declaredMimeType,
+                declaredSizeBytes = link.declaredSizeBytes,
+                widthPx = link.widthPx,
+                heightPx = link.heightPx,
+                storageStatus = link.storageStatus,
+                sourceType = link.sourceType.name,
+                analysisId = link.analysisId?.toString(),
+                analysisImportId = link.analysisImportId?.toString(),
+                createdAt = link.createdAt
             )
     }
 }

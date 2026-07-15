@@ -1,5 +1,5 @@
 import type { TaskListResponseDto } from "../api/task/TaskApi";
-import type { TaskResponseDto } from "../api/task/TaskDtos";
+import type { TaskAttachmentResponseDto, TaskResponseDto } from "../api/task/TaskDtos";
 
 export type TaskFilterState = {
   q: string;
@@ -36,6 +36,23 @@ export type TaskDetail = TaskSummary & {
   assigneeType: string | null;
   assigneeId: string | null;
   assignedAt: string | null;
+  attachments?: TaskAttachmentMetadata[];
+};
+
+export type TaskAttachmentMetadata = {
+  attachmentId: string;
+  conversationId: string;
+  type: "IMAGE" | "PDF" | "DOCUMENT";
+  originalFileName: string;
+  declaredMimeType: string;
+  declaredSizeBytes: number;
+  widthPx: number | null;
+  heightPx: number | null;
+  storageStatus: "REGISTERED";
+  sourceType: "ASSISTANT_MESSAGE" | "VISION_ANALYSIS";
+  analysisId: string | null;
+  analysisImportId: string | null;
+  createdAt: string;
 };
 
 export function taskSummaryFromResponse(task: TaskResponseDto): TaskSummary {
@@ -67,7 +84,26 @@ export function taskDetailFromResponse(task: TaskResponseDto): TaskDetail {
     overdueAt: task.overdueAt,
     assigneeType: task.assignment?.assigneeType ?? null,
     assigneeId: task.assignment?.assigneeId ?? null,
-    assignedAt: task.assignment?.assignedAt ?? null
+    assignedAt: task.assignment?.assignedAt ?? null,
+    attachments: []
+  };
+}
+
+export function taskAttachmentFromResponse(attachment: TaskAttachmentResponseDto): TaskAttachmentMetadata {
+  return {
+    attachmentId: attachment.attachmentId,
+    conversationId: attachment.conversationId,
+    type: attachment.type,
+    originalFileName: attachment.originalFileName,
+    declaredMimeType: attachment.declaredMimeType,
+    declaredSizeBytes: attachment.declaredSizeBytes,
+    widthPx: attachment.widthPx ?? null,
+    heightPx: attachment.heightPx ?? null,
+    storageStatus: attachment.storageStatus,
+    sourceType: attachment.sourceType,
+    analysisId: attachment.analysisId ?? null,
+    analysisImportId: attachment.analysisImportId ?? null,
+    createdAt: attachment.createdAt
   };
 }
 

@@ -14,6 +14,7 @@ data class Conversation(
     val followUpQuestion: FollowUpQuestion? = null,
     val taskPreview: TaskPreview? = null,
     val activeDraftId: String? = null,
+    val activeDraftSourceMessageIds: List<String> = emptyList(),
     val draftVersion: Int = 0,
     val createdTaskId: String? = null,
     val confirmationIdempotencyKey: String? = null,
@@ -33,16 +34,19 @@ data class Conversation(
         intent: IntentType,
         collectedFields: Map<String, String>,
         draftId: String,
+        sourceMessageIds: List<String>,
         draftVersion: Int,
         now: Instant = Instant.now()
     ): Conversation {
         require(draftId.isNotBlank()) { "draftId must not be blank" }
+        require(sourceMessageIds.all(String::isNotBlank)) { "source message ids must not be blank" }
         require(draftVersion > 0) { "draftVersion must be positive" }
 
         return copy(
             intent = intent,
             collectedFields = collectedFields,
             activeDraftId = draftId,
+            activeDraftSourceMessageIds = sourceMessageIds.distinct(),
             draftVersion = draftVersion,
             updatedAt = now
         )
@@ -146,6 +150,7 @@ data class Conversation(
             followUpQuestion = null,
             taskPreview = null,
             activeDraftId = null,
+            activeDraftSourceMessageIds = emptyList(),
             draftVersion = 0,
             createdTaskId = null,
             confirmationIdempotencyKey = null,

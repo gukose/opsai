@@ -6,6 +6,7 @@ import {
   LocalImageObservationMetadata,
   LocalVoiceTranscriptMetadata
 } from "./types";
+import type { RegisteredAttachmentResponse } from "./attachmentMetadata";
 
 export class LocalInteractiveAssistantDataSource implements AssistantDataSource {
   private readonly engine = new LocalConversationEngine();
@@ -35,6 +36,25 @@ export class LocalInteractiveAssistantDataSource implements AssistantDataSource 
     }
   ): Promise<AssistantHomeState> {
     return this.engine.sendTextMessage(conversationId, transcript);
+  }
+
+  async registerAttachment(
+    conversationId: string,
+    attachment: LocalAttachmentMetadata
+  ): Promise<RegisteredAttachmentResponse> {
+    return {
+      attachmentId: attachment.id,
+      conversationId,
+      type: attachment.type,
+      originalFileName: attachment.originalFileName,
+      mimeType: attachment.mimeType,
+      sizeBytes: attachment.sizeBytes,
+      widthPx: attachment.widthPx ?? null,
+      heightPx: attachment.heightPx ?? null,
+      storageStatus: "REGISTERED",
+      storageReference: null,
+      createdAt: new Date().toISOString()
+    };
   }
 
   async confirmTask(

@@ -4,6 +4,7 @@ import {
   LocalImageObservationMetadata,
   LocalVoiceTranscriptMetadata
 } from "./types";
+import type { RegisteredAttachmentResponse } from "./attachmentMetadata";
 
 export interface AssistantDataSource {
   loadHomeState(): Promise<AssistantHomeState>;
@@ -15,6 +16,11 @@ export interface AssistantDataSource {
     voiceTranscript?: LocalVoiceTranscriptMetadata | null,
     imageObservations?: LocalImageObservationMetadata[]
   ): Promise<AssistantHomeState>;
+
+  registerAttachment(
+    conversationId: string,
+    attachment: LocalAttachmentMetadata
+  ): Promise<RegisteredAttachmentResponse>;
 
   sendVoiceMessage(
     conversationId: string,

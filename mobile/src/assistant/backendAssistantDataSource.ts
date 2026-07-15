@@ -1,19 +1,24 @@
-import { CurrentUserSnapshot } from "../session/sessionTypes";
+import type { CurrentUserSnapshot } from "../session/sessionTypes";
 import { HttpAssistantApi } from "../api/assistant/AssistantApi";
-import { ApiClient } from "../api/client/ApiClient";
+import type { ApiClient } from "../api/client/ApiClient";
 import { AppApiError } from "../api/client/AppApiError";
 import {
   assistantInterpretationFailureMessage,
   isAssistantInterpretationFailureResponse,
   mapAssistantConversationResponseToHomeState
 } from "../api/assistant/assistantMapper";
-import { AssistantDataSource } from "./assistantDataSource";
-import { AssistantHomeState } from "./homeState";
+import type { AssistantDataSource } from "./assistantDataSource";
+import type { AssistantHomeState } from "./homeState";
 import {
   LocalAttachmentMetadata,
   LocalImageObservationMetadata,
   LocalVoiceTranscriptMetadata
 } from "./types";
+import type { RegisteredAttachmentResponse } from "./attachmentMetadata";
+import {
+  buildAttachmentRegistrationRequest,
+  splitAssistantMessageAttachments
+} from "./assistantAttachmentRequestMapper";
 
 export class BackendAssistantDataSource implements AssistantDataSource {
   private readonly api: HttpAssistantApi;
@@ -45,6 +50,7 @@ export class BackendAssistantDataSource implements AssistantDataSource {
     voiceTranscript?: LocalVoiceTranscriptMetadata | null,
     imageObservations: LocalImageObservationMetadata[] = []
   ): Promise<AssistantHomeState> {
+    const { registeredAttachmentIds, localMetadataAttachments } = splitAssistantMessageAttachments(attachments);
     const response = await this.api.sendMessage(conversationId, {
       text,
       inputType: attachments.length > 0 || voiceTranscript || imageObservations.length > 0 ? "MIXED" : "TEXT",
@@ -56,18 +62,8 @@ export class BackendAssistantDataSource implements AssistantDataSource {
             source: "CLIENT_TRANSCRIPT"
           }
         : null,
-      attachments: attachments.map((attachment) => ({
-        id: attachment.id,
-        type: attachment.type,
-        originalFileName: attachment.originalFileName,
-        mimeType: attachment.mimeType,
-        sizeBytes: attachment.sizeBytes,
-        widthPx: attachment.widthPx ?? null,
-        heightPx: attachment.heightPx ?? null,
-        localReference: attachment.localReference ?? null,
-        storageStatus: "LOCAL_METADATA_ONLY"
-      })),
-      attachmentIds: [],
+      attachments: localMetadataAttachments,
+      attachmentIds: registeredAttachmentIds,
       imageObservations: imageObservations.map((observation) => ({
         id: observation.id,
         attachmentId: observation.attachmentId,
@@ -77,6 +73,13 @@ export class BackendAssistantDataSource implements AssistantDataSource {
     });
     throwIfInterpretationFailed(response);
     return mapAssistantConversationResponseToHomeState(response);
+  }
+
+  async registerAttachment(
+    conversationId: string,
+    attachment: LocalAttachmentMetadata
+  ): Promise<RegisteredAttachmentResponse> {
+    return this.api.registerAttachment(conversationId, buildAttachmentRegistrationRequest(attachment));
   }
 
   async sendVoiceMessage(

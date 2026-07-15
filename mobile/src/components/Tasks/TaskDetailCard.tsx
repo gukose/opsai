@@ -1,11 +1,12 @@
 import { ComponentType } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { CalendarDays, Clock3, Flag, MapPin, Play, Pause, RotateCcw, Ban, CheckCheck } from "lucide-react-native";
+import { CalendarDays, Clock3, Flag, MapPin, Play, Pause, RotateCcw, Ban, CheckCheck, Image as ImageIcon } from "lucide-react-native";
 import { LucideProps } from "lucide-react-native";
 
 import { colors, radius, shadow, spacing, typography } from "../../theme/tokens";
 import { TaskDetail } from "../../tasks/types";
 import { formatDateTime, formatSlaCountdown } from "../../tasks/formatters";
+import { formatAttachmentSize } from "../../assistant/attachmentMetadata";
 import { TaskStatusChip } from "./TaskStatusChip";
 
 type TaskDetailCardProps = {
@@ -62,6 +63,8 @@ export function TaskDetailCard({
         <InfoChip label="Assignee" value={task.assigneeType ?? "N/A"} />
       </View>
 
+      <TaskAttachmentSection task={task} />
+
       <View style={styles.actions}>
         {actions.start ? (
           <ActionButton
@@ -109,6 +112,36 @@ export function TaskDetailCard({
           />
         ) : null}
       </View>
+    </View>
+  );
+}
+
+function TaskAttachmentSection({ task }: { task: TaskDetail }) {
+  const attachments = task.attachments ?? [];
+  return (
+    <View style={styles.attachmentSection}>
+      <Text style={styles.attachmentSectionTitle}>Attachments</Text>
+      {attachments.length === 0 ? (
+        <Text style={styles.attachmentEmpty}>No registered attachment metadata.</Text>
+      ) : (
+        attachments.map((attachment) => (
+          <View key={`${attachment.attachmentId}-${attachment.sourceType}`} style={styles.attachmentRow}>
+            <View style={styles.detailIcon}>
+              <ImageIcon color={colors.blue} size={12} strokeWidth={2.2} />
+            </View>
+            <View style={styles.attachmentBody}>
+              <Text style={styles.attachmentName} numberOfLines={1}>{attachment.originalFileName}</Text>
+              <Text style={styles.attachmentMeta} numberOfLines={2}>
+                {attachment.type} · {attachment.declaredMimeType} · {formatAttachmentSize(attachment.declaredSizeBytes)}
+                {attachment.widthPx && attachment.heightPx ? ` · ${attachment.widthPx}x${attachment.heightPx}` : ""}
+              </Text>
+              <Text style={styles.attachmentMeta} numberOfLines={1}>
+                Registered metadata · {attachment.sourceType === "VISION_ANALYSIS" ? "Vision provenance" : "Assistant message"}
+              </Text>
+            </View>
+          </View>
+        ))
+      )}
     </View>
   );
 }
@@ -307,6 +340,43 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8
+  },
+  attachmentSection: {
+    marginTop: 10,
+    gap: 6
+  },
+  attachmentSectionTitle: {
+    color: colors.textMuted,
+    fontSize: typography.tiny,
+    fontWeight: "900"
+  },
+  attachmentEmpty: {
+    color: colors.textSubtle,
+    fontSize: typography.tiny,
+    fontWeight: "700"
+  },
+  attachmentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: radius.md,
+    backgroundColor: "#f7f8fa",
+    padding: 7
+  },
+  attachmentBody: {
+    flex: 1,
+    minWidth: 0
+  },
+  attachmentName: {
+    color: colors.text,
+    fontSize: typography.caption,
+    fontWeight: "800"
+  },
+  attachmentMeta: {
+    marginTop: 1,
+    color: colors.textMuted,
+    fontSize: typography.tiny,
+    fontWeight: "700"
   },
   actionButton: {
     minWidth: 84,

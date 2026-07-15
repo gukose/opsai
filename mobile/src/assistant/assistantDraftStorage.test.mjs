@@ -17,7 +17,7 @@ test("assistant draft normalizes restored sending state to safe manual retry sta
         sizeBytes: 1234,
         localReference: "local://sink.png",
         storageStatus: "LOCAL_METADATA_ONLY",
-        state: "sending"
+        state: "MESSAGE_SENDING"
       }
     ],
     voiceTranscript: {
@@ -39,7 +39,7 @@ test("assistant draft normalizes restored sending state to safe manual retry sta
   });
 
   assert.equal(draft.text, "Room 502 sink is leaking");
-  assert.equal(draft.attachments[0].state, "selected");
+  assert.equal(draft.attachments[0].state, "LOCAL_SELECTED");
   assert.equal(draft.attachments[0].storageStatus, "LOCAL_METADATA_ONLY");
   assert.equal(draft.attachments[0].localReference, "local://sink.png");
   assert.equal(draft.voiceTranscript.source, "CLIENT_TRANSCRIPT");
@@ -61,7 +61,7 @@ test("assistant draft preserves ordering and failed state remains manually retry
         mimeType: "image/png",
         sizeBytes: 1,
         storageStatus: "LOCAL_METADATA_ONLY",
-        state: "failed"
+        state: "REGISTRATION_FAILED"
       },
       {
         id: "att-2",
@@ -70,7 +70,7 @@ test("assistant draft preserves ordering and failed state remains manually retry
         mimeType: "image/png",
         sizeBytes: 1,
         storageStatus: "LOCAL_METADATA_ONLY",
-        state: "selected"
+        state: "LOCAL_SELECTED"
       }
     ],
     voiceTranscript: null,
@@ -82,7 +82,7 @@ test("assistant draft preserves ordering and failed state remains manually retry
 
   assert.deepEqual(draft.attachments.map((attachment) => attachment.id), ["att-1", "att-2"]);
   assert.deepEqual(draft.imageObservations.map((observation) => observation.id), ["obs-1", "obs-2"]);
-  assert.equal(draft.attachments[0].state, "failed");
+  assert.equal(draft.attachments[0].state, "REGISTRATION_FAILED");
   assert.equal(draft.imageObservations[0].state, "failed");
 });
 
@@ -123,7 +123,7 @@ function imageAttachment(id) {
     mimeType: "image/png",
     sizeBytes: 1,
     storageStatus: "LOCAL_METADATA_ONLY",
-    state: "selected"
+    state: "LOCAL_SELECTED"
   };
 }
 

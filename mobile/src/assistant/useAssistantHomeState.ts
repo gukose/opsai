@@ -15,6 +15,7 @@ import {
   LocalImageObservationMetadata,
   LocalVoiceTranscriptMetadata
 } from "./types";
+import type { RegisteredAttachmentResponse } from "./attachmentMetadata";
 
 type AssistantHomeController = AssistantHomeState & {
   isBackendMode: boolean;
@@ -27,6 +28,7 @@ type AssistantHomeController = AssistantHomeState & {
     voiceTranscript?: LocalVoiceTranscriptMetadata | null,
     imageObservations?: LocalImageObservationMetadata[]
   ) => Promise<boolean>;
+  registerAttachment: (attachment: LocalAttachmentMetadata) => Promise<RegisteredAttachmentResponse | null>;
   confirmTask: () => Promise<string | null>;
   resetConversation: () => Promise<void>;
 };
@@ -202,6 +204,22 @@ export function useAssistantHomeState({
     [applyState, dataSource, ensureConversation, handleError]
   );
 
+  const registerAttachment = useCallback(
+    async (attachment: LocalAttachmentMetadata): Promise<RegisteredAttachmentResponse | null> => {
+      if (assistantStaticMockEnabled || requestLockRef.current) {
+        return null;
+      }
+
+      const conversationId = await ensureConversation();
+      if (!conversationId) {
+        return null;
+      }
+
+      return dataSource.registerAttachment(conversationId, attachment);
+    },
+    [dataSource, ensureConversation]
+  );
+
   const confirmTask = useCallback(async () => {
     if (assistantStaticMockEnabled) {
       return null;
@@ -278,6 +296,7 @@ export function useAssistantHomeState({
     isConfirming,
     errorMessage,
     sendTextMessage,
+    registerAttachment,
     confirmTask,
     resetConversation
   };

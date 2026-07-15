@@ -167,6 +167,7 @@ Minimum audit events:
 - task preview shown
 - task confirmed
 - task created
+- task attachment metadata linked
 - task assigned
 - notification sent
 - task acknowledged
@@ -192,3 +193,18 @@ Hotel OpAI tables should include:
 - `pms_integration_events`
 
 Do not duplicate UniMock master data into Hotel OpAI except for immutable snapshots needed for audit display.
+
+## Task Attachment Links
+
+Sprint 7 task attachments are metadata/provenance links created only after successful explicit assistant confirmation.
+
+- Links are created in `task_attachment_link`.
+- Links point to backend-owned `REGISTERED` assistant attachments only.
+- `LOCAL_METADATA_ONLY` message attachments do not create durable task links.
+- Older unrelated registered conversation attachments are not linked.
+- Valid source types are `ASSISTANT_MESSAGE` and `VISION_ANALYSIS`.
+- Vision provenance stores analysis/import IDs where available, but it remains audit metadata and does not become authoritative task data.
+- `REGISTERED` still means metadata identity only. It does not mean uploaded, stored, downloadable, provider-accessible, or analyzed.
+- The task attachment read API returns metadata/provenance only and must not expose binary, base64, local URI, storage reference, download URL, raw provider payload, or provider secret.
+
+Task deletion cascades task attachment link rows. Linked attachment, conversation, analysis, and analysis-import deletion is restricted by foreign keys while task links depend on them, so audit provenance is not silently destroyed.

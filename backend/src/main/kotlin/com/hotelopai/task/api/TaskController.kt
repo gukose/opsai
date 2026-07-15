@@ -5,6 +5,7 @@ import com.hotelopai.task.application.TaskAssignmentFilter
 import com.hotelopai.task.application.TaskPageRequest
 import com.hotelopai.task.application.TaskSearchQuery
 import com.hotelopai.task.application.TaskLifecycleService
+import com.hotelopai.task.application.TaskAttachmentLinkService
 import com.hotelopai.task.domain.TaskPriority
 import com.hotelopai.task.domain.TaskStatus
 import org.springframework.web.bind.annotation.GetMapping
@@ -20,6 +21,7 @@ import java.time.Instant
 @RequestMapping("/api/v1/tasks")
 class TaskController(
     private val taskLifecycleService: TaskLifecycleService,
+    private val taskAttachmentLinkService: TaskAttachmentLinkService,
     private val currentUserContextResolver: CurrentUserContextResolver
 ) {
     @PostMapping
@@ -34,6 +36,14 @@ class TaskController(
                 hotelId = currentUserContextResolver.current().hotelId
             )
         )
+
+    @GetMapping("/{taskId}/attachments")
+    fun getTaskAttachments(@PathVariable taskId: String): List<TaskAttachmentResponse> {
+        val currentUser = currentUserContextResolver.current()
+        return taskAttachmentLinkService
+            .listTaskAttachments(taskId, currentUser.hotelId)
+            .map(TaskAttachmentResponse::from)
+    }
 
     @GetMapping
     fun listTasks(

@@ -1,7 +1,7 @@
 package com.hotelopai.assistant.api
 
 import com.hotelopai.assistant.application.AssistantConversationService
-import com.hotelopai.assistant.domain.ConversationAttachment
+import com.hotelopai.assistant.application.AssistantAttachmentRegistrationService
 import com.hotelopai.shared.security.CurrentUserContextResolver
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/v1/assistant/conversations")
 class AssistantConversationController(
     private val assistantConversationService: AssistantConversationService,
+    private val assistantAttachmentRegistrationService: AssistantAttachmentRegistrationService,
     private val currentUserContextResolver: CurrentUserContextResolver
 ) {
     @PostMapping
@@ -34,26 +35,21 @@ class AssistantConversationController(
         @RequestBody request: SendAssistantMessageRequest
     ): AssistantConversationResponse {
         request.rejectUnsafeOwnershipAndMediaFields()
-        val attachments = request.attachments
-            ?.map { it.toDomain() }
-            .orEmpty()
-            .ifEmpty {
-                request.attachmentIds.orEmpty().map { attachmentId ->
-                    ConversationAttachment(
-                        id = attachmentId.trim(),
-                        originalFileName = attachmentId.trim(),
-                        mimeType = "image/jpeg",
-                        sizeBytes = 1
-                    )
-                }
-            }
-        val imageObservations = request.imageObservations
-            .orEmpty()
-            .map { it.toDomain(attachments) }
         val voiceTranscriptMetadata = request.voiceTranscript?.toDomain()
         val legacyTranscript = request.transcript?.trim()?.takeIf(String::isNotBlank)
 
         return currentUserContextResolver.current().let { currentUser ->
+            val attachments = request.attachments?.map { it.toDomain() }
+                ?: assistantAttachmentRegistrationService.resolveMessageAttachmentReferences(
+                    conversationId = conversationId,
+                    hotelId = currentUser.hotelId.toString(),
+                    userId = currentUser.userId.toString(),
+                    attachmentIds = request.attachmentIds.orEmpty()
+                )
+            val imageObservations = request.imageObservations
+                .orEmpty()
+                .map { it.toDomain(attachments) }
+
             AssistantConversationResponse.from(
                 assistantConversationService.sendMessage(
                     conversationId = conversationId,
@@ -70,6 +66,22 @@ class AssistantConversationController(
             )
         }
     }
+
+    @PostMapping("/{conversationId}/attachments")
+    fun registerAttachment(
+        @PathVariable conversationId: String,
+        @RequestBody request: RegisterAssistantAttachmentRequest
+    ): RegisteredAssistantAttachmentResponse =
+        currentUserContextResolver.current().let { currentUser ->
+            RegisteredAssistantAttachmentResponse.from(
+                assistantAttachmentRegistrationService.register(
+                    conversationId = conversationId,
+                    hotelId = currentUser.hotelId.toString(),
+                    userId = currentUser.userId.toString(),
+                    command = request.toCommand()
+                )
+            )
+        }
 
     @PostMapping("/{conversationId}/confirm")
     fun confirmTask(

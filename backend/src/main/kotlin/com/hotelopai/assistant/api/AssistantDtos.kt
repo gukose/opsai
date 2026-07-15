@@ -1,6 +1,9 @@
 package com.hotelopai.assistant.api
 
+import com.fasterxml.jackson.annotation.JsonAnySetter
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.hotelopai.assistant.application.ConversationTurnResult
+import com.hotelopai.assistant.application.RegisterAssistantAttachmentCommand
 import com.hotelopai.assistant.domain.ConversationAttachment
 import com.hotelopai.assistant.domain.Conversation
 import com.hotelopai.assistant.domain.ConversationMessage
@@ -17,6 +20,7 @@ import com.hotelopai.assistant.domain.TaskCreationCandidate
 import com.hotelopai.assistant.domain.TaskPreview
 import com.hotelopai.assistant.domain.VoiceTranscriptMetadata
 import com.hotelopai.assistant.domain.VoiceTranscriptSource
+import com.hotelopai.assistant.domain.RegisteredConversationAttachment
 
 data class StartConversationRequest(
     val hotelId: String,
@@ -51,6 +55,161 @@ data class SendAssistantMessageRequest(
         require(imageBase64 == null && imageBytes == null && imageUrl == null) {
             "raw image fields and image URLs are not accepted"
         }
+    }
+}
+
+data class RegisterAssistantAttachmentRequest(
+    val type: AttachmentType?,
+    val originalFileName: String?,
+    val mimeType: String?,
+    val sizeBytes: Long?,
+    val widthPx: Int? = null,
+    val heightPx: Int? = null,
+    val id: String? = null,
+    val hotelId: String? = null,
+    val userId: String? = null,
+    val ownerId: String? = null,
+    val storageReference: String? = null,
+    val storageStatus: String? = null,
+    val providerUrl: String? = null,
+    val mediaUrl: String? = null,
+    val imageUrl: String? = null,
+    val fileUrl: String? = null,
+    val imageBase64: String? = null,
+    val imageBytes: String? = null,
+    val base64: String? = null,
+    val binary: String? = null,
+    val rawBytes: String? = null,
+    val localReference: String? = null,
+    val localUri: String? = null,
+    val fileUri: String? = null,
+    val deviceUri: String? = null
+) {
+    @JsonIgnore
+    private val unsupportedFields: MutableSet<String> = linkedSetOf()
+
+    @JsonAnySetter
+    fun captureUnsupportedField(name: String, value: Any?) {
+        unsupportedFields += name
+    }
+
+    fun toCommand(): RegisterAssistantAttachmentCommand {
+        rejectForbiddenFields()
+        val normalizedType = requireNotNull(type) { "attachment type is required" }
+        val normalizedFileName = normalizedFileName()
+        val normalizedMimeType = normalizedMimeType()
+        val normalizedSizeBytes = validSizeBytes()
+        val normalizedWidthPx = validWidthPx()
+        val normalizedHeightPx = validHeightPx()
+        validateConsistency(normalizedType, normalizedMimeType, normalizedWidthPx, normalizedHeightPx)
+
+        return RegisterAssistantAttachmentCommand(
+            type = normalizedType,
+            originalFileName = normalizedFileName,
+            mimeType = normalizedMimeType,
+            sizeBytes = normalizedSizeBytes,
+            widthPx = normalizedWidthPx,
+            heightPx = normalizedHeightPx
+        )
+    }
+
+    private fun rejectForbiddenFields() {
+        require(unsupportedFields.isEmpty()) {
+            "unsupported attachment registration fields are not accepted: ${unsupportedFields.joinToString(", ")}"
+        }
+        require(id == null) { "client attachment id is not accepted" }
+        require(hotelId == null && userId == null && ownerId == null) {
+            "attachment ownership fields are not accepted"
+        }
+        require(storageReference == null && storageStatus == null) {
+            "attachment storage fields are not accepted"
+        }
+        require(providerUrl == null && mediaUrl == null && imageUrl == null && fileUrl == null) {
+            "attachment media URLs are not accepted"
+        }
+        require(imageBase64 == null && imageBytes == null && base64 == null && binary == null && rawBytes == null) {
+            "raw attachment bytes are not accepted"
+        }
+        require(localReference == null && localUri == null && fileUri == null && deviceUri == null) {
+            "device-local attachment references are not accepted"
+        }
+    }
+
+    private fun normalizedFileName(): String =
+        originalFileName?.trim()?.also {
+            require(it.isNotBlank()) { "attachment originalFileName is required" }
+            require(it.length <= 180) { "attachment originalFileName must be 180 characters or fewer" }
+        } ?: throw IllegalArgumentException("attachment originalFileName is required")
+
+    private fun normalizedMimeType(): String =
+        mimeType?.trim()?.lowercase()?.also {
+            require(it in SUPPORTED_MIME_TYPES) { "unsupported attachment mimeType: $it" }
+        } ?: throw IllegalArgumentException("attachment mimeType is required")
+
+    private fun validSizeBytes(): Long =
+        sizeBytes?.also {
+            require(it in 1..10_000_000) { "attachment sizeBytes must be between 1 and 10000000" }
+        } ?: throw IllegalArgumentException("attachment sizeBytes is required")
+
+    private fun validWidthPx(): Int? =
+        widthPx?.also {
+            require(it in 1..10_000) { "attachment widthPx must be between 1 and 10000" }
+        }
+
+    private fun validHeightPx(): Int? =
+        heightPx?.also {
+            require(it in 1..10_000) { "attachment heightPx must be between 1 and 10000" }
+        }
+
+    private fun validateConsistency(type: AttachmentType, mimeType: String, widthPx: Int?, heightPx: Int?) {
+        when (type) {
+            AttachmentType.IMAGE -> require(mimeType in IMAGE_MIME_TYPES) {
+                "IMAGE attachments require an image MIME type"
+            }
+            AttachmentType.PDF -> {
+                require(mimeType == "application/pdf") { "PDF attachments require application/pdf" }
+                require(widthPx == null && heightPx == null) {
+                    "image dimensions are only accepted for image attachments"
+                }
+            }
+            AttachmentType.DOCUMENT -> {
+                require(mimeType == "text/plain") { "DOCUMENT attachments require text/plain" }
+                require(widthPx == null && heightPx == null) {
+                    "image dimensions are only accepted for image attachments"
+                }
+            }
+        }
+    }
+}
+
+data class RegisteredAssistantAttachmentResponse(
+    val attachmentId: String,
+    val conversationId: String,
+    val type: AttachmentType,
+    val originalFileName: String,
+    val mimeType: String,
+    val sizeBytes: Long,
+    val widthPx: Int?,
+    val heightPx: Int?,
+    val storageStatus: AttachmentStorageStatus,
+    val storageReference: String?,
+    val createdAt: String
+) {
+    companion object {
+        fun from(attachment: RegisteredConversationAttachment): RegisteredAssistantAttachmentResponse =
+            RegisteredAssistantAttachmentResponse(
+                attachmentId = attachment.id.toString(),
+                conversationId = attachment.conversationId,
+                type = attachment.type,
+                originalFileName = attachment.originalFileName,
+                mimeType = attachment.declaredMimeType,
+                sizeBytes = attachment.declaredSizeBytes,
+                widthPx = attachment.widthPx,
+                heightPx = attachment.heightPx,
+                storageStatus = attachment.storageStatus,
+                storageReference = attachment.storageReference,
+                createdAt = attachment.createdAt.toString()
+            )
     }
 }
 
@@ -319,6 +478,7 @@ data class MessageAttachmentDto(
     val heightPx: Int?,
     val localReference: String? = null,
     val storageStatus: AttachmentStorageStatus? = null,
+    val storageReference: String? = null,
     val hotelId: String? = null,
     val userId: String? = null,
     val ownerId: String? = null
@@ -334,7 +494,8 @@ data class MessageAttachmentDto(
                 widthPx = attachment.widthPx,
                 heightPx = attachment.heightPx,
                 localReference = attachment.localReference,
-                storageStatus = attachment.storageStatus
+                storageStatus = attachment.storageStatus,
+                storageReference = attachment.storageReference
             )
     }
 
@@ -348,8 +509,9 @@ data class MessageAttachmentDto(
             widthPx = validWidthPx(),
             heightPx = validHeightPx(),
             localReference = localReference?.trim()?.takeIf(String::isNotBlank),
-            storageStatus = storageStatus ?: AttachmentStorageStatus.LOCAL_METADATA_ONLY
-        ).also { validateOwnershipFields(); validateConsistency(it) }
+            storageStatus = storageStatus ?: AttachmentStorageStatus.LOCAL_METADATA_ONLY,
+            storageReference = storageReference?.trim()?.takeIf(String::isNotBlank)
+        ).also { validateForbiddenFields(); validateConsistency(it) }
 
     private fun normalizedId(): String =
         id.trim().also { require(it.isNotBlank()) { "attachment id is required" } }
@@ -380,9 +542,12 @@ data class MessageAttachmentDto(
             require(it in 1..10_000) { "attachment heightPx must be between 1 and 10000" }
         }
 
-    private fun validateOwnershipFields() {
+    private fun validateForbiddenFields() {
         require(hotelId == null && userId == null && ownerId == null) {
             "attachment ownership fields are not accepted"
+        }
+        require(storageReference == null) {
+            "attachment storageReference is not accepted"
         }
     }
 
@@ -416,8 +581,12 @@ private val SUPPORTED_MIME_TYPES = IMAGE_MIME_TYPES + setOf("application/pdf", "
 data class ImageObservationDto(
     val id: String? = null,
     val attachmentId: String?,
+    val analysisId: String? = null,
     val text: String? = null,
     val source: ImageObservationSource? = null,
+    val advisory: Boolean? = null,
+    val order: Int? = null,
+    val providerId: String? = null,
     val description: String? = null,
     val confidence: Double? = null,
     val imageBase64: String? = null,
@@ -429,8 +598,12 @@ data class ImageObservationDto(
             ImageObservationDto(
                 id = observation.id,
                 attachmentId = observation.attachmentId,
+                analysisId = observation.analysisId,
                 text = observation.semanticText,
                 source = observation.source,
+                advisory = observation.advisory,
+                order = observation.order,
+                providerId = observation.providerId,
                 description = observation.description,
                 confidence = observation.confidence
             )
@@ -453,6 +626,9 @@ data class ImageObservationDto(
         } ?: throw IllegalArgumentException("image observation text is required")
         require((source ?: ImageObservationSource.USER_PROVIDED) == ImageObservationSource.USER_PROVIDED) {
             "image observation source must be USER_PROVIDED"
+        }
+        require(analysisId == null && advisory == null && order == null && providerId == null) {
+            "provider analysis observation fields are not accepted from clients"
         }
 
         val attachment = attachments.firstOrNull { it.id == normalizedAttachmentId }

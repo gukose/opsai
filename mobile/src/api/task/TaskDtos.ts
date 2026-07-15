@@ -33,3 +33,19 @@ export type TaskPageResponseDto = {
   hasNext: boolean;
   hasPrevious: boolean;
 };
+
+export type TaskAttachmentResponseDto = {
+  attachmentId: string;
+  conversationId: string;
+  type: "IMAGE" | "PDF" | "DOCUMENT";
+  originalFileName: string;
+  declaredMimeType: string;
+  declaredSizeBytes: number;
+  widthPx?: number | null;
+  heightPx?: number | null;
+  storageStatus: "REGISTERED";
+  sourceType: "ASSISTANT_MESSAGE" | "VISION_ANALYSIS";
+  analysisId?: string | null;
+  analysisImportId?: string | null;
+  createdAt: string;
+};

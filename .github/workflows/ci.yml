@@ -43,9 +43,9 @@ jobs:
         working-directory: mobile
         run: npx tsc --noEmit
 
-      - name: Run mobile assistant mapper test directly
+      - name: Run mobile tests
         working-directory: mobile
-        run: node --no-warnings --test src/api/assistant/assistantMapper.test.mjs
+        run: npm test
 
       - name: Build backend Docker image
         run: docker build -f docker/backend.Dockerfile -t hotel-opai-backend:ci .

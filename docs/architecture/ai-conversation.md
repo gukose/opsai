@@ -2,11 +2,11 @@
 
 ## Purpose
 
-The AI Conversation Engine converts natural user input into hotel operations without exposing users to forms. It supports text, voice, photos, and mixed inputs. It must collect enough information, confirm the generated operation, create the task, assign it, notify the correct team, and call UniMock only when PMS-owned state needs to change.
+The AI Conversation Engine converts natural user input into hotel operations without exposing users to forms. It supports text, voice, metadata-only image context, user-provided image notes, imported advisory vision-analysis observations, and mixed inputs. It must collect enough information, confirm the generated operation, create the task, assign it, notify the correct team, and call UniMock only when PMS-owned state needs to change.
 
 ## Core Responsibilities
 
-- Accept multimodal user messages.
+- Accept text, transcript, metadata-only attachment, and advisory vision-analysis conversation inputs.
 - Detect intent and language.
 - Extract operational fields such as room, area, issue type, priority, asset, department, description, attachments, and due time.
 - Ask focused follow-up questions when required information is missing or ambiguous.
@@ -27,7 +27,7 @@ The AI Conversation Engine converts natural user input into hotel operations wit
 ## Production Flow
 
 1. Mobile sends a conversation message to the backend.
-2. Backend stores the raw message and attachment metadata.
+2. Backend stores the message and allowed attachment metadata. Sprint 7 does not upload or store image bytes.
 3. Conversation application service loads the active conversation state.
 4. Context builder fetches only required operational context:
    - current user profile
@@ -105,6 +105,9 @@ The AI engine may read UniMock data through integration services. It must never 
 - User confirmation is required before task creation unless the task type is explicitly configured as a flash task.
 - PMS writes must be idempotent where possible.
 - Store enough logs to reconstruct why a task was created.
+- `REGISTERED` attachments are metadata identity only. They are not uploaded, stored, downloadable, provider-accessible, or analyzed by default.
+- `VISION_ANALYSIS` observations are advisory. LOW confidence cannot independently create a preview or task, and HIGH confidence still requires required-field validation, preview, and explicit confirmation.
+- No local URI, storage URL, base64, raw binary, provider secret, or raw provider payload may enter interpreter prompts.
 
 ## Backend Components
 
@@ -132,5 +135,10 @@ Track:
 - UniMock call latency/failure
 - model latency/token usage
 - unsupported intent frequency
+- attachment registration success/failure
+- vision analysis status and confidence bucket
+- analysis import success/failure/duplicate
+- task attachment link success/failure
 
 Do not log raw sensitive guest data unless explicitly required and protected by retention policy.
+Do not log raw media, base64, local/device/file URIs, authorization tokens, storage/provider secrets, raw provider payloads, or sensitive observation text unless an explicit sanitized logging policy exists.

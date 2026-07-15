@@ -52,11 +52,21 @@ export type ConversationAttachment = {
   widthPx?: number;
   heightPx?: number;
   localReference?: string;
-  storageStatus?: "LOCAL_METADATA_ONLY";
+  storageStatus?: "LOCAL_METADATA_ONLY" | "REGISTERED";
 };
+
+export type LocalAttachmentState =
+  | "LOCAL_SELECTED"
+  | "REGISTERING"
+  | "REGISTERED"
+  | "REGISTRATION_FAILED"
+  | "MESSAGE_SENDING"
+  | "MESSAGE_SENT";
 
 export type LocalAttachmentMetadata = {
   id: string;
+  localId?: string;
+  serverAttachmentId?: string;
   type: "IMAGE" | "PDF" | "DOCUMENT";
   originalFileName: string;
   mimeType: string;
@@ -64,8 +74,12 @@ export type LocalAttachmentMetadata = {
   widthPx?: number;
   heightPx?: number;
   localReference?: string;
-  storageStatus: "LOCAL_METADATA_ONLY";
-  state: "selected" | "sending" | "sent" | "failed";
+  localUri?: string;
+  storageStatus: "LOCAL_METADATA_ONLY" | "REGISTERED";
+  storageReference?: null;
+  createdAt?: string;
+  state: LocalAttachmentState;
+  errorMessage?: string;
 };
 
 export type LocalVoiceTranscriptMetadata = {

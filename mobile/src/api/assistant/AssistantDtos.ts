@@ -1,7 +1,7 @@
 export type AssistantInputTypeDto = "TEXT" | "VOICE_TRANSCRIPT" | "VOICE" | "IMAGE" | "MIXED";
 export type AssistantMessageRoleDto = "USER" | "ASSISTANT" | "SYSTEM";
 export type AssistantAttachmentTypeDto = "IMAGE" | "PDF" | "DOCUMENT";
-export type AssistantAttachmentStorageStatusDto = "LOCAL_METADATA_ONLY";
+export type AssistantAttachmentStorageStatusDto = "LOCAL_METADATA_ONLY" | "REGISTERED";
 export type AssistantVoiceTranscriptSourceDto = "CLIENT_TRANSCRIPT";
 export type AssistantImageObservationSourceDto = "USER_PROVIDED";
 
@@ -116,6 +116,29 @@ export type AssistantMessageAttachmentDto = {
   heightPx?: number | null;
   localReference?: string | null;
   storageStatus?: AssistantAttachmentStorageStatusDto | null;
+};
+
+export type RegisterAssistantAttachmentRequestDto = {
+  type: AssistantAttachmentTypeDto;
+  originalFileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  widthPx?: number | null;
+  heightPx?: number | null;
+};
+
+export type RegisteredAssistantAttachmentResponseDto = {
+  attachmentId: string;
+  conversationId: string;
+  type: AssistantAttachmentTypeDto;
+  originalFileName: string;
+  mimeType: string;
+  sizeBytes: number;
+  widthPx?: number | null;
+  heightPx?: number | null;
+  storageStatus: "REGISTERED";
+  storageReference?: string | null;
+  createdAt: string;
 };
 
 export type AssistantImageObservationDto = {
