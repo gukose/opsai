@@ -11,14 +11,17 @@ type TaskReportingState = {
   refreshReport: () => Promise<void>;
 };
 
-export function useTaskReportingState(accessToken: string | null): TaskReportingState {
+export function useTaskReportingState(
+  accessToken: string | null,
+  refreshAccessToken?: () => Promise<string | null>
+): TaskReportingState {
   const isBackendMode = assistantDataSourceMode === "backend";
   const service = useMemo(
     () =>
       new DashboardService(() => {
         return accessToken;
-      }),
-    [accessToken]
+      }, refreshAccessToken),
+    [accessToken, refreshAccessToken]
   );
   const [report, setReport] = useState<TaskReportingSummary | null>(null);
   const [isLoading, setIsLoading] = useState(false);

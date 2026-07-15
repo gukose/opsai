@@ -37,16 +37,18 @@ import { BottomNavigationKey } from "../Navigation/BottomNavigation";
 type AssistantHomeScreenProps = {
   accessToken: string | null;
   currentUser: CurrentUserSnapshot | null;
+  refreshAccessToken?: () => Promise<string | null>;
   onLogout?: () => void;
 };
 
-export function AssistantHomeScreen({ accessToken, currentUser, onLogout }: AssistantHomeScreenProps) {
+export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessToken, onLogout }: AssistantHomeScreenProps) {
   const [activeSection, setActiveSection] = useState<BottomNavigationKey>("home");
   const [composerText, setComposerText] = useState("");
   const [selectedAttachments, setSelectedAttachments] = useState<LocalAttachmentMetadata[]>([]);
   const [voiceTranscript, setVoiceTranscript] = useState<LocalVoiceTranscriptMetadata | null>(null);
   const [imageObservations, setImageObservations] = useState<LocalImageObservationMetadata[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [draftHydrated, setDraftHydrated] = useState(false);
   const {
     conversationId,
     conversationItems,
@@ -80,19 +82,19 @@ export function AssistantHomeScreen({ accessToken, currentUser, onLogout }: Assi
     cancelSelectedTask,
     startHomeTask,
     resumeHomeTask
-  } = useTaskBoardState(accessToken, currentUser);
+  } = useTaskBoardState(accessToken, currentUser, refreshAccessToken);
   const {
     summary: dashboardSummary,
     staleReason: dashboardStaleReason,
     cachedAt: dashboardCachedAt,
     refreshDashboard
-  } = useDashboardSummaryState(accessToken, currentUser);
+  } = useDashboardSummaryState(accessToken, currentUser, refreshAccessToken);
   const {
     report: taskReport,
     isLoading: isReportLoading,
     errorMessage: reportingErrorMessage,
     refreshReport
-  } = useTaskReportingState(accessToken);
+  } = useTaskReportingState(accessToken, refreshAccessToken);
   const overviewForDisplay = dashboardSummary?.overview ?? overview;
   const assistantActionDisabled = isSending || isConfirming;
   const isHomeSurface = activeSection === "home" || activeSection === "assistant";
@@ -106,18 +108,32 @@ export function AssistantHomeScreen({ accessToken, currentUser, onLogout }: Assi
 
   useEffect(() => {
     if (!offlineScope) {
+      setDraftHydrated(false);
       return;
     }
 
     let active = true;
+    setDraftHydrated(false);
     void loadAssistantDraft(offlineScope, conversationId).then((draft) => {
-      if (!active || !draft) {
+      if (!active) {
         return;
       }
-      setComposerText(draft.text);
-      setSelectedAttachments(draft.attachments);
-      setVoiceTranscript(draft.voiceTranscript);
-      setImageObservations(draft.imageObservations);
+      if (draft) {
+        setComposerText(draft.text);
+        setSelectedAttachments(draft.attachments);
+        setVoiceTranscript(draft.voiceTranscript);
+        setImageObservations(draft.imageObservations);
+      } else {
+        setComposerText("");
+        setSelectedAttachments([]);
+        setVoiceTranscript(null);
+        setImageObservations([]);
+      }
+      setDraftHydrated(true);
+    }).catch(() => {
+      if (active) {
+        setDraftHydrated(true);
+      }
     });
 
     return () => {
@@ -126,7 +142,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, onLogout }: Assi
   }, [conversationId, offlineScope]);
 
   useEffect(() => {
-    if (!offlineScope) {
+    if (!offlineScope || !draftHydrated) {
       return;
     }
 
@@ -137,7 +153,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, onLogout }: Assi
       voiceTranscript,
       imageObservations
     });
-  }, [composerText, conversationId, imageObservations, offlineScope, selectedAttachments, voiceTranscript]);
+  }, [composerText, conversationId, draftHydrated, imageObservations, offlineScope, selectedAttachments, voiceTranscript]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -145,6 +161,9 @@ export function AssistantHomeScreen({ accessToken, currentUser, onLogout }: Assi
       <View style={styles.screen}>
         <AssistantHeader
           currentUser={currentUser}
+          unreadNotificationCount={dashboardSummary?.overview.unreadNotificationCount ?? 0}
+          recentNotifications={dashboardSummary?.recentNotifications ?? []}
+          notificationsStaleReason={dashboardStaleReason}
           onReset={() => {
             void resetConversation();
           }}

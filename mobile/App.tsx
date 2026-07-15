@@ -6,7 +6,7 @@ import { useAppBootstrap } from "./src/app/AppBootstrap";
 import { colors, spacing, typography } from "./src/theme/tokens";
 
 function AppGate() {
-  const { status, logout, currentUser, session } = useAppBootstrap();
+  const { status, logout, currentUser, session, refreshAccessToken } = useAppBootstrap();
 
   if (status === "loading") {
     return (
@@ -29,6 +29,7 @@ function AppGate() {
     <AssistantHomeScreen
       accessToken={session?.accessToken ?? null}
       currentUser={currentUser}
+      refreshAccessToken={refreshAccessToken}
       onLogout={() => void logout()}
     />
   );

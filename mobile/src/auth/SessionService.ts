@@ -1,13 +1,11 @@
 import { appApiBaseUrl } from "../config/appConfig";
+import { AppApiError } from "../api/client/AppApiError";
 import { FetchApiClient } from "../api/client/FetchApiClient";
 import { HttpAuthApi } from "../api/auth/AuthApi";
-import {
-  CurrentUserResponseDto,
-  LoginRequestDto,
-  mapCurrentUserResponseToSnapshot
-} from "../api/auth/AuthDtos";
-import { AppSessionSnapshot } from "../session/sessionTypes";
-import { SessionStore } from "../session/SessionStore";
+import { mapCurrentUserResponseToSnapshot } from "../api/auth/AuthDtos";
+import type { CurrentUserResponseDto, LoginRequestDto } from "../api/auth/AuthDtos";
+import type { AppSessionSnapshot } from "../session/sessionTypes";
+import type { SessionStore } from "../session/SessionStore";
 import { mapAuthSessionResponseToSnapshot } from "./authSessionMapper";
 
 export type LoginCredentials = Pick<LoginRequestDto, "hotelCode" | "email" | "password">;
@@ -15,8 +13,10 @@ export type LoginCredentials = Pick<LoginRequestDto, "hotelCode" | "email" | "pa
 export class SessionService {
   private currentSession: AppSessionSnapshot | null = null;
   private readonly authApi: HttpAuthApi;
+  private readonly sessionStore: SessionStore;
 
-  constructor(private readonly sessionStore: SessionStore) {
+  constructor(sessionStore: SessionStore) {
+    this.sessionStore = sessionStore;
     const apiClient = new FetchApiClient({
       baseUrl: appApiBaseUrl,
       accessTokenProvider: () => this.currentSession?.accessToken ?? null
@@ -39,7 +39,11 @@ export class SessionService {
       const nextSession = this.mergeCurrentUser(storedSession, currentUser);
       await this.saveSession(nextSession);
       return nextSession;
-    } catch {
+    } catch (error) {
+      if (isTransportFailure(error)) {
+        return storedSession;
+      }
+
       if (!storedSession.refreshToken) {
         await this.clearInvalidSession();
         return null;
@@ -56,7 +60,11 @@ export class SessionService {
         const nextSession = this.mergeCurrentUser(refreshedSession, refreshedCurrentUser);
         await this.saveSession(nextSession);
         return nextSession;
-      } catch {
+      } catch (refreshError) {
+        if (isTransportFailure(refreshError)) {
+          return storedSession;
+        }
+
         await this.clearInvalidSession();
         return null;
       }
@@ -142,4 +150,8 @@ export class SessionService {
     this.currentSession = session;
     await this.sessionStore.save(session);
   }
+}
+
+function isTransportFailure(error: unknown): boolean {
+  return error instanceof AppApiError && (error.kind === "network" || error.kind === "timeout");
 }

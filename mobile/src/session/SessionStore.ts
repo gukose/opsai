@@ -1,4 +1,4 @@
-import { AppSessionSnapshot } from "./sessionTypes";
+import type { AppSessionSnapshot } from "./sessionTypes";
 
 export interface SessionStore {
   load(): Promise<AppSessionSnapshot | null>;

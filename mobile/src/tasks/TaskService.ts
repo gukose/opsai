@@ -6,11 +6,12 @@ import { TaskDetail, TaskFilterState, taskDetailFromResponse, taskSummariesFromL
 export class TaskService {
   private readonly taskApi: HttpTaskApi;
 
-  constructor(accessTokenProvider: () => string | null) {
+  constructor(accessTokenProvider: () => string | null, refreshAccessToken?: () => Promise<string | null>) {
     this.taskApi = new HttpTaskApi(
       new FetchApiClient({
         baseUrl: appApiBaseUrl,
-        accessTokenProvider
+        accessTokenProvider,
+        refreshAccessToken
       })
     );
   }

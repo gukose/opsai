@@ -13,6 +13,12 @@ ops:
         secret: ${OPS_AI_AUTH_JWT_SECRET:hotel-opai-local-dev-secret-hotel-opai-local-dev-secret}
       seed:
         enabled: ${OPS_AI_AUTH_SEED_ENABLED:true}
+    rate-limit:
+      enabled: true
+      default-limit: ${OPS_AI_RATE_LIMIT_DEFAULT_LIMIT:5000}
+      auth-limit: ${OPS_AI_RATE_LIMIT_AUTH_LIMIT:100}
+      write-limit: ${OPS_AI_RATE_LIMIT_WRITE_LIMIT:500}
+      window: ${OPS_AI_RATE_LIMIT_WINDOW:PT60S}
 
 assistant:
   ai:

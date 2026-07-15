@@ -43,14 +43,18 @@ type TaskBoardState = {
 
 type TaskCommand = (taskId: string) => Promise<TaskDetail>;
 
-export function useTaskBoardState(accessToken: string | null, currentUser?: CurrentUserSnapshot | null): TaskBoardState {
+export function useTaskBoardState(
+  accessToken: string | null,
+  currentUser?: CurrentUserSnapshot | null,
+  refreshAccessToken?: () => Promise<string | null>
+): TaskBoardState {
   const useMockTasks = assistantStaticMockEnabled;
   const service = useMemo(
     () =>
       new TaskService(() => {
         return accessToken;
-      }),
-    [accessToken]
+      }, refreshAccessToken),
+    [accessToken, refreshAccessToken]
   );
 
   const [tasks, setTasks] = useState<TaskSummary[]>(useMockTasks ? [mockTaskFromSample()] : []);

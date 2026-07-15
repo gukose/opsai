@@ -60,6 +60,15 @@ export class OfflineCache {
       // Offline cache is best effort.
     }
   }
+
+  async removeByPrefix(prefix: string): Promise<void> {
+    try {
+      const keys = await this.storage.keys();
+      await Promise.all(keys.filter((key) => key.startsWith(prefix)).map((key) => this.remove(key)));
+    } catch {
+      // Offline cache is best effort.
+    }
+  }
 }
 
 const memory = new Map<string, string>();
@@ -116,6 +125,10 @@ export function dashboardCacheKey(scope: OfflineScope, range: "today" | "shift" 
 
 export function assistantDraftCacheKey(scope: OfflineScope, conversationId?: string | null): string {
   return scopedKey(scope, "assistant-draft", conversationId?.trim() || "new");
+}
+
+export function assistantDraftCacheKeyPrefix(scope: OfflineScope): string {
+  return `${PREFIX}:${OFFLINE_CACHE_VERSION}:${scope.hotelId}:${scope.userId}:assistant-draft:`;
 }
 
 function scopedKey(scope: OfflineScope, kind: string, identity: string): string {

@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { OfflineCache, assistantDraftCacheKey, dashboardCacheKey, taskListCacheKey } from "./offlineCache.ts";
+import {
+  OfflineCache,
+  assistantDraftCacheKey,
+  assistantDraftCacheKeyPrefix,
+  dashboardCacheKey,
+  taskListCacheKey
+} from "./offlineCache.ts";
 
 class FakeStorage {
   constructor() {
@@ -106,4 +112,22 @@ test("storage failures do not crash cache operations and clearScope removes only
   storage.failWrite = false;
   storage.failRemove = true;
   await cache.remove(keyB);
+});
+
+test("assistant draft prefix removal clears only current scope draft aliases", async () => {
+  const storage = new FakeStorage();
+  const cache = new OfflineCache(storage);
+  const currentConversation = assistantDraftCacheKey(scope, "conversation-a");
+  const currentStartup = assistantDraftCacheKey(scope, null);
+  const otherScope = assistantDraftCacheKey({ hotelId: "hotel-b", userId: "user-a" }, "conversation-a");
+
+  await cache.save(currentConversation, { text: "a" });
+  await cache.save(currentStartup, { text: "new" });
+  await cache.save(otherScope, { text: "other" });
+
+  await cache.removeByPrefix(assistantDraftCacheKeyPrefix(scope));
+
+  assert.equal(await cache.load(currentConversation), null);
+  assert.equal(await cache.load(currentStartup), null);
+  assert.deepEqual((await cache.load(otherScope))?.data, { text: "other" });
 });

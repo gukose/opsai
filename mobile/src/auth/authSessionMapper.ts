@@ -1,5 +1,6 @@
-import { AuthSessionResponseDto, mapCurrentUserResponseToSnapshot } from "../api/auth/AuthDtos";
-import { AppSessionSnapshot } from "../session/sessionTypes";
+import { mapCurrentUserResponseToSnapshot } from "../api/auth/AuthDtos";
+import type { AuthSessionResponseDto } from "../api/auth/AuthDtos";
+import type { AppSessionSnapshot } from "../session/sessionTypes";
 
 export function mapAuthSessionResponseToSnapshot(
   response: AuthSessionResponseDto

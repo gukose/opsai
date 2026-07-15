@@ -16,15 +16,25 @@ class OpsaiApplicationTests : PostgresIntegrationTestSupport() {
 
     @Test
     fun contextLoads() {
-        val schemaCount = jdbcTemplate.queryForObject(
+        val publicSchemaCount = jdbcTemplate.queryForObject(
             """
                 select count(*)
                 from pg_catalog.pg_namespace
-                where nspname in ('public', 'unimock')
+                where nspname = 'public'
             """.trimIndent(),
             Int::class.java
         )
 
-        assertEquals(2, schemaCount)
+        val publicFlywayHistoryCount = jdbcTemplate.queryForObject(
+            """
+                select count(*)
+                from public.flyway_schema_history
+                where success = true
+            """.trimIndent(),
+            Long::class.java
+        )
+
+        assertEquals(1, publicSchemaCount)
+        assertEquals(8L, publicFlywayHistoryCount)
     }
 }

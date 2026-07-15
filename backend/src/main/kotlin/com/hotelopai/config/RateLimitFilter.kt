@@ -86,10 +86,22 @@ class RateLimitFilter(
             request.method == "POST" &&
                 (path == "/api/v1/tasks" || path.startsWith("/api/v1/tasks/") || path.startsWith("/api/v1/assistant/conversations")) ->
                 RateLimitRule("write", properties.writeLimit)
+            request.method == "GET" ->
+                RateLimitRule("read:${readBucketName(path)}", properties.defaultLimit)
             else ->
                 RateLimitRule("default", properties.defaultLimit)
         }
     }
+
+    private fun readBucketName(path: String): String =
+        when {
+            path == "/api/v1/dashboard/summary" -> "dashboard-summary"
+            path == "/api/v1/dashboard/reports/tasks" -> "dashboard-reporting"
+            path == "/api/v1/tasks" -> "tasks"
+            path == "/api/v1/notifications" -> "notifications"
+            path == "/api/v1/auth/me" -> "auth-me"
+            else -> path.trim('/').replace('/', '-').ifBlank { "root" }
+        }
 
     private fun principalKey(request: HttpServletRequest): String {
         val authorization = request.getHeader(HttpHeaders.AUTHORIZATION)

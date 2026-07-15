@@ -17,26 +17,26 @@ export type AssistantDraftSnapshot = {
 
 export type AssistantDraftInput = Omit<AssistantDraftSnapshot, "schemaVersion">;
 
-export function normalizeDraft(draft: AssistantDraftSnapshot): AssistantDraftSnapshot {
+export function normalizeDraft(draft: Partial<AssistantDraftSnapshot> | null | undefined): AssistantDraftSnapshot {
   return {
     schemaVersion: ASSISTANT_DRAFT_SCHEMA_VERSION,
-    conversationId: typeof draft.conversationId === "string" ? draft.conversationId : null,
-    text: typeof draft.text === "string" ? draft.text : "",
-    attachments: Array.isArray(draft.attachments)
+    conversationId: typeof draft?.conversationId === "string" ? draft.conversationId : null,
+    text: typeof draft?.text === "string" ? draft.text : "",
+    attachments: Array.isArray(draft?.attachments)
       ? draft.attachments.map((attachment) => ({
           ...attachment,
           storageStatus: "LOCAL_METADATA_ONLY",
           state: attachment.state === "failed" ? "failed" : "selected"
         }))
       : [],
-    voiceTranscript: draft.voiceTranscript
+    voiceTranscript: draft?.voiceTranscript
       ? {
           ...draft.voiceTranscript,
           source: "CLIENT_TRANSCRIPT",
           state: draft.voiceTranscript.state === "failed" ? "failed" : "selected"
         }
       : null,
-    imageObservations: Array.isArray(draft.imageObservations)
+    imageObservations: Array.isArray(draft?.imageObservations)
       ? draft.imageObservations.map((observation) => ({
           ...observation,
           source: "USER_PROVIDED",
@@ -44,4 +44,13 @@ export function normalizeDraft(draft: AssistantDraftSnapshot): AssistantDraftSna
         }))
       : []
   };
+}
+
+export function hasAssistantDraftContent(draft: AssistantDraftInput): boolean {
+  return Boolean(
+    draft.text.trim() ||
+      draft.attachments.length > 0 ||
+      draft.voiceTranscript ||
+      draft.imageObservations.length > 0
+  );
 }

@@ -7,12 +7,16 @@ import com.hotelopai.shared.kernel.UuidV7Generator
 import com.nimbusds.jose.jwk.source.ImmutableSecret
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm
 import org.springframework.security.oauth2.jwt.JwsHeader
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator
 import org.springframework.security.oauth2.jwt.JwtClaimsSet
 import org.springframework.security.oauth2.jwt.JwtEncoder
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters
+import org.springframework.security.oauth2.jwt.JwtIssuerValidator
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.stereotype.Component
+import java.time.Clock
 import java.time.Instant
 import java.util.UUID
 
@@ -58,7 +62,8 @@ class JwtAccessTokenService(
 
 @Configuration
 class JwtEncoderConfiguration(
-    private val authSecurityProperties: AuthSecurityProperties
+    private val authSecurityProperties: AuthSecurityProperties,
+    private val clock: Clock
 ) {
     @Bean
     fun jwtEncoder(): JwtEncoder {
@@ -80,9 +85,13 @@ class JwtEncoderConfiguration(
             .macAlgorithm(MacAlgorithm.HS256)
             .build()
             .also {
+                val timestampValidator = JwtTimestampValidator().apply {
+                    setClock(clock)
+                }
                 it.setJwtValidator(
-                    org.springframework.security.oauth2.jwt.JwtValidators.createDefaultWithIssuer(
-                        authSecurityProperties.jwt.issuer
+                    DelegatingOAuth2TokenValidator(
+                        JwtIssuerValidator(authSecurityProperties.jwt.issuer),
+                        timestampValidator
                     )
                 )
             }

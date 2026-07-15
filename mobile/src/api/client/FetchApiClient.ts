@@ -80,10 +80,11 @@ export class FetchApiClient implements ApiClient {
     const policy = options?.retry ?? defaultGetRetryPolicy;
     let attempt = 0;
     let didRefresh = false;
+    let refreshedAccessToken: string | null = null;
 
     while (true) {
       try {
-        return await this.request<T>(path, init, options);
+        return await this.request<T>(path, init, options, refreshedAccessToken);
       } catch (error) {
         if (
           error instanceof AppApiError &&
@@ -96,6 +97,7 @@ export class FetchApiClient implements ApiClient {
           didRefresh = true;
           const refreshed = await this.refreshAccessToken();
           if (refreshed) {
+            refreshedAccessToken = refreshed;
             continue;
           }
         }
@@ -112,7 +114,8 @@ export class FetchApiClient implements ApiClient {
   private async request<T>(
     path: string,
     init: RequestInit,
-    options?: ApiRequestOptions
+    options?: ApiRequestOptions,
+    accessTokenOverride?: string | null
   ): Promise<T> {
     const controller = new AbortController();
     const timeoutMs = options?.timeoutMs ?? this.timeoutMs;
@@ -126,7 +129,7 @@ export class FetchApiClient implements ApiClient {
         headers: {
           "Content-Type": "application/json",
           "X-Correlation-Id": correlationId,
-          ...(this.authorizationHeader(options) ?? {}),
+          ...(this.authorizationHeader(options, accessTokenOverride) ?? {}),
           ...(init.headers || {}),
           ...(options?.headers || {})
         }
@@ -158,12 +161,12 @@ export class FetchApiClient implements ApiClient {
     return `${this.options.baseUrl.replace(/\/$/, "")}${path}`;
   }
 
-  private authorizationHeader(options?: ApiRequestOptions): Record<string, string> | null {
+  private authorizationHeader(options?: ApiRequestOptions, accessTokenOverride?: string | null): Record<string, string> | null {
     if (options?.skipAuth) {
       return null;
     }
 
-    const token = this.accessTokenProvider?.();
+    const token = accessTokenOverride ?? this.accessTokenProvider?.();
     if (!token) {
       return null;
     }

@@ -18,6 +18,7 @@ type AppBootstrapContextValue = AppStateSnapshot & {
   login: (credentials: LoginCredentials) => Promise<void>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
+  refreshAccessToken: () => Promise<string | null>;
   clearSession: () => Promise<void>;
 };
 
@@ -151,6 +152,23 @@ export function AppBootstrapProvider({ children }: { children: ReactNode }) {
 
         setSession(null);
         setStatus("unauthenticated");
+      },
+      refreshAccessToken: async () => {
+        try {
+          const refreshedSession = await sessionService.refresh();
+          if (refreshedSession?.accessToken) {
+            setSession(refreshedSession);
+            setStatus("authenticated");
+            return refreshedSession.accessToken;
+          }
+        } catch {
+          // Fall through to clearing the stale session.
+        }
+
+        await sessionService.clearInvalidSession();
+        setSession(null);
+        setStatus("unauthenticated");
+        return null;
       },
       clearSession: async () => {
         await sessionService.clearInvalidSession();

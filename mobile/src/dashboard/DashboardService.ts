@@ -1,16 +1,18 @@
 import { FetchApiClient } from "../api/client/FetchApiClient";
 import { HttpDashboardApi } from "../api/dashboard/DashboardApi";
 import { appApiBaseUrl } from "../config/appConfig";
-import { DashboardSummary, TaskReportingSummary, dashboardSummaryFromResponse, taskReportingFromResponse } from "./types";
+import { dashboardSummaryFromResponse, taskReportingFromResponse } from "./types";
+import type { DashboardSummary, TaskReportingSummary } from "./types";
 
 export class DashboardService {
   private readonly dashboardApi: HttpDashboardApi;
 
-  constructor(accessTokenProvider: () => string | null) {
+  constructor(accessTokenProvider: () => string | null, refreshAccessToken?: () => Promise<string | null>) {
     this.dashboardApi = new HttpDashboardApi(
       new FetchApiClient({
         baseUrl: appApiBaseUrl,
-        accessTokenProvider
+        accessTokenProvider,
+        refreshAccessToken
       })
     );
   }

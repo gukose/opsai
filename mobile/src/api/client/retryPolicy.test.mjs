@@ -30,6 +30,12 @@ test("non GET methods and deterministic statuses are not retried", () => {
   }
 });
 
+test("GET 429 is not retried", () => {
+  const error = new AppApiError("Too many requests", { kind: "problem-details", status: 429 });
+
+  assert.equal(shouldRetryRequest({ method: "GET", error, attempt: 1, policy }), false);
+});
+
 test("zero retry policy disables automatic retry", () => {
   const error = new AppApiError("Request timed out", { kind: "timeout" });
 

@@ -47,6 +47,7 @@ node_modules/
 # Logs
 *.log
 start.log
+/scripts/.run/
 
 # Expo local state
 .expo/

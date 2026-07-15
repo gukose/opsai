@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { assistantDataSourceMode } from "../config/assistantConfig";
 import { CurrentUserSnapshot } from "../session/sessionTypes";
@@ -15,19 +15,25 @@ type DashboardSummaryState = {
 
 export function useDashboardSummaryState(
   accessToken: string | null,
-  currentUser?: CurrentUserSnapshot | null
+  currentUser?: CurrentUserSnapshot | null,
+  refreshAccessToken?: () => Promise<string | null>
 ): DashboardSummaryState {
   const isBackendMode = assistantDataSourceMode === "backend";
   const service = useMemo(
     () =>
       new DashboardService(() => {
         return accessToken;
-      }),
-    [accessToken]
+      }, refreshAccessToken),
+    [accessToken, refreshAccessToken]
   );
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [staleReason, setStaleReason] = useState<string | null>(null);
   const [cachedAt, setCachedAt] = useState<string | null>(null);
+  const summaryRef = useRef<DashboardSummary | null>(summary);
+
+  useEffect(() => {
+    summaryRef.current = summary;
+  }, [summary]);
 
   const refreshDashboard = useCallback(async () => {
     if (!accessToken || !isBackendMode) {
@@ -48,7 +54,7 @@ export function useDashboardSummaryState(
       }
     } catch {
       const key = scopedDashboardCacheKey(currentUser);
-      if (!summary && key) {
+      if (!summaryRef.current && key) {
         const cached = await defaultOfflineCache.load<DashboardSummary>(key);
         if (cached) {
           setSummary(cached.data);
@@ -57,9 +63,9 @@ export function useDashboardSummaryState(
           return;
         }
       }
-      setStaleReason(summary ? "Refresh failed. Showing last saved data." : "No saved data is available offline.");
+      setStaleReason(summaryRef.current ? "Refresh failed. Showing last saved data." : "No saved data is available offline.");
     }
-  }, [accessToken, currentUser, isBackendMode, service, summary]);
+  }, [accessToken, currentUser, isBackendMode, service]);
 
   useEffect(() => {
     void refreshDashboard();

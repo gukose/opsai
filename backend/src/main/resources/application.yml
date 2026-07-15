@@ -18,7 +18,6 @@ spring:
     default-schema: public
     schemas:
       - public
-      - unimock
 
 ops:
   ai:

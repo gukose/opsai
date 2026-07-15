@@ -1,5 +1,5 @@
-import { ApiClient } from "../client/ApiClient";
-import {
+import type { ApiClient } from "../client/ApiClient";
+import type {
   AuthSessionResponseDto,
   CurrentUserResponseDto,
   LoginRequestDto,
@@ -18,7 +18,11 @@ export interface AuthApi {
 }
 
 export class HttpAuthApi implements AuthApi {
-  constructor(private readonly client: ApiClient) {}
+  private readonly client: ApiClient;
+
+  constructor(client: ApiClient) {
+    this.client = client;
+  }
 
   login(request: LoginRequestDto): Promise<AuthSessionResponseDto> {
     return this.client.post("/api/v1/auth/login", request, { skipAuth: true });

@@ -1,4 +1,4 @@
-import { CurrentUserSnapshot } from "../../session/sessionTypes";
+import type { CurrentUserSnapshot } from "../../session/sessionTypes";
 
 export type LoginRequestDto = {
   hotelCode: string;

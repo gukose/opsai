@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { normalizeDraft } from "./assistantDraftNormalizer.ts";
+import { hasAssistantDraftContent, normalizeDraft } from "./assistantDraftNormalizer.ts";
 
 test("assistant draft normalizes restored sending state to safe manual retry state", () => {
   const draft = normalizeDraft({
@@ -85,3 +85,64 @@ test("assistant draft preserves ordering and failed state remains manually retry
   assert.equal(draft.attachments[0].state, "failed");
   assert.equal(draft.imageObservations[0].state, "failed");
 });
+
+test("assistant draft content detection prevents initial empty overwrite", () => {
+  assert.equal(hasAssistantDraftContent(emptyDraft()), false);
+  assert.equal(hasAssistantDraftContent({ ...emptyDraft(), text: "hello" }), true);
+  assert.equal(hasAssistantDraftContent({ ...emptyDraft(), attachments: [imageAttachment("att-1")] }), true);
+  assert.equal(hasAssistantDraftContent({ ...emptyDraft(), voiceTranscript: voiceTranscript() }), true);
+  assert.equal(hasAssistantDraftContent({ ...emptyDraft(), imageObservations: [imageObservation("obs-1", "att-1")] }), true);
+});
+
+test("assistant draft malformed data normalizes to safe empty draft", () => {
+  assert.deepEqual(normalizeDraft(null), {
+    schemaVersion: 1,
+    conversationId: null,
+    text: "",
+    attachments: [],
+    voiceTranscript: null,
+    imageObservations: []
+  });
+});
+
+function emptyDraft() {
+  return {
+    conversationId: "conversation-1",
+    text: "",
+    attachments: [],
+    voiceTranscript: null,
+    imageObservations: []
+  };
+}
+
+function imageAttachment(id) {
+  return {
+    id,
+    type: "IMAGE",
+    originalFileName: `${id}.png`,
+    mimeType: "image/png",
+    sizeBytes: 1,
+    storageStatus: "LOCAL_METADATA_ONLY",
+    state: "selected"
+  };
+}
+
+function voiceTranscript() {
+  return {
+    transcript: "Room 502 sink is leaking",
+    languageCode: "en",
+    durationMs: 4200,
+    source: "CLIENT_TRANSCRIPT",
+    state: "selected"
+  };
+}
+
+function imageObservation(id, attachmentId) {
+  return {
+    id,
+    attachmentId,
+    text: "Water visible under the sink",
+    source: "USER_PROVIDED",
+    state: "selected"
+  };
+}
