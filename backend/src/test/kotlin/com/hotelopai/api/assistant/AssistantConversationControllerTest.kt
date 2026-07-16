@@ -436,6 +436,55 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
     }
 
     @Test
+    fun `mobile shaped message request preserves registered attachment response and persistence`() {
+        val login = login()
+        val conversationId = startConversation(login)
+        val registrationResponse = post(
+            path = "/api/v1/assistant/conversations/$conversationId/attachments",
+            body = registrationBody("IMAGE", "registered-sink.jpg", "image/jpeg", 100, widthPx = 100, heightPx = 100),
+            bearerToken = login.accessToken
+        )
+        assertEquals(200, registrationResponse.statusCode(), registrationResponse.body())
+        val attachmentId = extractAttachmentId(registrationResponse.body())
+
+        val sent = post(
+            path = "/api/v1/assistant/conversations/$conversationId/messages",
+            body = """
+                {
+                  "text":"Room 101 sink is leaking",
+                  "inputType":"MIXED",
+                  "attachments":[],
+                  "attachmentIds":["$attachmentId"]
+                }
+            """.trimIndent(),
+            bearerToken = login.accessToken
+        )
+
+        assertEquals(200, sent.statusCode(), sent.body())
+        assertContains(sent.body(), """"id":"$attachmentId"""")
+        assertContains(sent.body(), """"originalFileName":"registered-sink.jpg"""")
+        assertContains(sent.body(), """"storageStatus":"REGISTERED"""")
+        assertContains(sent.body(), """"storageReference":null""")
+
+        val persistedJson = jdbcTemplate.queryForObject(
+            "select messages_json::text from assistant_conversation where id = ?",
+            String::class.java,
+            conversationId
+        ) ?: ""
+        assertContains(persistedJson, attachmentId)
+        assertContains(persistedJson, "registered-sink.jpg")
+        assertContains(persistedJson, "REGISTERED")
+
+        val reloaded = conversationRepository.findByIdAndHotelIdAndUserId(
+            conversationId,
+            login.hotelId,
+            login.userId
+        )
+        assertEquals(attachmentId, reloaded?.messages?.last()?.attachments?.single()?.id)
+        assertEquals(com.hotelopai.assistant.domain.AttachmentStorageStatus.REGISTERED, reloaded?.messages?.last()?.attachments?.single()?.storageStatus)
+    }
+
+    @Test
     fun `legacy local metadata image observations remain supported`() {
         val login = login()
         val conversationId = startConversation(login)

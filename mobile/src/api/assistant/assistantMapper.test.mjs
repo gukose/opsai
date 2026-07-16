@@ -126,6 +126,48 @@ test("maps persisted image observations as user-provided image notes", () => {
   assert.equal(imageNote?.author, "user");
 });
 
+test("maps registered attachment response into conversation attachment without local preview", () => {
+  const state = mapAssistantConversationResponseToHomeState({
+    ...baseResponse,
+    messages: [
+      {
+        id: "message-registered",
+        role: "USER",
+        inputType: "MIXED",
+        text: "Room 101 sink is leaking",
+        voiceTranscript: null,
+        voiceTranscriptMetadata: null,
+        audioMetadata: null,
+        attachments: [
+          {
+            id: "018f0000-0000-7000-8000-000000000001",
+            type: "IMAGE",
+            originalFileName: "sink.jpg",
+            mimeType: "image/jpeg",
+            sizeBytes: 2048,
+            widthPx: 640,
+            heightPx: 480,
+            localReference: null,
+            storageStatus: "REGISTERED",
+            storageReference: null
+          }
+        ],
+        imageObservations: [],
+        attachmentIds: ["018f0000-0000-7000-8000-000000000001"],
+        createdAt: "2026-07-10T09:15:00Z"
+      }
+    ]
+  });
+
+  const attachment = state.conversationItems.find((item) => item.type === "attachment");
+
+  assert.equal(attachment?.attachment.id, "018f0000-0000-7000-8000-000000000001");
+  assert.equal(attachment?.attachment.filename, "sink.jpg");
+  assert.equal(attachment?.attachment.storageStatus, "REGISTERED");
+  assert.equal(attachment?.attachment.imageUri, undefined);
+  assert.equal(attachment?.attachment.localReference, undefined);
+});
+
 test("detects OpenAI interpretation failure responses for UI error feedback", () => {
   const response = {
     ...baseResponse,

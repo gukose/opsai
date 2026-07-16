@@ -39,13 +39,15 @@ class AssistantConversationController(
         val legacyTranscript = request.transcript?.trim()?.takeIf(String::isNotBlank)
 
         return currentUserContextResolver.current().let { currentUser ->
-            val attachments = request.attachments?.map { it.toDomain() }
-                ?: assistantAttachmentRegistrationService.resolveMessageAttachmentReferences(
+            val localMetadataAttachments = request.attachments.orEmpty().map { it.toDomain() }
+            val registeredAttachments =
+                assistantAttachmentRegistrationService.resolveMessageAttachmentReferences(
                     conversationId = conversationId,
                     hotelId = currentUser.hotelId.toString(),
                     userId = currentUser.userId.toString(),
                     attachmentIds = request.attachmentIds.orEmpty()
                 )
+            val attachments = localMetadataAttachments + registeredAttachments
             val imageObservations = request.imageObservations
                 .orEmpty()
                 .map { it.toDomain(attachments) }

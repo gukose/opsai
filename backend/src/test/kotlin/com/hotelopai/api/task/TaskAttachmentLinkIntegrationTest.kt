@@ -105,6 +105,48 @@ class TaskAttachmentLinkIntegrationTest : PostgresIntegrationTestSupport() {
     }
 
     @Test
+    fun `confirmation links registered attachment sent by mobile shaped request`() {
+        val login = login()
+        val conversationId = startConversation(login)
+        val attachmentId = registerAttachment(login, conversationId, "mobile-sink.jpg")
+
+        val preview = post(
+            "/api/v1/assistant/conversations/$conversationId/messages",
+            """
+                {
+                  "text":"Room 101 sink is leaking",
+                  "inputType":"MIXED",
+                  "attachments":[],
+                  "attachmentIds":["$attachmentId"]
+                }
+            """.trimIndent(),
+            login.accessToken
+        )
+        assertEquals(200, preview.statusCode(), preview.body())
+        assertThat(preview.body()).contains(
+            "WAITING_FOR_CONFIRMATION",
+            attachmentId.toString(),
+            "mobile-sink.jpg",
+            """"storageStatus":"REGISTERED""""
+        )
+
+        val confirmed = confirm(login, conversationId, "confirm-mobile-shaped-link")
+        assertEquals(200, confirmed.statusCode(), confirmed.body())
+        val taskId = extract(confirmed.body(), "createdTaskId")
+
+        val links = get("/api/v1/tasks/$taskId/attachments", login.accessToken)
+        assertEquals(200, links.statusCode(), links.body())
+        assertThat(links.body()).contains(
+            attachmentId.toString(),
+            "mobile-sink.jpg",
+            "ASSISTANT_MESSAGE",
+            """"storageStatus":"REGISTERED""""
+        )
+        assertThat(links.body()).doesNotContain("storageReference", "downloadUrl", "localReference", "base64")
+        assertThat(linkCount(taskId)).isEqualTo(1)
+    }
+
+    @Test
     fun `text only and local metadata only confirmation create no durable links`() {
         val login = login()
         val textOnlyConversationId = startConversation(login)
@@ -255,6 +297,7 @@ class TaskAttachmentLinkIntegrationTest : PostgresIntegrationTestSupport() {
         )
 
         val beforeTasks = taskCount()
+        val beforeLinks = linkCount()
         assertThrows(IllegalStateException::class.java) {
             assistantConversationService.confirmTask(
                 conversationId = conversation.id,
@@ -265,7 +308,7 @@ class TaskAttachmentLinkIntegrationTest : PostgresIntegrationTestSupport() {
         }
 
         assertThat(taskCount()).isEqualTo(beforeTasks)
-        assertThat(linkCount()).isZero()
+        assertThat(linkCount()).isEqualTo(beforeLinks)
         assertThat(
             taskConfirmationRepository.findByConversationIdAndIdempotencyKey(conversation.id, "confirm-rollback")
         ).isNull()
