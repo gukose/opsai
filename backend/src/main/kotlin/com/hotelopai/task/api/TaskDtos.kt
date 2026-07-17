@@ -25,9 +25,13 @@ data class CreateTaskRequest(
     val slaDeadline: Instant,
     val assignment: AssignmentRequest? = null
 ) {
-    fun toCommand(): CreateTaskCommand =
-        CreateTaskCommand(
-            hotelId = UUID.fromString(hotelId),
+    fun toCommand(authenticatedHotelId: UUID): CreateTaskCommand {
+        val requestedHotelId = UUID.fromString(hotelId)
+        require(requestedHotelId == authenticatedHotelId) {
+            "hotelId must match the authenticated hotel"
+        }
+        return CreateTaskCommand(
+            hotelId = authenticatedHotelId,
             intentType = intentType,
             source = source,
             title = title,
@@ -37,6 +41,7 @@ data class CreateTaskRequest(
             slaDeadline = slaDeadline,
             assignment = assignment?.toCommand()
         )
+    }
 }
 
 data class AssignTaskRequest(

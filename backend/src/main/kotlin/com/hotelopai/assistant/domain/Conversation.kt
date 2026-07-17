@@ -18,6 +18,7 @@ data class Conversation(
     val draftVersion: Int = 0,
     val createdTaskId: String? = null,
     val confirmationIdempotencyKey: String? = null,
+    val rowVersion: Long = 0,
     val createdAt: Instant = Instant.now(),
     val updatedAt: Instant = createdAt
 ) {

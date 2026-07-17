@@ -40,6 +40,9 @@ class NotificationJpaEntity : AuditedJpaEntity() {
     @Column(name = "source_task_id", columnDefinition = "uuid")
     var sourceTaskId: UUID? = null
 
+    @Column(name = "source_event_id", columnDefinition = "uuid")
+    var sourceEventId: UUID? = null
+
     @Column(name = "read_at")
     var readAt: Instant? = null
 }

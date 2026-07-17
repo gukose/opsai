@@ -4,8 +4,10 @@ import com.fasterxml.jackson.annotation.JsonAnySetter
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.hotelopai.assistant.api.AssistantConversationResponse
 import com.hotelopai.shared.security.CurrentUserContextResolver
+import com.hotelopai.shared.security.PermissionExpressions
 import com.hotelopai.vision.application.ImportVisionAnalysisCommand
 import com.hotelopai.vision.application.VisionAnalysisImportService
+import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -20,6 +22,7 @@ class VisionAnalysisImportController(
     private val currentUserContextResolver: CurrentUserContextResolver
 ) {
     @PostMapping("/{conversationId}/vision-analyses/{analysisId}/import")
+    @PreAuthorize(PermissionExpressions.ASSISTANT_VISION_IMPORT)
     fun importVisionAnalysis(
         @PathVariable conversationId: String,
         @PathVariable analysisId: UUID,

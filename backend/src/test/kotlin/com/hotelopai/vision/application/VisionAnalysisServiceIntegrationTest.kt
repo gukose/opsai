@@ -10,6 +10,7 @@ import com.hotelopai.shared.kernel.UuidV7Generator
 import com.hotelopai.support.PostgresIntegrationTestSupport
 import com.hotelopai.vision.domain.VisionAnalysisProviderMode
 import com.hotelopai.vision.domain.VisionAnalysisStatus
+import io.micrometer.core.instrument.MeterRegistry
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
@@ -37,6 +38,9 @@ class VisionAnalysisServiceIntegrationTest : PostgresIntegrationTestSupport() {
 
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
+
+    @Autowired
+    private lateinit var meterRegistry: MeterRegistry
 
     @Test
     fun `deterministic fixture analysis persists completed tenant scoped result without changing conversation or tasks`() {
@@ -70,6 +74,18 @@ class VisionAnalysisServiceIntegrationTest : PostgresIntegrationTestSupport() {
 
         val persisted = visionAnalysisRepository.findById(analysis.id)
         assertThat(persisted).isEqualTo(analysis)
+        assertThat(
+            counter(
+                "hotelopai.vision.analysis.total",
+                "operation" to "analyze",
+                "outcome" to "completed",
+                "provider" to "deterministic",
+                "confidence_bucket" to "high",
+                "reason_code" to "none"
+            )
+        ).isGreaterThanOrEqualTo(1.0)
+        assertThat(meterRegistry.find("hotelopai.vision.analysis.duration").timer()?.count() ?: 0)
+            .isGreaterThanOrEqualTo(1)
     }
 
     @Test
@@ -102,6 +118,16 @@ class VisionAnalysisServiceIntegrationTest : PostgresIntegrationTestSupport() {
         assertThat(analysis.failureMessage).contains("registered metadata only")
         assertThat(analysis.observations).isEmpty()
         assertThat(analysis.confidence).isNull()
+        assertThat(
+            counter(
+                "hotelopai.vision.analysis.total",
+                "operation" to "analyze",
+                "outcome" to "ineligible",
+                "provider" to "other",
+                "confidence_bucket" to "none",
+                "reason_code" to "provider_media_unavailable"
+            )
+        ).isGreaterThanOrEqualTo(1.0)
     }
 
     @Test
@@ -203,6 +229,16 @@ class VisionAnalysisServiceIntegrationTest : PostgresIntegrationTestSupport() {
 
         val duplicateFailed = visionAnalysisService.analyze(failingRequest)
         assertThat(duplicateFailed).isEqualTo(failed)
+        assertThat(
+            counter(
+                "hotelopai.vision.analysis.total",
+                "operation" to "analyze",
+                "outcome" to "idempotent_reuse",
+                "provider" to "deterministic",
+                "confidence_bucket" to "none",
+                "reason_code" to "none"
+            )
+        ).isGreaterThanOrEqualTo(1.0)
 
         val retried = visionAnalysisService.retryFailed(
             command(scope, attachment.id, VisionAnalysisProviderMode.DETERMINISTIC_FIXTURE, "idem-retry", "broken-window")
@@ -211,6 +247,16 @@ class VisionAnalysisServiceIntegrationTest : PostgresIntegrationTestSupport() {
         assertThat(retried.status).isEqualTo(VisionAnalysisStatus.COMPLETED)
         assertThat(retried.attemptCount).isEqualTo(2)
         assertThat(retried.detectedLocationHint).isEqualTo("window")
+        assertThat(
+            counter(
+                "hotelopai.vision.analysis.total",
+                "operation" to "retry",
+                "outcome" to "completed",
+                "provider" to "deterministic",
+                "confidence_bucket" to "high",
+                "reason_code" to "none"
+            )
+        ).isGreaterThanOrEqualTo(1.0)
     }
 
     @Test
@@ -294,6 +340,13 @@ class VisionAnalysisServiceIntegrationTest : PostgresIntegrationTestSupport() {
 
     private fun taskCount(): Int =
         jdbcTemplate.queryForObject("select count(*) from task", Int::class.java) ?: 0
+
+    private fun counter(name: String, vararg tags: Pair<String, String>): Double =
+        meterRegistry.find(name)
+            .tags(*tags.flatMap { listOf(it.first, it.second) }.toTypedArray())
+            .counter()
+            ?.count()
+            ?: 0.0
 
     private data class Scope(
         val conversationId: String,

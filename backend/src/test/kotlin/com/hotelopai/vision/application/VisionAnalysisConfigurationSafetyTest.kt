@@ -108,6 +108,13 @@ class VisionAnalysisConfigurationSafetyTest {
                         it.hotelId == hotelId &&
                         it.userId == userId
                 }
+
+            override fun findByRegistrationIdempotencyKey(
+                conversationId: String,
+                hotelId: String,
+                userId: String,
+                registrationIdempotencyKey: String
+            ): RegisteredConversationAttachment? = null
         }
         private val analysisRepository = object : VisionAnalysisRepository {
             private var stored: VisionAnalysis? = null

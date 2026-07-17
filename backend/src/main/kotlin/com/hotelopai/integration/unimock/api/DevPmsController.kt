@@ -3,7 +3,9 @@ package com.hotelopai.integration.unimock.api
 import com.hotelopai.integration.unimock.PmsLookupService
 import com.hotelopai.integration.unimock.PmsEventCreateRequest
 import com.hotelopai.integration.unimock.PmsRoomStatusUpdateRequest
+import com.hotelopai.shared.security.PermissionExpressions
 import org.springframework.context.annotation.Profile
+import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -18,34 +20,42 @@ class DevPmsController(
     private val pmsLookupService: PmsLookupService
 ) {
     @GetMapping("/rooms")
+    @PreAuthorize(PermissionExpressions.DEV_PMS_ACCESS)
     fun listRooms(): List<RoomResponse> =
         pmsLookupService.listRooms().map { it.toResponse() }
 
     @GetMapping("/rooms/{roomNumber}")
+    @PreAuthorize(PermissionExpressions.DEV_PMS_ACCESS)
     fun getRoom(@PathVariable roomNumber: String): RoomResponse =
         pmsLookupService.getRoom(roomNumber).toResponse()
 
     @GetMapping("/rooms/{roomNumber}/status")
+    @PreAuthorize(PermissionExpressions.DEV_PMS_ACCESS)
     fun getRoomStatus(@PathVariable roomNumber: String): RoomStatusResponse =
         pmsLookupService.getRoomStatus(roomNumber).toResponse()
 
     @GetMapping("/rooms/{roomNumber}/occupancy")
+    @PreAuthorize(PermissionExpressions.DEV_PMS_ACCESS)
     fun getRoomOccupancy(@PathVariable roomNumber: String): RoomOccupancyResponse =
         pmsLookupService.getRoomOccupancy(roomNumber).toResponse()
 
     @GetMapping("/rooms/{roomNumber}/assets")
+    @PreAuthorize(PermissionExpressions.DEV_PMS_ACCESS)
     fun getRoomAssets(@PathVariable roomNumber: String): List<AssetResponse> =
         pmsLookupService.getRoomAssets(roomNumber).map { it.toResponse() }
 
     @GetMapping("/assets/{assetId}")
+    @PreAuthorize(PermissionExpressions.DEV_PMS_ACCESS)
     fun getAsset(@PathVariable assetId: String): AssetResponse =
         pmsLookupService.getAsset(assetId).toResponse()
 
     @GetMapping("/issue-types")
+    @PreAuthorize(PermissionExpressions.DEV_PMS_ACCESS)
     fun listIssueTypes(): List<IssueTypeResponse> =
         pmsLookupService.listIssueTypes().map { it.toResponse() }
 
     @PostMapping("/rooms/{roomNumber}/status")
+    @PreAuthorize(PermissionExpressions.DEV_PMS_ACCESS)
     fun updateRoomStatus(
         @PathVariable roomNumber: String,
         @RequestBody request: RoomStatusUpdateRequest
@@ -56,6 +66,7 @@ class DevPmsController(
         ).toResponse()
 
     @PostMapping("/maintenance/updates")
+    @PreAuthorize(PermissionExpressions.DEV_PMS_ACCESS)
     fun updateMaintenance(
         @RequestBody request: MaintenanceUpdateRequest
     ): PmsUpdateResponse =
@@ -67,6 +78,7 @@ class DevPmsController(
         ).toResponse()
 
     @PostMapping("/events")
+    @PreAuthorize(PermissionExpressions.DEV_PMS_ACCESS)
     fun pushEvent(
         @RequestBody request: EventPushRequest
     ): EventResponse =

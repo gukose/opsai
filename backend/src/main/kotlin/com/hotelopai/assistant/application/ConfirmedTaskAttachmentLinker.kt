@@ -3,9 +3,11 @@ package com.hotelopai.assistant.application
 import com.hotelopai.assistant.domain.AttachmentStorageStatus
 import com.hotelopai.assistant.domain.Conversation
 import com.hotelopai.assistant.domain.ImageObservationSource
+import com.hotelopai.observability.OperationalObservability
 import com.hotelopai.task.application.TaskAttachmentLinkRepository
 import com.hotelopai.task.domain.TaskAttachmentLink
 import com.hotelopai.task.domain.TaskAttachmentSourceType
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.UUID
@@ -30,19 +32,29 @@ object NoOpConfirmedTaskAttachmentLinker : ConfirmedTaskAttachmentLinker {
 class ConfirmedTaskAttachmentLinkService(
     private val assistantAttachmentRepository: AssistantAttachmentRepository,
     private val importedVisionAnalysisLookupPort: ImportedVisionAnalysisLookupPort,
-    private val taskAttachmentLinkRepository: TaskAttachmentLinkRepository
+    private val taskAttachmentLinkRepository: TaskAttachmentLinkRepository,
+    private val observability: OperationalObservability = OperationalObservability.noop()
 ) : ConfirmedTaskAttachmentLinker {
     override fun linkConfirmedTask(
         conversation: Conversation,
         taskId: UUID,
         now: Instant
     ): List<TaskAttachmentLink> {
+        var sourceType = "none"
+        try {
         val sourceMessageIds = conversation.activeDraftSourceMessageIds.toSet()
         if (sourceMessageIds.isEmpty()) {
+            recordLink(outcome = "success", sourceType = sourceType, reasonCode = "none")
             return emptyList()
         }
 
         val sourceMessages = conversation.messages.filter { it.id in sourceMessageIds }
+        sourceType = observability.sourceType(
+            hasAssistantMessage = sourceMessages.any { message -> message.attachments.isNotEmpty() },
+            hasVisionAnalysis = sourceMessages.any { message ->
+                message.imageObservations.any { it.source == ImageObservationSource.VISION_ANALYSIS }
+            }
+        )
         val assistantMessageLinks = sourceMessages
             .flatMap { message ->
                 message.attachments
@@ -127,7 +139,14 @@ class ConfirmedTaskAttachmentLinkService(
             .distinctBy { it.attachmentId }
             .sortedWith(compareBy<TaskAttachmentLink> { it.createdAt }.thenBy { it.attachmentId })
 
-        return taskAttachmentLinkRepository.saveAll(links)
+        return taskAttachmentLinkRepository.saveAll(links).also {
+            recordLink(outcome = "success", sourceType = sourceType, reasonCode = "none")
+        }
+        } catch (exception: RuntimeException) {
+            recordLink(outcome = "failure", sourceType = sourceType, reasonCode = "operation_failed")
+            logger.warn("event=task_attachment_link operation=link outcome=failure reasonCode=operation_failed sourceType=$sourceType")
+            throw exception
+        }
     }
 
     private fun parseUuid(value: String, field: String): UUID =
@@ -136,4 +155,18 @@ class ConfirmedTaskAttachmentLinkService(
         } catch (_: IllegalArgumentException) {
             throw IllegalStateException("$field must be a server-generated UUID")
         }
+
+    private fun recordLink(outcome: String, sourceType: String, reasonCode: String) {
+        observability.incrementCounter(
+            "hotelopai.task.attachment.link.total",
+            "operation" to "link",
+            "outcome" to outcome,
+            "source_type" to sourceType,
+            "reason_code" to reasonCode
+        )
+    }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(ConfirmedTaskAttachmentLinkService::class.java)
+    }
 }

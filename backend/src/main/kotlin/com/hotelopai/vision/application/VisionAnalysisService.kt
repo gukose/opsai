@@ -5,11 +5,13 @@ import com.hotelopai.assistant.application.ConversationNotFoundException
 import com.hotelopai.assistant.application.ConversationRepository
 import com.hotelopai.assistant.domain.AttachmentStorageStatus
 import com.hotelopai.assistant.domain.AttachmentType
+import com.hotelopai.observability.OperationalObservability
 import com.hotelopai.shared.kernel.UuidV7Generator
 import com.hotelopai.vision.domain.VisionAnalysis
 import com.hotelopai.vision.domain.VisionAnalysisProviderMode
 import com.hotelopai.vision.domain.VisionAnalysisStatus
 import com.hotelopai.vision.domain.VisionProviderIds
+import org.slf4j.LoggerFactory
 import org.springframework.core.env.Environment
 import org.springframework.core.env.Profiles
 import org.springframework.stereotype.Service
@@ -24,10 +26,17 @@ class VisionAnalysisService(
     private val analysisRepository: VisionAnalysisRepository,
     private val visionAnalysisPort: VisionAnalysisPort,
     private val properties: VisionAnalysisProperties,
-    private val environment: Environment
+    private val environment: Environment,
+    private val observability: OperationalObservability = OperationalObservability.noop()
 ) {
     @Transactional
     fun analyze(command: RequestVisionAnalysisCommand): VisionAnalysis {
+        val timer = observability.startTimer()
+        var outcome = "failure"
+        var reasonCode = "operation_failed"
+        var confidenceBucket = "none"
+        val provider = observability.provider(providerIdFor(command.providerMode))
+        try {
         require(properties.enabled) { "Vision analysis is disabled" }
         val existing = analysisRepository.findByIdempotencyScope(
             attachmentId = command.attachmentId,
@@ -37,16 +46,49 @@ class VisionAnalysisService(
             idempotencyKey = command.idempotencyKey
         )
         if (existing != null) {
+            outcome = "idempotent_reuse"
+            reasonCode = "none"
+            confidenceBucket = observability.confidenceBucket(existing.confidence)
+            recordAnalysis("analyze", outcome, provider, confidenceBucket, reasonCode)
             return existing
         }
 
         val pending = createPending(command)
         analysisRepository.save(pending)
-        return process(pending, command)
+        val finalAnalysis = process(pending, command)
+        outcome = analysisOutcome(finalAnalysis)
+        reasonCode = finalAnalysis.failureCode?.lowercase() ?: "none"
+        confidenceBucket = observability.confidenceBucket(finalAnalysis.confidence)
+        recordAnalysis("analyze", outcome, provider, confidenceBucket, reasonCode)
+        if (outcome == "failed" || outcome == "ineligible") {
+            logger.warn("event=vision_analysis operation=analyze outcome=$outcome reasonCode=$reasonCode provider=$provider confidenceBucket=$confidenceBucket")
+        }
+        return finalAnalysis
+        } catch (exception: RuntimeException) {
+            recordAnalysis("analyze", outcome, provider, confidenceBucket, reasonCode)
+            logger.warn("event=vision_analysis operation=analyze outcome=failure reasonCode=$reasonCode provider=$provider confidenceBucket=$confidenceBucket")
+            throw exception
+        } finally {
+            observability.stopTimer(
+                timer,
+                "hotelopai.vision.analysis.duration",
+                "operation" to "analyze",
+                "outcome" to outcome,
+                "provider" to provider,
+                "confidence_bucket" to confidenceBucket,
+                "reason_code" to reasonCode
+            )
+        }
     }
 
     @Transactional
     fun retryFailed(command: RequestVisionAnalysisCommand): VisionAnalysis {
+        val timer = observability.startTimer()
+        var outcome = "failure"
+        var reasonCode = "operation_failed"
+        var confidenceBucket = "none"
+        val provider = observability.provider(providerIdFor(command.providerMode))
+        try {
         require(properties.enabled) { "Vision analysis is disabled" }
         val existing = analysisRepository.findByIdempotencyScope(
             attachmentId = command.attachmentId,
@@ -58,7 +100,30 @@ class VisionAnalysisService(
 
         val retry = existing.retry()
         analysisRepository.save(retry)
-        return process(retry, command)
+        val finalAnalysis = process(retry, command)
+        outcome = analysisOutcome(finalAnalysis)
+        reasonCode = finalAnalysis.failureCode?.lowercase() ?: "none"
+        confidenceBucket = observability.confidenceBucket(finalAnalysis.confidence)
+        recordAnalysis("retry", outcome, provider, confidenceBucket, reasonCode)
+        if (outcome == "failed" || outcome == "ineligible") {
+            logger.warn("event=vision_analysis operation=retry outcome=$outcome reasonCode=$reasonCode provider=$provider confidenceBucket=$confidenceBucket")
+        }
+        return finalAnalysis
+        } catch (exception: RuntimeException) {
+            recordAnalysis("retry", outcome, provider, confidenceBucket, reasonCode)
+            logger.warn("event=vision_analysis operation=retry outcome=failure reasonCode=$reasonCode provider=$provider confidenceBucket=$confidenceBucket")
+            throw exception
+        } finally {
+            observability.stopTimer(
+                timer,
+                "hotelopai.vision.analysis.duration",
+                "operation" to "retry",
+                "outcome" to outcome,
+                "provider" to provider,
+                "confidence_bucket" to confidenceBucket,
+                "reason_code" to reasonCode
+            )
+        }
     }
 
     private fun createPending(command: RequestVisionAnalysisCommand): VisionAnalysis {
@@ -178,6 +243,35 @@ class VisionAnalysisService(
             VisionAnalysisProviderMode.DETERMINISTIC_FIXTURE -> VisionProviderIds.DETERMINISTIC_LOCAL
             VisionAnalysisProviderMode.REAL_PROVIDER -> properties.normalizedProvider().name.lowercase()
         }
+
+    private fun analysisOutcome(analysis: VisionAnalysis): String =
+        when (analysis.status) {
+            VisionAnalysisStatus.COMPLETED -> "completed"
+            VisionAnalysisStatus.FAILED -> "failed"
+            VisionAnalysisStatus.INELIGIBLE -> "ineligible"
+            VisionAnalysisStatus.PENDING -> "pending"
+        }
+
+    private fun recordAnalysis(
+        operation: String,
+        outcome: String,
+        provider: String,
+        confidenceBucket: String,
+        reasonCode: String
+    ) {
+        observability.incrementCounter(
+            "hotelopai.vision.analysis.total",
+            "operation" to operation,
+            "outcome" to outcome,
+            "provider" to provider,
+            "confidence_bucket" to confidenceBucket,
+            "reason_code" to reasonCode
+        )
+    }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(VisionAnalysisService::class.java)
+    }
 }
 
 data class RequestVisionAnalysisCommand(

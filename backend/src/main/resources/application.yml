@@ -28,6 +28,15 @@ ops:
         refresh-token-ttl: P30D
       seed:
         enabled: false
+    outbox:
+      enabled: true
+      poll-interval: PT5S
+      batch-size: 25
+      max-attempts: 5
+      initial-retry-delay: PT10S
+      max-retry-delay: PT5M
+      lock-timeout: PT5M
+      processor-id: backend
 
 assistant:
   ai:

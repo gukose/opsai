@@ -9,6 +9,12 @@ interface TaskConfirmationRepository {
         idempotencyKey: String
     ): TaskConfirmationRecord?
 
+    fun findByConversationIdAndDraftIdentity(
+        conversationId: String,
+        draftId: String,
+        draftVersion: Int
+    ): TaskConfirmationRecord?
+
     fun save(record: TaskConfirmationRecord): TaskConfirmationRecord
 }
 

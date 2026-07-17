@@ -17,6 +17,10 @@ Sprint 7 exposes metadata and provenance contracts only. It does not expose bina
 
 Registers declared metadata for an attachment owned by the authenticated conversation scope.
 
+Optional headers:
+
+- `Idempotency-Key`: scopes a retry to the authenticated hotel, user, conversation, and declared metadata.
+
 Accepted request fields:
 
 - `type`: `IMAGE`, `PDF`, or `DOCUMENT`
@@ -51,6 +55,13 @@ Response fields:
 - `createdAt`
 
 Registration does not upload bytes, create a task, trigger analysis, create a preview, or make media provider-accessible. Registration is a write; mobile retries are manual only.
+
+Idempotency behavior:
+
+- requests without `Idempotency-Key` keep the legacy behavior and create a new registration each time
+- the same key with identical metadata returns the existing `attachmentId`
+- the same key with different declared metadata returns `409 Attachment registration conflict`
+- keys are scoped by authenticated hotel, user, and conversation
 
 ## Send Assistant Message
 
@@ -149,7 +160,7 @@ LOW confidence cannot independently create a preview or task. HIGH confidence st
 
 `POST /api/v1/assistant/conversations/{conversationId}/confirm`
 
-Confirms an existing assistant preview using the existing confirmation idempotency contract.
+Confirms an existing assistant preview using confirmation idempotency and draft-version uniqueness.
 
 Request fields:
 
@@ -164,8 +175,13 @@ Confirmation behavior:
 - creates no links for unrelated historical conversation attachments
 - creates no links for `LOCAL_METADATA_ONLY` attachments
 - retries with the same idempotency key return the existing task and do not duplicate links
+- retries or concurrent requests with a different idempotency key for the same draft version return the existing task and do not duplicate links
+- each `(conversationId, draftId, draftVersion)` can create at most one task
+- a later new draft version may create a new task through the same preview and confirmation safeguards
 
 The confirmation transaction covers task creation, task attachment link creation, idempotency persistence, and conversation task-created state persistence.
+
+Conversation writes use row-version optimistic concurrency. A stale full-aggregate write returns `409 Assistant conversation conflict`; non-idempotent writes are not replayed automatically.
 
 ## Read Task Attachments
 

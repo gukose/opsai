@@ -1,6 +1,7 @@
 package com.hotelopai.config
 
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.hotelopai.observability.OperationalObservability
 import com.hotelopai.shared.error.ProblemDetailFactory
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
@@ -24,7 +25,8 @@ import kotlin.math.max
 class RateLimitFilter(
     private val properties: RateLimitProperties,
     private val objectMapper: ObjectMapper,
-    private val clock: Clock
+    private val clock: Clock,
+    private val observability: OperationalObservability
 ) : OncePerRequestFilter() {
     private val buckets = ConcurrentHashMap<String, RateLimitBucket>()
 
@@ -55,6 +57,11 @@ class RateLimitFilter(
             return
         }
 
+        observability.incrementCounter(
+            "hotelopai.rate_limit.rejection.total",
+            "endpoint_group" to observability.endpointGroup(request.requestURI),
+            "reason_code" to "limit_exceeded"
+        )
         val retryAfterSeconds = max(1L, (bucket.windowEndsAtMillis - now + 999L) / 1000L)
         val problemDetail = ProblemDetailFactory.create(
             status = HttpStatus.TOO_MANY_REQUESTS,

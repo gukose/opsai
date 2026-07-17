@@ -13,7 +13,21 @@ class InMemoryTaskConfirmationRepository : TaskConfirmationRepository {
     ): TaskConfirmationRecord? =
         records[recordKey(conversationId, idempotencyKey)]
 
+    override fun findByConversationIdAndDraftIdentity(
+        conversationId: String,
+        draftId: String,
+        draftVersion: Int
+    ): TaskConfirmationRecord? =
+        records.values.firstOrNull {
+            it.conversationId == conversationId &&
+                it.draftId == draftId &&
+                it.draftVersion == draftVersion
+        }
+
     override fun save(record: TaskConfirmationRecord): TaskConfirmationRecord {
+        require(findByConversationIdAndDraftIdentity(record.conversationId, record.draftId, record.draftVersion) == null) {
+            "confirmation draft already exists"
+        }
         records[recordKey(record.conversationId, record.idempotencyKey)] = record
         return record
     }

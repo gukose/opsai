@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.hotelopai.assistant.application.ConversationRepository
+import com.hotelopai.assistant.application.ConversationConcurrencyException
 import com.hotelopai.assistant.application.TaskConfirmationRecord
 import com.hotelopai.assistant.application.TaskConfirmationRepository
 import com.hotelopai.assistant.domain.AudioMetadata
@@ -21,6 +22,7 @@ import com.hotelopai.assistant.domain.TaskPreview
 import com.hotelopai.assistant.domain.VoiceTranscriptMetadata
 import com.hotelopai.shared.kernel.UuidV7Generator
 import org.springframework.dao.EmptyResultDataAccessException
+import org.springframework.dao.DuplicateKeyException
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
@@ -37,9 +39,98 @@ class AssistantConversationPersistenceRepository(
     private val objectMapper = objectMapper.persistenceCopy()
 
     override fun save(conversation: Conversation): Conversation {
-        jdbcTemplate.update(
+        val updated = jdbcTemplate.update(
             """
-            insert into assistant_conversation (
+            update assistant_conversation set
+                hotel_id = :hotelId,
+                user_id = :userId,
+                state = :state,
+                intent = :intent,
+                collected_fields_json = cast(:collectedFieldsJson as jsonb),
+                missing_fields_json = cast(:missingFieldsJson as jsonb),
+                follow_up_question_json = cast(:followUpQuestionJson as jsonb),
+                task_preview_json = cast(:taskPreviewJson as jsonb),
+                messages_json = cast(:messagesJson as jsonb),
+                active_draft_id = :activeDraftId,
+                active_draft_source_message_ids_json = cast(:activeDraftSourceMessageIdsJson as jsonb),
+                draft_version = :draftVersion,
+                created_task_id = :createdTaskId,
+                confirmation_idempotency_key = :confirmationIdempotencyKey,
+                created_at = :createdAt,
+                updated_at = :updatedAt,
+                row_version = row_version + 1
+            where id = :id
+              and row_version = :rowVersion
+            """.trimIndent(),
+            conversation.toSqlParameters(objectMapper)
+        )
+
+        if (updated == 1) {
+            return conversation.copy(rowVersion = conversation.rowVersion + 1)
+        }
+
+        val existing = findById(conversation.id)
+        if (existing != null) {
+            throw ConversationConcurrencyException("Conversation was modified by another request")
+        }
+
+        try {
+            jdbcTemplate.update(
+                """
+                insert into assistant_conversation (
+                    id,
+                    hotel_id,
+                    user_id,
+                    state,
+                    intent,
+                    collected_fields_json,
+                    missing_fields_json,
+                    follow_up_question_json,
+                    task_preview_json,
+                    messages_json,
+                    active_draft_id,
+                    active_draft_source_message_ids_json,
+                    draft_version,
+                    created_task_id,
+                    confirmation_idempotency_key,
+                    row_version,
+                    created_at,
+                    updated_at
+                ) values (
+                    :id,
+                    :hotelId,
+                    :userId,
+                    :state,
+                    :intent,
+                    cast(:collectedFieldsJson as jsonb),
+                    cast(:missingFieldsJson as jsonb),
+                    cast(:followUpQuestionJson as jsonb),
+                    cast(:taskPreviewJson as jsonb),
+                    cast(:messagesJson as jsonb),
+                    :activeDraftId,
+                    cast(:activeDraftSourceMessageIdsJson as jsonb),
+                    :draftVersion,
+                    :createdTaskId,
+                    :confirmationIdempotencyKey,
+                    0,
+                    :createdAt,
+                    :updatedAt
+                )
+                """.trimIndent(),
+                conversation.copy(rowVersion = 0).toSqlParameters(objectMapper)
+            )
+        } catch (_: DuplicateKeyException) {
+            throw ConversationConcurrencyException("Conversation was modified by another request")
+        }
+
+        return conversation.copy(rowVersion = 0)
+    }
+
+    private fun findByIdWithClause(id: String, lockForUpdate: Boolean): Conversation? =
+        try {
+            jdbcTemplate.queryForObject(
+            """
+            select
                 id,
                 hotel_id,
                 user_id,
@@ -55,83 +146,26 @@ class AssistantConversationPersistenceRepository(
                 draft_version,
                 created_task_id,
                 confirmation_idempotency_key,
+                row_version,
                 created_at,
                 updated_at
-            ) values (
-                :id,
-                :hotelId,
-                :userId,
-                :state,
-                :intent,
-                cast(:collectedFieldsJson as jsonb),
-                cast(:missingFieldsJson as jsonb),
-                cast(:followUpQuestionJson as jsonb),
-                cast(:taskPreviewJson as jsonb),
-                cast(:messagesJson as jsonb),
-                :activeDraftId,
-                cast(:activeDraftSourceMessageIdsJson as jsonb),
-                :draftVersion,
-                :createdTaskId,
-                :confirmationIdempotencyKey,
-                :createdAt,
-                :updatedAt
-            )
-            on conflict (id) do update set
-                hotel_id = excluded.hotel_id,
-                user_id = excluded.user_id,
-                state = excluded.state,
-                intent = excluded.intent,
-                collected_fields_json = excluded.collected_fields_json,
-                missing_fields_json = excluded.missing_fields_json,
-                follow_up_question_json = excluded.follow_up_question_json,
-                task_preview_json = excluded.task_preview_json,
-                messages_json = excluded.messages_json,
-                active_draft_id = excluded.active_draft_id,
-                active_draft_source_message_ids_json = excluded.active_draft_source_message_ids_json,
-                draft_version = excluded.draft_version,
-                created_task_id = excluded.created_task_id,
-                confirmation_idempotency_key = excluded.confirmation_idempotency_key,
-                created_at = excluded.created_at,
-                updated_at = excluded.updated_at
+            from assistant_conversation
+            where id = :id
+            ${if (lockForUpdate) "for update" else ""}
             """.trimIndent(),
-            conversation.toSqlParameters(objectMapper)
-        )
-
-        return conversation
-    }
-
-    override fun findById(id: String): Conversation? =
-        try {
-            jdbcTemplate.queryForObject(
-                """
-                select
-                    id,
-                    hotel_id,
-                    user_id,
-                    state,
-                    intent,
-                    collected_fields_json,
-                    missing_fields_json,
-                    follow_up_question_json,
-                    task_preview_json,
-                    messages_json,
-                    active_draft_id,
-                    active_draft_source_message_ids_json,
-                    draft_version,
-                    created_task_id,
-                    confirmation_idempotency_key,
-                    created_at,
-                    updated_at
-                from assistant_conversation
-                where id = :id
-                """.trimIndent(),
                 mapOf("id" to id)
             ) { rs, _ -> rs.toConversation(objectMapper) }
         } catch (_: EmptyResultDataAccessException) {
             null
         }
 
-    override fun findByIdAndHotelIdAndUserId(id: String, hotelId: String, userId: String): Conversation? =
+    override fun findById(id: String): Conversation? =
+        findByIdWithClause(id, lockForUpdate = false)
+
+    override fun findByIdForUpdate(id: String): Conversation? =
+        findByIdWithClause(id, lockForUpdate = true)
+
+    private fun findByIdAndScopeWithClause(id: String, hotelId: String, userId: String, lockForUpdate: Boolean): Conversation? =
         try {
             jdbcTemplate.queryForObject(
                 """
@@ -151,12 +185,14 @@ class AssistantConversationPersistenceRepository(
                     draft_version,
                     created_task_id,
                     confirmation_idempotency_key,
+                    row_version,
                     created_at,
                     updated_at
                 from assistant_conversation
                 where id = :id
                   and hotel_id = :hotelId
                   and user_id = :userId
+                ${if (lockForUpdate) "for update" else ""}
                 """.trimIndent(),
                 mapOf(
                     "id" to id,
@@ -167,6 +203,12 @@ class AssistantConversationPersistenceRepository(
         } catch (_: EmptyResultDataAccessException) {
             null
         }
+
+    override fun findByIdAndHotelIdAndUserId(id: String, hotelId: String, userId: String): Conversation? =
+        findByIdAndScopeWithClause(id, hotelId, userId, lockForUpdate = false)
+
+    override fun findByIdAndHotelIdAndUserIdForUpdate(id: String, hotelId: String, userId: String): Conversation? =
+        findByIdAndScopeWithClause(id, hotelId, userId, lockForUpdate = true)
 }
 
 @Repository
@@ -199,6 +241,37 @@ class AssistantTaskConfirmationPersistenceRepository(
                 mapOf(
                     "conversationId" to conversationId,
                     "idempotencyKey" to idempotencyKey
+                )
+            ) { rs, _ -> rs.toTaskConfirmationRecord(objectMapper) }
+        } catch (_: EmptyResultDataAccessException) {
+            null
+        }
+
+    override fun findByConversationIdAndDraftIdentity(
+        conversationId: String,
+        draftId: String,
+        draftVersion: Int
+    ): TaskConfirmationRecord? =
+        try {
+            jdbcTemplate.queryForObject(
+                """
+                select
+                    conversation_id,
+                    idempotency_key,
+                    created_task_id,
+                    draft_id,
+                    draft_version,
+                    preview_json,
+                    created_at
+                from assistant_task_confirmation
+                where conversation_id = :conversationId
+                  and draft_id = :draftId
+                  and draft_version = :draftVersion
+                """.trimIndent(),
+                mapOf(
+                    "conversationId" to conversationId,
+                    "draftId" to draftId,
+                    "draftVersion" to draftVersion
                 )
             ) { rs, _ -> rs.toTaskConfirmationRecord(objectMapper) }
         } catch (_: EmptyResultDataAccessException) {
@@ -268,6 +341,7 @@ private fun Conversation.toSqlParameters(objectMapper: ObjectMapper): MapSqlPara
         .addValue("draftVersion", draftVersion)
         .addValue("createdTaskId", createdTaskId)
         .addValue("confirmationIdempotencyKey", confirmationIdempotencyKey)
+        .addValue("rowVersion", rowVersion)
         .addValue("createdAt", Timestamp.from(createdAt))
         .addValue("updatedAt", Timestamp.from(updatedAt))
 
@@ -294,6 +368,7 @@ private fun ResultSet.toConversation(objectMapper: ObjectMapper): Conversation =
         draftVersion = getInt("draft_version"),
         createdTaskId = getString("created_task_id"),
         confirmationIdempotencyKey = getString("confirmation_idempotency_key"),
+        rowVersion = getLong("row_version"),
         createdAt = getTimestamp("created_at").toInstant(),
         updatedAt = getTimestamp("updated_at").toInstant()
     )

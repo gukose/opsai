@@ -2,6 +2,8 @@ package com.hotelopai.assistant.application
 
 import com.hotelopai.task.application.TaskPage
 import com.hotelopai.task.application.TaskPageRequest
+import com.hotelopai.observability.OperationalObservability
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -58,6 +60,69 @@ class AssistantConversationServiceTest {
     }
 
     @Test
+    fun `confirm with different idempotency key for same draft returns existing task`() {
+        val fixtures = createFixtures()
+        val conversation = fixtures.service.startConversation(UuidV7Generator.generate().toString(), "user-1").conversation
+
+        fixtures.service.sendMessage(
+            conversationId = conversation.id,
+            text = "Room 101 AC not working",
+            inputType = InputType.TEXT,
+            attachments = emptyList()
+        )
+
+        val first = fixtures.service.confirmTask(conversation.id, "confirm-1")
+        val second = fixtures.service.confirmTask(conversation.id, "confirm-2")
+
+        assertEquals(first.createdTaskId, second.createdTaskId)
+        assertEquals(1, fixtures.taskRepository.findAll().size)
+    }
+
+    @Test
+    fun `assistant message and confirmation outcomes record observability metrics`() {
+        val fixtures = createFixtures()
+        val conversation = fixtures.service.startConversation(UuidV7Generator.generate().toString(), "user-1").conversation
+
+        fixtures.service.sendMessage(
+            conversationId = conversation.id,
+            text = "Room 101 AC not working",
+            inputType = InputType.TEXT,
+            attachments = emptyList()
+        )
+
+        fixtures.service.confirmTask(conversation.id, "confirm-1")
+        fixtures.service.confirmTask(conversation.id, "confirm-1")
+
+        assertEquals(
+            1.0,
+            fixtures.counter(
+                "hotelopai.assistant.message.total",
+                "operation" to "send",
+                "outcome" to "preview"
+            )
+        )
+        assertEquals(
+            1.0,
+            fixtures.counter(
+                "hotelopai.assistant.confirmation.total",
+                "operation" to "confirm",
+                "outcome" to "success"
+            )
+        )
+        assertEquals(
+            1.0,
+            fixtures.counter(
+                "hotelopai.assistant.confirmation.total",
+                "operation" to "confirm",
+                "outcome" to "duplicate",
+                "reason_code" to "idempotency_reuse"
+            )
+        )
+        assertEquals(1, fixtures.timerCount("hotelopai.assistant.interpretation.duration"))
+        assertEquals(2, fixtures.timerCount("hotelopai.assistant.confirmation.duration"))
+    }
+
+    @Test
     fun `confirm before preview is rejected`() {
         val fixtures = createFixtures()
         val conversation = fixtures.service.startConversation(UuidV7Generator.generate().toString(), "user-1").conversation
@@ -95,26 +160,45 @@ class AssistantConversationServiceTest {
     ): Fixtures {
         val conversationRepository = InMemoryConversationRepository()
         val taskConfirmationRepository = InMemoryTaskConfirmationRepository()
+        val meterRegistry = SimpleMeterRegistry()
+        val observability = OperationalObservability(meterRegistry)
         val taskApplicationPort = TaskLifecycleService(taskRepository)
         val service = AssistantConversationService(
             conversationRepository = conversationRepository,
             stateMachine = ConversationStateMachine(),
             taskApplicationPort = taskApplicationPort,
-            taskConfirmationRepository = taskConfirmationRepository
+            taskConfirmationRepository = taskConfirmationRepository,
+            observability = observability
         )
 
         return Fixtures(
             service = service,
             conversationRepository = conversationRepository,
-            taskRepository = taskRepository
+            taskRepository = taskRepository,
+            taskConfirmationRepository = taskConfirmationRepository,
+            meterRegistry = meterRegistry
         )
     }
 
     private data class Fixtures(
         val service: AssistantConversationService,
         val conversationRepository: InMemoryConversationRepository,
-        val taskRepository: com.hotelopai.task.application.TaskRepository
-    )
+        val taskRepository: com.hotelopai.task.application.TaskRepository,
+        val taskConfirmationRepository: InMemoryTaskConfirmationRepository,
+        val meterRegistry: SimpleMeterRegistry
+    ) {
+        fun counter(name: String, vararg tags: Pair<String, String>): Double =
+            meterRegistry.find(name)
+                .tags(*tags.flatMap { listOf(it.first, it.second) }.toTypedArray())
+                .counter()
+                ?.count()
+                ?: 0.0
+
+        fun timerCount(name: String): Long =
+            meterRegistry.meters
+                .filter { it.id.name == name }
+                .sumOf { (it as? io.micrometer.core.instrument.Timer)?.count() ?: 0 }
+    }
 
     private class FailingTaskRepository : com.hotelopai.task.application.TaskRepository {
         override fun save(task: com.hotelopai.task.domain.Task): com.hotelopai.task.domain.Task {

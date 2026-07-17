@@ -4,6 +4,11 @@ import com.hotelopai.hotel.application.HotelRepository
 import com.hotelopai.hotel.domain.Hotel
 import com.hotelopai.notification.application.NotificationRepository
 import com.hotelopai.notification.domain.NotificationRecipient
+import com.hotelopai.outbox.application.OperationalOutboxProcessor
+import com.hotelopai.outbox.application.OperationalOutboxRepository
+import com.hotelopai.outbox.domain.OperationalOutboxAggregateTypes
+import com.hotelopai.outbox.domain.OperationalOutboxEventTypes
+import com.hotelopai.outbox.domain.OperationalOutboxStatus
 import com.hotelopai.shared.kernel.UuidV7Generator
 import com.hotelopai.support.PostgresIntegrationTestSupport
 import com.hotelopai.task.application.AssignmentCommand
@@ -32,8 +37,14 @@ class TaskNotificationIntegrationTest : PostgresIntegrationTestSupport() {
     @Autowired
     private lateinit var notificationRepository: NotificationRepository
 
+    @Autowired
+    private lateinit var outboxRepository: OperationalOutboxRepository
+
+    @Autowired
+    private lateinit var outboxProcessor: OperationalOutboxProcessor
+
     @Test
-    fun `creating a task creates exactly one persisted notification`() {
+    fun `creating a task enqueues one event and processor creates exactly one notification`() {
         val hotel = hotelRepository.save(
             Hotel(code = "task-notification-${UuidV7Generator.generate()}", name = "Task Notification Hotel")
         )
@@ -49,6 +60,21 @@ class TaskNotificationIntegrationTest : PostgresIntegrationTestSupport() {
             )
         )
 
+        assertThat(notificationRepository.countBySourceTaskId(created.id)).isEqualTo(0)
+        val event = outboxRepository.findByEventAggregate(
+            eventType = OperationalOutboxEventTypes.TASK_CREATED,
+            aggregateType = OperationalOutboxAggregateTypes.TASK,
+            aggregateId = created.id
+        ) ?: error("task-created outbox event missing")
+        assertThat(event.status).isEqualTo(OperationalOutboxStatus.PENDING)
+
+        assertThat(outboxProcessor.processBatch()).isGreaterThanOrEqualTo(1)
+
+        assertThat(notificationRepository.countBySourceTaskId(created.id)).isEqualTo(1)
+        assertThat(notificationRepository.countBySourceEventId(event.id)).isEqualTo(1)
+        assertThat(outboxRepository.findById(event.id)?.status).isEqualTo(OperationalOutboxStatus.COMPLETED)
+
+        outboxProcessor.processBatch()
         assertThat(notificationRepository.countBySourceTaskId(created.id)).isEqualTo(1)
     }
 
@@ -75,6 +101,14 @@ class TaskNotificationIntegrationTest : PostgresIntegrationTestSupport() {
             )
         )
 
+        val event = outboxRepository.findByEventAggregate(
+            eventType = OperationalOutboxEventTypes.TASK_CREATED,
+            aggregateType = OperationalOutboxAggregateTypes.TASK,
+            aggregateId = created.id
+        ) ?: error("task-created outbox event missing")
+        assertThat(notificationRepository.countBySourceTaskId(created.id)).isEqualTo(0)
+        assertThat(outboxProcessor.processBatch()).isGreaterThanOrEqualTo(1)
+
         val accessible = notificationRepository.findAccessible(
             hotelId = hotel.id,
             userId = assignedUserId,
@@ -85,6 +119,7 @@ class TaskNotificationIntegrationTest : PostgresIntegrationTestSupport() {
         assertThat(accessible).hasSize(1)
         val notification = accessible.single()
         assertThat(notification.sourceTaskId).isEqualTo(created.id)
+        assertThat(notification.sourceEventId).isEqualTo(event.id)
         assertThat(notification.recipient).isEqualTo(NotificationRecipient.User(assignedUserId))
     }
 }

@@ -12,5 +12,5 @@ class TaskOverdueService(
     fun markOverdueTasks(now: Instant = Instant.now()): List<String> =
         taskRepository.findAll()
             .filter { it.status != TaskStatus.OVERDUE && it.isOverdue(now) }
-            .map { taskLifecycleService.markOverdue(it.id.toString(), now).id.toString() }
+            .map { task -> taskLifecycleService.markOverdue(task.id.toString(), task.hotelId, now).id.toString() }
 }

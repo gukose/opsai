@@ -3,6 +3,7 @@ package com.hotelopai.api.dashboard
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.hotelopai.auth.application.PasswordHasher
+import com.hotelopai.auth.application.PermissionRepository
 import com.hotelopai.auth.application.RoleRepository
 import com.hotelopai.auth.application.UserRepository
 import com.hotelopai.auth.domain.EmailAddress
@@ -12,6 +13,7 @@ import com.hotelopai.auth.domain.UserStatus
 import com.hotelopai.hotel.application.HotelRepository
 import com.hotelopai.hotel.domain.Hotel
 import com.hotelopai.shared.kernel.UuidV7Generator
+import com.hotelopai.shared.security.PermissionCodes
 import com.hotelopai.support.PostgresIntegrationTestSupport
 import com.hotelopai.task.application.TaskRepository
 import com.hotelopai.task.domain.Task
@@ -19,6 +21,7 @@ import com.hotelopai.task.domain.TaskIntentType
 import com.hotelopai.task.domain.TaskPriority
 import com.hotelopai.task.domain.TaskSource
 import com.hotelopai.task.domain.TaskStatus
+import io.micrometer.core.instrument.MeterRegistry
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -52,6 +55,9 @@ class TaskReportingControllerIntegrationTest : PostgresIntegrationTestSupport() 
     private lateinit var hotelRepository: HotelRepository
 
     @Autowired
+    private lateinit var permissionRepository: PermissionRepository
+
+    @Autowired
     private lateinit var roleRepository: RoleRepository
 
     @Autowired
@@ -62,6 +68,9 @@ class TaskReportingControllerIntegrationTest : PostgresIntegrationTestSupport() 
 
     @Autowired
     private lateinit var taskRepository: TaskRepository
+
+    @Autowired
+    private lateinit var meterRegistry: MeterRegistry
 
     private val httpClient = HttpClient.newHttpClient()
     private val generatedAt = FIXED_NOW
@@ -95,6 +104,8 @@ class TaskReportingControllerIntegrationTest : PostgresIntegrationTestSupport() 
         assertThat(bucket(body.path("createdInRange").path("byStatus"), "CREATED")).isEqualTo(0)
         assertThat(bucket(body.path("createdInRange").path("byPriority"), "URGENT")).isEqualTo(0)
         assertThat(body.path("currentSnapshot").path("active").asLong()).isEqualTo(0)
+        assertThat(meterRegistry.find("hotelopai.dashboard.reporting.duration").timer()?.count() ?: 0)
+            .isGreaterThanOrEqualTo(1)
     }
 
     @Test
@@ -192,7 +203,8 @@ class TaskReportingControllerIntegrationTest : PostgresIntegrationTestSupport() 
             Role(
                 hotelId = hotel.id,
                 code = "ADMIN",
-                name = "Administrator"
+                name = "Administrator",
+                permissionIds = setOf(permissionId(PermissionCodes.REPORT_READ))
             )
         )
         val email = "report-${UuidV7Generator.generate()}@hotelopai.local"
@@ -245,6 +257,9 @@ class TaskReportingControllerIntegrationTest : PostgresIntegrationTestSupport() 
                 .build(),
             HttpResponse.BodyHandlers.ofString()
         )
+
+    private fun permissionId(code: String): UUID =
+        requireNotNull(permissionRepository.findByCode(code)) { "Missing permission: $code" }.id
 
     private fun json(value: String): JsonNode = objectMapper.readTree(value)
 

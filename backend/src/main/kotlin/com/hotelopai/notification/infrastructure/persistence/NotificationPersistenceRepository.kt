@@ -23,6 +23,15 @@ class NotificationPersistenceRepository(
     override fun findById(id: UUID): Notification? =
         notificationJpaRepository.findById(id).orElse(null)?.let(NotificationPersistenceMapper::toDomain)
 
+    override fun findBySourceEventId(sourceEventId: UUID): Notification? =
+        notificationJpaRepository.findBySourceEventId(sourceEventId)?.let(NotificationPersistenceMapper::toDomain)
+
+    override fun findTaskCreatedBySourceTaskId(sourceTaskId: UUID): Notification? =
+        notificationJpaRepository.findBySourceTaskIdAndType(
+            sourceTaskId,
+            com.hotelopai.notification.domain.NotificationType.TASK_CREATED
+        )?.let(NotificationPersistenceMapper::toDomain)
+
     override fun findAccessible(
         hotelId: UUID,
         userId: UUID,
@@ -36,4 +45,7 @@ class NotificationPersistenceRepository(
 
     override fun countBySourceTaskId(sourceTaskId: UUID): Long =
         notificationJpaRepository.countBySourceTaskId(sourceTaskId)
+
+    override fun countBySourceEventId(sourceEventId: UUID): Long =
+        notificationJpaRepository.countBySourceEventId(sourceEventId)
 }

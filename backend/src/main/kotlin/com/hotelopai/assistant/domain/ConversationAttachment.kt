@@ -29,6 +29,7 @@ data class RegisteredConversationAttachment(
     val heightPx: Int? = null,
     val storageStatus: AttachmentStorageStatus = AttachmentStorageStatus.REGISTERED,
     val storageReference: String? = null,
+    val registrationIdempotencyKey: String? = null,
     val createdAt: Instant,
     val updatedAt: Instant = createdAt
 ) {

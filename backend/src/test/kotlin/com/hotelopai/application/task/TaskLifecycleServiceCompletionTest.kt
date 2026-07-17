@@ -35,8 +35,8 @@ class TaskLifecycleServiceCompletionTest {
 
         val now = Instant.parse("2026-07-08T10:00:00Z")
         val task = service.createTask(newCreateCommand(now), now = now)
-        service.startTask(task.id.toString(), Instant.parse("2026-07-08T10:10:00Z"))
-        val completed = service.completeTask(task.id.toString(), Instant.parse("2026-07-08T10:30:00Z"))
+        service.startTask(task.id.toString(), task.hotelId, Instant.parse("2026-07-08T10:10:00Z"))
+        val completed = service.completeTask(task.id.toString(), task.hotelId, Instant.parse("2026-07-08T10:30:00Z"))
 
         assertEquals(TaskStatus.COMPLETED, completed.status)
         assertEquals(TaskTransition.COMPLETE, historyRepository.entries.last().operation)
@@ -62,10 +62,10 @@ class TaskLifecycleServiceCompletionTest {
 
         val now = Instant.parse("2026-07-08T10:00:00Z")
         val task = service.createTask(newCreateCommand(now), now = now)
-        service.startTask(task.id.toString(), Instant.parse("2026-07-08T10:10:00Z"))
+        service.startTask(task.id.toString(), task.hotelId, Instant.parse("2026-07-08T10:10:00Z"))
 
         assertThrows(TaskCompletionPolicyException::class.java) {
-            service.completeTask(task.id.toString(), Instant.parse("2026-07-08T10:30:00Z"))
+            service.completeTask(task.id.toString(), task.hotelId, Instant.parse("2026-07-08T10:30:00Z"))
         }
 
         assertEquals(TaskStatus.STARTED, taskRepository.findById(task.id)?.status)

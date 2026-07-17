@@ -38,5 +38,11 @@ interface NotificationJpaRepository : JpaRepository<NotificationJpaEntity, UUID>
         @Param("userId") userId: UUID
     ): List<NotificationJpaEntity>
 
+    fun findBySourceEventId(sourceEventId: UUID): NotificationJpaEntity?
+
+    fun findBySourceTaskIdAndType(sourceTaskId: UUID, type: com.hotelopai.notification.domain.NotificationType): NotificationJpaEntity?
+
     fun countBySourceTaskId(sourceTaskId: UUID): Long
+
+    fun countBySourceEventId(sourceEventId: UUID): Long
 }

@@ -8,6 +8,10 @@ interface NotificationRepository {
 
     fun findById(id: UUID): Notification?
 
+    fun findBySourceEventId(sourceEventId: UUID): Notification?
+
+    fun findTaskCreatedBySourceTaskId(sourceTaskId: UUID): Notification?
+
     fun findAccessible(
         hotelId: UUID,
         userId: UUID,
@@ -15,4 +19,6 @@ interface NotificationRepository {
     ): List<Notification>
 
     fun countBySourceTaskId(sourceTaskId: UUID): Long
+
+    fun countBySourceEventId(sourceEventId: UUID): Long
 }

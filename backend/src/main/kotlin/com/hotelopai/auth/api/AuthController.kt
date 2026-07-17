@@ -3,6 +3,7 @@ package com.hotelopai.auth.api
 import com.hotelopai.auth.application.AuthenticationApplicationService
 import com.hotelopai.auth.application.CurrentUserQuery
 import com.hotelopai.auth.application.LogoutCommand
+import com.hotelopai.shared.security.PermissionExpressions
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.security.access.prepost.PreAuthorize
@@ -28,7 +29,7 @@ class AuthController(
         AuthSessionResponse.from(authenticationApplicationService.refresh(request.toCommand()))
 
     @PostMapping("/logout")
-    @PreAuthorize("@permissionGuard.hasAnyPermission('AUTH_LOGIN') or isAuthenticated()")
+    @PreAuthorize("isAuthenticated()")
     fun logout(@AuthenticationPrincipal jwt: Jwt): Map<String, String> {
         authenticationApplicationService.logout(
             LogoutCommand(sessionId = claimUuid(jwt, "sid"))
@@ -37,7 +38,7 @@ class AuthController(
     }
 
     @GetMapping("/me")
-    @PreAuthorize("@permissionGuard.hasAnyPermission('AUTH_VIEW')")
+    @PreAuthorize(PermissionExpressions.AUTH_VIEW)
     fun me(@AuthenticationPrincipal jwt: Jwt): CurrentUserResponse =
         CurrentUserResponse.from(
             authenticationApplicationService.currentUser(

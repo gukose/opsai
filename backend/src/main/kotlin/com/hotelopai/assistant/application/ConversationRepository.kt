@@ -7,6 +7,14 @@ interface ConversationRepository {
 
     fun findById(id: String): Conversation?
 
+    fun findByIdForUpdate(id: String): Conversation? =
+        findById(id)
+
     fun findByIdAndHotelIdAndUserId(id: String, hotelId: String, userId: String): Conversation? =
         findById(id)?.takeIf { it.hotelId == hotelId && it.userId == userId }
+
+    fun findByIdAndHotelIdAndUserIdForUpdate(id: String, hotelId: String, userId: String): Conversation? =
+        findByIdAndHotelIdAndUserId(id, hotelId, userId)
 }
+
+class ConversationConcurrencyException(message: String) : RuntimeException(message)

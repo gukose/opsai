@@ -1,6 +1,7 @@
 package com.hotelopai.task.api
 
 import com.hotelopai.shared.security.CurrentUserContextResolver
+import com.hotelopai.shared.security.PermissionExpressions
 import com.hotelopai.task.application.TaskAssignmentFilter
 import com.hotelopai.task.application.TaskPageRequest
 import com.hotelopai.task.application.TaskSearchQuery
@@ -9,6 +10,7 @@ import com.hotelopai.task.application.TaskAttachmentLinkService
 import com.hotelopai.task.domain.TaskPriority
 import com.hotelopai.task.domain.TaskStatus
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -25,10 +27,14 @@ class TaskController(
     private val currentUserContextResolver: CurrentUserContextResolver
 ) {
     @PostMapping
-    fun createTask(@RequestBody request: CreateTaskRequest): TaskResponse =
-        TaskResponse.from(taskLifecycleService.createTask(request.toCommand()))
+    @PreAuthorize(PermissionExpressions.TASK_CREATE)
+    fun createTask(@RequestBody request: CreateTaskRequest): TaskResponse {
+        val currentUser = currentUserContextResolver.current()
+        return TaskResponse.from(taskLifecycleService.createTask(request.toCommand(currentUser.hotelId)))
+    }
 
     @GetMapping("/{taskId}")
+    @PreAuthorize(PermissionExpressions.TASK_READ)
     fun getTask(@PathVariable taskId: String): TaskResponse =
         TaskResponse.from(
             taskLifecycleService.getTaskForHotel(
@@ -38,6 +44,7 @@ class TaskController(
         )
 
     @GetMapping("/{taskId}/attachments")
+    @PreAuthorize(PermissionExpressions.TASK_ATTACHMENT_READ)
     fun getTaskAttachments(@PathVariable taskId: String): List<TaskAttachmentResponse> {
         val currentUser = currentUserContextResolver.current()
         return taskAttachmentLinkService
@@ -46,6 +53,7 @@ class TaskController(
     }
 
     @GetMapping
+    @PreAuthorize(PermissionExpressions.TASK_READ)
     fun listTasks(
         @RequestParam(required = false) q: String?,
         @RequestParam(required = false) status: String?,
@@ -93,35 +101,48 @@ class TaskController(
     }
 
     @PostMapping("/{taskId}/assign")
+    @PreAuthorize(PermissionExpressions.TASK_ASSIGN)
     fun assignTask(
         @PathVariable taskId: String,
         @RequestBody request: AssignTaskRequest
     ): TaskResponse =
-        TaskResponse.from(taskLifecycleService.assignTask(taskId, request.toCommand()))
+        TaskResponse.from(
+            taskLifecycleService.assignTask(
+                taskId = taskId,
+                hotelId = currentUserContextResolver.current().hotelId,
+                request = request.toCommand()
+            )
+        )
 
     @PostMapping("/{taskId}/start")
+    @PreAuthorize(PermissionExpressions.TASK_START)
     fun startTask(@PathVariable taskId: String): TaskResponse =
-        TaskResponse.from(taskLifecycleService.startTask(taskId))
+        TaskResponse.from(taskLifecycleService.startTask(taskId, currentUserContextResolver.current().hotelId))
 
     @PostMapping("/{taskId}/pause")
+    @PreAuthorize(PermissionExpressions.TASK_PAUSE)
     fun pauseTask(@PathVariable taskId: String): TaskResponse =
-        TaskResponse.from(taskLifecycleService.pauseTask(taskId))
+        TaskResponse.from(taskLifecycleService.pauseTask(taskId, currentUserContextResolver.current().hotelId))
 
     @PostMapping("/{taskId}/resume")
+    @PreAuthorize(PermissionExpressions.TASK_RESUME)
     fun resumeTask(@PathVariable taskId: String): TaskResponse =
-        TaskResponse.from(taskLifecycleService.resumeTask(taskId))
+        TaskResponse.from(taskLifecycleService.resumeTask(taskId, currentUserContextResolver.current().hotelId))
 
     @PostMapping("/{taskId}/complete")
+    @PreAuthorize(PermissionExpressions.TASK_COMPLETE)
     fun completeTask(@PathVariable taskId: String): TaskResponse =
-        TaskResponse.from(taskLifecycleService.completeTask(taskId))
+        TaskResponse.from(taskLifecycleService.completeTask(taskId, currentUserContextResolver.current().hotelId))
 
     @PostMapping("/{taskId}/cancel")
+    @PreAuthorize(PermissionExpressions.TASK_CANCEL)
     fun cancelTask(@PathVariable taskId: String): TaskResponse =
-        TaskResponse.from(taskLifecycleService.cancelTask(taskId))
+        TaskResponse.from(taskLifecycleService.cancelTask(taskId, currentUserContextResolver.current().hotelId))
 
     @PostMapping("/{taskId}/overdue")
+    @PreAuthorize(PermissionExpressions.TASK_MARK_OVERDUE)
     fun overdueTask(@PathVariable taskId: String): TaskResponse =
-        TaskResponse.from(taskLifecycleService.markOverdue(taskId))
+        TaskResponse.from(taskLifecycleService.markOverdue(taskId, currentUserContextResolver.current().hotelId))
 
     private fun parseSearchText(value: String?): String? {
         val trimmed = value?.trim()?.takeIf(String::isNotBlank) ?: return null

@@ -1,6 +1,7 @@
 package com.hotelopai.task.infrastructure.persistence
 
 import com.hotelopai.task.application.TaskLifecycleService
+import com.hotelopai.task.application.TaskNotFoundException
 import com.hotelopai.task.application.TaskRepository
 import com.hotelopai.task.domain.Task
 import com.hotelopai.task.domain.TaskIntentType
@@ -99,10 +100,10 @@ class TaskPersistenceRepositoryIntegrationTest : PostgresIntegrationTestSupport(
         assertEquals(TaskTransition.CREATE, taskStateHistoryJpaRepository.findAllByTaskIdOrderByCreatedAtAsc(created.id).first().operation)
         assertEquals(1, taskLogJpaRepository.countByTaskId(created.id))
 
-        taskLifecycleService.startTask(created.id.toString(), Instant.parse("2026-07-08T10:05:00Z"))
-        taskLifecycleService.pauseTask(created.id.toString(), Instant.parse("2026-07-08T10:10:00Z"))
-        taskLifecycleService.resumeTask(created.id.toString(), Instant.parse("2026-07-08T10:15:00Z"))
-        taskLifecycleService.completeTask(created.id.toString(), Instant.parse("2026-07-08T10:20:00Z"))
+        taskLifecycleService.startTask(created.id.toString(), created.hotelId, Instant.parse("2026-07-08T10:05:00Z"))
+        taskLifecycleService.pauseTask(created.id.toString(), created.hotelId, Instant.parse("2026-07-08T10:10:00Z"))
+        taskLifecycleService.resumeTask(created.id.toString(), created.hotelId, Instant.parse("2026-07-08T10:15:00Z"))
+        taskLifecycleService.completeTask(created.id.toString(), created.hotelId, Instant.parse("2026-07-08T10:20:00Z"))
 
         val history = taskStateHistoryJpaRepository.findAllByTaskIdOrderByCreatedAtAsc(created.id)
         assertThat(history.map { it.operation }).containsExactly(
@@ -134,14 +135,15 @@ class TaskPersistenceRepositoryIntegrationTest : PostgresIntegrationTestSupport(
                 now = Instant.parse("2026-07-08T10:00:00Z")
             )
 
-            taskLifecycleService.startTask(created.id.toString(), Instant.parse("2026-07-08T10:05:00Z"))
-            taskLifecycleService.completeTask(created.id.toString(), Instant.parse("2026-07-08T10:10:00Z"))
+            taskLifecycleService.startTask(created.id.toString(), created.hotelId, Instant.parse("2026-07-08T10:05:00Z"))
+            taskLifecycleService.completeTask(created.id.toString(), created.hotelId, Instant.parse("2026-07-08T10:10:00Z"))
             created.id
         }
 
         val failure = assertThrows(IllegalArgumentException::class.java) {
             inNewTransaction {
-                taskLifecycleService.startTask(createdTaskId.toString(), Instant.parse("2026-07-08T10:15:00Z"))
+                val created = taskRepository.findById(createdTaskId) ?: error("task not found")
+                taskLifecycleService.startTask(createdTaskId.toString(), created.hotelId, Instant.parse("2026-07-08T10:15:00Z"))
             }
         }
 
@@ -175,6 +177,35 @@ class TaskPersistenceRepositoryIntegrationTest : PostgresIntegrationTestSupport(
         assertEquals(historyBefore, taskStateHistoryJpaRepository.countByTaskId(overdueTask.id))
         assertEquals(logBefore, taskLogJpaRepository.countByTaskId(overdueTask.id))
         assertEquals(TaskTransition.CREATE, taskStateHistoryJpaRepository.findAllByTaskIdOrderByCreatedAtAsc(overdueTask.id).first().operation)
+    }
+
+    @Test
+    fun `hotel scoped lookup and mutation reject foreign hotel task ids`() {
+        val hotel = hotelRepository.save(Hotel(code = "task-hotel-scope-${UUID.randomUUID()}", name = "Task Scope Hotel"))
+        val otherHotel = hotelRepository.save(Hotel(code = "task-hotel-foreign-${UUID.randomUUID()}", name = "Task Foreign Hotel"))
+        val foreignTask = taskRepository.save(
+            Task.create(
+                hotelId = otherHotel.id,
+                intentType = TaskIntentType.MAINTENANCE,
+                source = TaskSource.MANUAL,
+                title = "Foreign scoped task",
+                description = "Foreign scoped task description",
+                priority = TaskPriority.HIGH,
+                slaDeadline = Instant.parse("2026-07-08T12:00:00Z"),
+                createdAt = Instant.parse("2026-07-08T10:00:00Z")
+            )
+        )
+        val historyBefore = taskStateHistoryJpaRepository.countByTaskId(foreignTask.id)
+        val logBefore = taskLogJpaRepository.countByTaskId(foreignTask.id)
+
+        assertThat(taskRepository.findByIdAndHotelId(foreignTask.id, hotel.id)).isNull()
+        assertThrows(TaskNotFoundException::class.java) {
+            taskLifecycleService.startTask(foreignTask.id.toString(), hotel.id, Instant.parse("2026-07-08T10:05:00Z"))
+        }
+
+        assertEquals(TaskStatus.CREATED, taskRepository.findById(foreignTask.id)?.status)
+        assertEquals(historyBefore, taskStateHistoryJpaRepository.countByTaskId(foreignTask.id))
+        assertEquals(logBefore, taskLogJpaRepository.countByTaskId(foreignTask.id))
     }
 
     @Test

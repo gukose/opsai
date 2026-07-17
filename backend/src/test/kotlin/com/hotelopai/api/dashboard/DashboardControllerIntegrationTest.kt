@@ -3,6 +3,7 @@ package com.hotelopai.api.dashboard
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.hotelopai.auth.application.PasswordHasher
+import com.hotelopai.auth.application.PermissionRepository
 import com.hotelopai.auth.application.RoleRepository
 import com.hotelopai.auth.application.UserRepository
 import com.hotelopai.auth.domain.EmailAddress
@@ -17,6 +18,7 @@ import com.hotelopai.notification.domain.NotificationRecipient
 import com.hotelopai.notification.domain.NotificationStatus
 import com.hotelopai.notification.domain.NotificationType
 import com.hotelopai.shared.kernel.UuidV7Generator
+import com.hotelopai.shared.security.PermissionCodes
 import com.hotelopai.support.PostgresIntegrationTestSupport
 import com.hotelopai.task.application.AssignmentCommand
 import com.hotelopai.task.application.CreateTaskCommand
@@ -27,6 +29,7 @@ import com.hotelopai.task.domain.TaskAssigneeType
 import com.hotelopai.task.domain.TaskIntentType
 import com.hotelopai.task.domain.TaskPriority
 import com.hotelopai.task.domain.TaskSource
+import io.micrometer.core.instrument.MeterRegistry
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -53,6 +56,9 @@ class DashboardControllerIntegrationTest : PostgresIntegrationTestSupport() {
     private lateinit var hotelRepository: HotelRepository
 
     @Autowired
+    private lateinit var permissionRepository: PermissionRepository
+
+    @Autowired
     private lateinit var roleRepository: RoleRepository
 
     @Autowired
@@ -69,6 +75,9 @@ class DashboardControllerIntegrationTest : PostgresIntegrationTestSupport() {
 
     @Autowired
     private lateinit var notificationRepository: NotificationRepository
+
+    @Autowired
+    private lateinit var meterRegistry: MeterRegistry
 
     private val httpClient = HttpClient.newHttpClient()
 
@@ -113,7 +122,7 @@ class DashboardControllerIntegrationTest : PostgresIntegrationTestSupport() {
                 )
             )
         )
-        taskLifecycleService.startTask(assignedUserTask.id.toString())
+        taskLifecycleService.startTask(assignedUserTask.id.toString(), assignedUserTask.hotelId)
         val completed = taskLifecycleService.createTask(
             command(
                 hotelId = login.hotelId,
@@ -121,8 +130,8 @@ class DashboardControllerIntegrationTest : PostgresIntegrationTestSupport() {
                 statusDeadline = Instant.now().plusSeconds(7200)
             )
         )
-        taskLifecycleService.startTask(completed.id.toString())
-        taskLifecycleService.completeTask(completed.id.toString())
+        taskLifecycleService.startTask(completed.id.toString(), completed.hotelId)
+        taskLifecycleService.completeTask(completed.id.toString(), completed.hotelId)
         taskLifecycleService.createTask(
             command(
                 hotelId = otherHotel.id,
@@ -146,6 +155,8 @@ class DashboardControllerIntegrationTest : PostgresIntegrationTestSupport() {
         assertThat(body.path("tasks").path("currentSnapshot").path("completionPercent").asInt()).isEqualTo(33)
         assertThat(body.path("workload").path("assignedToUser").asLong()).isEqualTo(1)
         assertThat(body.path("workload").path("unassigned").asLong()).isEqualTo(1)
+        assertThat(meterRegistry.find("hotelopai.dashboard.summary.duration").timer()?.count() ?: 0)
+            .isGreaterThanOrEqualTo(1)
     }
 
     @Test
@@ -201,8 +212,8 @@ class DashboardControllerIntegrationTest : PostgresIntegrationTestSupport() {
             )
         )
         Thread.sleep(1200)
-        taskLifecycleService.startTask(lateCompleted.id.toString())
-        taskLifecycleService.completeTask(lateCompleted.id.toString())
+        taskLifecycleService.startTask(lateCompleted.id.toString(), lateCompleted.hotelId)
+        taskLifecycleService.completeTask(lateCompleted.id.toString(), lateCompleted.hotelId)
 
         val response = get("/api/v1/dashboard/summary?range=7d", login.accessToken)
 
@@ -259,7 +270,8 @@ class DashboardControllerIntegrationTest : PostgresIntegrationTestSupport() {
             Role(
                 hotelId = hotel.id,
                 code = "ADMIN",
-                name = "Administrator"
+                name = "Administrator",
+                permissionIds = setOf(permissionId(PermissionCodes.DASHBOARD_READ))
             )
         )
         val email = "dashboard-${UuidV7Generator.generate()}@hotelopai.local"
@@ -309,6 +321,9 @@ class DashboardControllerIntegrationTest : PostgresIntegrationTestSupport() {
                 .build(),
             HttpResponse.BodyHandlers.ofString()
         )
+
+    private fun permissionId(code: String): UUID =
+        requireNotNull(permissionRepository.findByCode(code)) { "Missing permission: $code" }.id
 
     private fun json(value: String): JsonNode = objectMapper.readTree(value)
 

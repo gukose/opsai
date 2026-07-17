@@ -1,6 +1,7 @@
 package com.hotelopai.assistant.infrastructure.persistence
 
 import com.hotelopai.assistant.application.ConversationRepository
+import com.hotelopai.assistant.application.ConversationConcurrencyException
 import com.hotelopai.assistant.application.TaskConfirmationRecord
 import com.hotelopai.assistant.application.TaskConfirmationRepository
 import com.hotelopai.assistant.domain.AudioMetadata
@@ -22,6 +23,7 @@ import com.hotelopai.assistant.domain.VoiceTranscriptMetadata
 import com.hotelopai.assistant.domain.VoiceTranscriptSource
 import com.hotelopai.support.PostgresIntegrationTestSupport
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -118,8 +120,9 @@ class AssistantPersistenceRepositoryIntegrationTest : PostgresIntegrationTestSup
             updatedAt = Instant.parse("2026-07-10T10:01:00Z")
         )
 
-        conversationRepository.save(conversation)
+        val saved = conversationRepository.save(conversation)
 
+        assertThat(saved.rowVersion).isEqualTo(0)
         assertThat(conversationRepository.findById(conversation.id)).isEqualTo(conversation)
     }
 
@@ -145,10 +148,41 @@ class AssistantPersistenceRepositoryIntegrationTest : PostgresIntegrationTestSup
             updatedAt = Instant.parse("2026-07-10T10:05:00Z")
         )
 
-        conversationRepository.save(initial)
-        conversationRepository.save(updated)
+        val savedInitial = conversationRepository.save(initial)
+        val savedUpdated = conversationRepository.save(updated.copy(rowVersion = savedInitial.rowVersion))
 
-        assertThat(conversationRepository.findById(initial.id)).isEqualTo(updated)
+        assertThat(savedUpdated.rowVersion).isEqualTo(1)
+        assertThat(conversationRepository.findById(initial.id)).isEqualTo(savedUpdated)
+    }
+
+    @Test
+    fun `stale conversation save is rejected and successful save increments version`() {
+        val initial = conversationRepository.save(
+            Conversation(
+                id = "conversation-stale-1",
+                hotelId = "hotel-opai-demo",
+                userId = "user-1",
+                createdAt = Instant.parse("2026-07-10T10:00:00Z"),
+                updatedAt = Instant.parse("2026-07-10T10:00:00Z")
+            )
+        )
+        val firstUpdate = conversationRepository.save(
+            initial.copy(
+                state = ConversationState.WAITING_FOR_USER_ANSWER,
+                updatedAt = Instant.parse("2026-07-10T10:01:00Z")
+            )
+        )
+
+        assertThat(firstUpdate.rowVersion).isEqualTo(1)
+        assertThrows(ConversationConcurrencyException::class.java) {
+            conversationRepository.save(
+                initial.copy(
+                    state = ConversationState.RESET,
+                    updatedAt = Instant.parse("2026-07-10T10:02:00Z")
+                )
+            )
+        }
+        assertThat(conversationRepository.findById(initial.id)).isEqualTo(firstUpdate)
     }
 
     @Test
@@ -177,6 +211,13 @@ class AssistantPersistenceRepositoryIntegrationTest : PostgresIntegrationTestSup
             taskConfirmationRepository.findByConversationIdAndIdempotencyKey(
                 conversation.id,
                 "confirm-502"
+            )
+        ).isEqualTo(record)
+        assertThat(
+            taskConfirmationRepository.findByConversationIdAndDraftIdentity(
+                conversation.id,
+                "draft-502",
+                3
             )
         ).isEqualTo(record)
     }

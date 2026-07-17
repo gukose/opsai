@@ -28,6 +28,7 @@ object NotificationPersistenceMapper {
             title = notification.title
             body = notification.body
             sourceTaskId = notification.sourceTaskId
+            sourceEventId = notification.sourceEventId
             readAt = notification.readAt
             createdAt = notification.createdAt
             createdBy = notification.createdBy
@@ -46,6 +47,7 @@ object NotificationPersistenceMapper {
             title = entity.title,
             body = entity.body,
             sourceTaskId = entity.sourceTaskId,
+            sourceEventId = entity.sourceEventId,
             readAt = entity.readAt,
             version = entity.version ?: 0,
             createdAt = requireNotNull(entity.createdAt) { "notification createdAt is required" },

@@ -4,6 +4,7 @@ import com.hotelopai.auth.application.AccessTokenService
 import com.hotelopai.auth.application.AuthSessionPolicy
 import com.hotelopai.auth.application.PasswordHasher
 import com.hotelopai.auth.application.RefreshTokenCodec
+import com.hotelopai.observability.OperationalObservability
 import com.hotelopai.shared.error.ProblemDetailFactory
 import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.servlet.http.HttpServletRequest
@@ -101,8 +102,16 @@ class AuthSecurityConfiguration(
     }
 
     @Bean
-    fun authenticationEntryPoint(objectMapper: ObjectMapper): AuthenticationEntryPoint =
+    fun authenticationEntryPoint(
+        objectMapper: ObjectMapper,
+        observability: OperationalObservability
+    ): AuthenticationEntryPoint =
         AuthenticationEntryPoint { request: HttpServletRequest, response: HttpServletResponse, _: org.springframework.security.core.AuthenticationException ->
+            observability.incrementCounter(
+                "hotelopai.security.denial.total",
+                "status" to "401",
+                "endpoint_group" to observability.endpointGroup(request.requestURI)
+            )
             writeProblem(
                 request = request,
                 response = response,
@@ -114,8 +123,16 @@ class AuthSecurityConfiguration(
         }
 
     @Bean
-    fun accessDeniedHandler(objectMapper: ObjectMapper): AccessDeniedHandler =
+    fun accessDeniedHandler(
+        objectMapper: ObjectMapper,
+        observability: OperationalObservability
+    ): AccessDeniedHandler =
         AccessDeniedHandler { request: HttpServletRequest, response: HttpServletResponse, _: org.springframework.security.access.AccessDeniedException ->
+            observability.incrementCounter(
+                "hotelopai.security.denial.total",
+                "status" to "403",
+                "endpoint_group" to observability.endpointGroup(request.requestURI)
+            )
             writeProblem(
                 request = request,
                 response = response,

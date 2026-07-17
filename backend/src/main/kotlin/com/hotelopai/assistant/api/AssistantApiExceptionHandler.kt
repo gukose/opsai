@@ -1,5 +1,7 @@
 package com.hotelopai.assistant.api
 
+import com.hotelopai.assistant.application.AssistantAttachmentIdempotencyConflictException
+import com.hotelopai.assistant.application.ConversationConcurrencyException
 import com.hotelopai.assistant.application.ConversationNotFoundException
 import com.hotelopai.shared.error.ProblemDetailFactory
 import org.springframework.http.HttpStatus
@@ -17,6 +19,24 @@ class AssistantApiExceptionHandler {
             title = "Conversation not found",
             detail = exception.message ?: "Conversation not found",
             type = URI.create("https://hotelopai.com/problems/conversation-not-found")
+        )
+
+    @ExceptionHandler(ConversationConcurrencyException::class)
+    fun handleConcurrencyConflict(exception: ConversationConcurrencyException): ProblemDetail =
+        ProblemDetailFactory.create(
+            status = HttpStatus.CONFLICT,
+            title = "Assistant conversation conflict",
+            detail = exception.message ?: "Assistant conversation was modified by another request",
+            type = URI.create("https://hotelopai.com/problems/assistant-conversation-conflict")
+        )
+
+    @ExceptionHandler(AssistantAttachmentIdempotencyConflictException::class)
+    fun handleAttachmentIdempotencyConflict(exception: AssistantAttachmentIdempotencyConflictException): ProblemDetail =
+        ProblemDetailFactory.create(
+            status = HttpStatus.CONFLICT,
+            title = "Attachment registration conflict",
+            detail = exception.message ?: "Attachment registration idempotency conflict",
+            type = URI.create("https://hotelopai.com/problems/attachment-registration-conflict")
         )
 
     @ExceptionHandler(IllegalArgumentException::class, IllegalStateException::class)

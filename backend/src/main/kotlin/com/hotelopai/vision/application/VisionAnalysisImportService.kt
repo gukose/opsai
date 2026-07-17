@@ -9,6 +9,7 @@ import com.hotelopai.assistant.domain.AttachmentType
 import com.hotelopai.assistant.domain.ImageObservation
 import com.hotelopai.assistant.domain.ImageObservationSource
 import com.hotelopai.assistant.domain.InputType
+import com.hotelopai.observability.OperationalObservability
 import com.hotelopai.shared.kernel.UuidV7Generator
 import com.hotelopai.vision.domain.VisionAnalysis
 import com.hotelopai.vision.domain.VisionAnalysisImport
@@ -16,6 +17,7 @@ import com.hotelopai.vision.domain.VisionAnalysisImportStatus
 import com.hotelopai.vision.domain.VisionAnalysisStatus
 import com.hotelopai.vision.domain.VisionDetectedObservation
 import org.springframework.dao.DuplicateKeyException
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -28,10 +30,15 @@ class VisionAnalysisImportService(
     private val attachmentRepository: AssistantAttachmentRepository,
     private val visionAnalysisRepository: VisionAnalysisRepository,
     private val visionAnalysisImportRepository: VisionAnalysisImportRepository,
-    private val assistantConversationService: AssistantConversationService
+    private val assistantConversationService: AssistantConversationService,
+    private val observability: OperationalObservability = OperationalObservability.noop()
 ) {
     @Transactional
     fun importCompletedAnalysis(command: ImportVisionAnalysisCommand): ConversationTurnResult {
+        val timer = observability.startTimer()
+        var outcome = "failure"
+        var reasonCode = "operation_failed"
+        try {
         val conversation = conversationRepository.findByIdAndHotelIdAndUserId(
             id = command.conversationId,
             hotelId = command.hotelId,
@@ -44,7 +51,13 @@ class VisionAnalysisImportService(
         )
         if (existingImport != null) {
             return when (existingImport.status) {
-                VisionAnalysisImportStatus.COMPLETED -> ConversationTurnResult(conversation)
+                VisionAnalysisImportStatus.COMPLETED -> {
+                    outcome = "duplicate"
+                    reasonCode = "already_completed"
+                    recordImport(outcome, reasonCode)
+                    logger.info("event=vision_import operation=import outcome=duplicate reasonCode=already_completed")
+                    ConversationTurnResult(conversation)
+                }
                 VisionAnalysisImportStatus.PENDING -> throw VisionAnalysisImportConflictException("Vision analysis import is already in progress")
                 VisionAnalysisImportStatus.FAILED -> throw VisionAnalysisImportConflictException("Vision analysis import previously failed and requires explicit retry")
             }
@@ -90,6 +103,10 @@ class VisionAnalysisImportService(
                 analysisId = command.analysisId
             )
             if (duplicate?.status == VisionAnalysisImportStatus.COMPLETED) {
+                outcome = "duplicate"
+                reasonCode = "duplicate_key_completed"
+                recordImport(outcome, reasonCode)
+                logger.info("event=vision_import operation=import outcome=duplicate reasonCode=duplicate_key_completed")
                 return ConversationTurnResult(conversation)
             }
             throw VisionAnalysisImportConflictException("Vision analysis import is already in progress")
@@ -110,7 +127,39 @@ class VisionAnalysisImportService(
         }?.id ?: throw VisionAnalysisImportConflictException("Vision analysis import did not persist a conversation message")
 
         visionAnalysisImportRepository.save(importRecord.complete(messageId = messageId))
+        outcome = "success"
+        reasonCode = "none"
+        recordImport(outcome, reasonCode)
         return result
+        } catch (exception: ConversationNotFoundException) {
+            outcome = "not_found"
+            reasonCode = "conversation_not_found"
+            recordImport(outcome, reasonCode)
+            throw exception
+        } catch (exception: VisionAnalysisImportNotFoundException) {
+            outcome = "not_found"
+            reasonCode = "analysis_not_found"
+            recordImport(outcome, reasonCode)
+            throw exception
+        } catch (exception: VisionAnalysisImportConflictException) {
+            outcome = "conflict"
+            reasonCode = "import_conflict"
+            recordImport(outcome, reasonCode)
+            logger.warn("event=vision_import operation=import outcome=conflict reasonCode=import_conflict")
+            throw exception
+        } catch (exception: RuntimeException) {
+            recordImport(outcome, reasonCode)
+            logger.warn("event=vision_import operation=import outcome=failure reasonCode=operation_failed")
+            throw exception
+        } finally {
+            observability.stopTimer(
+                timer,
+                "hotelopai.vision.import.duration",
+                "operation" to "import",
+                "outcome" to outcome,
+                "reason_code" to reasonCode
+            )
+        }
     }
 
     private fun validateAnalysisScope(analysis: VisionAnalysis, command: ImportVisionAnalysisCommand) {
@@ -173,6 +222,19 @@ class VisionAnalysisImportService(
             .filter { it.isLetterOrDigit() || it == '-' || it == '_' || it == '.' }
             .take(120)
             .ifBlank { "unknown" }
+
+    private fun recordImport(outcome: String, reasonCode: String) {
+        observability.incrementCounter(
+            "hotelopai.vision.import.total",
+            "operation" to "import",
+            "outcome" to outcome,
+            "reason_code" to reasonCode
+        )
+    }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(VisionAnalysisImportService::class.java)
+    }
 }
 
 data class ImportVisionAnalysisCommand(

@@ -13,6 +13,8 @@ ops:
         secret: ${OPS_AI_AUTH_JWT_SECRET:hotel-opai-test-secret-hotel-opai-test-secret}
       seed:
         enabled: ${OPS_AI_AUTH_SEED_ENABLED:true}
+    outbox:
+      enabled: false
 
 assistant:
   ai:

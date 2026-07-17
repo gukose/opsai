@@ -5,8 +5,12 @@ import com.hotelopai.assistant.domain.ConversationAttachment
 import com.hotelopai.assistant.domain.AudioMetadata
 import com.hotelopai.assistant.domain.ImageObservation
 import com.hotelopai.assistant.domain.InputType
+import com.hotelopai.assistant.domain.TaskCreationCandidate
 import com.hotelopai.assistant.domain.VoiceTranscriptMetadata
+import com.hotelopai.assistant.domain.ConversationState
+import com.hotelopai.observability.OperationalObservability
 import com.hotelopai.task.application.TaskApplicationPort
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -18,8 +22,10 @@ class AssistantConversationService(
     private val stateMachine: ConversationStateMachine,
     private val taskApplicationPort: TaskApplicationPort,
     private val taskConfirmationRepository: TaskConfirmationRepository,
-    private val taskAttachmentLinker: ConfirmedTaskAttachmentLinker = NoOpConfirmedTaskAttachmentLinker
+    private val taskAttachmentLinker: ConfirmedTaskAttachmentLinker = NoOpConfirmedTaskAttachmentLinker,
+    private val observability: OperationalObservability = OperationalObservability.noop()
 ) {
+    @Transactional
     fun startConversation(
         hotelId: String,
         userId: String
@@ -30,9 +36,27 @@ class AssistantConversationService(
             userId = userId
         )
 
-        return ConversationTurnResult(conversationRepository.save(conversation))
+        return try {
+            ConversationTurnResult(conversationRepository.save(conversation)).also {
+                observability.incrementCounter(
+                    "hotelopai.assistant.conversation.total",
+                    "operation" to "start",
+                    "outcome" to "success"
+                )
+            }
+        } catch (exception: RuntimeException) {
+            observability.incrementCounter(
+                "hotelopai.assistant.conversation.total",
+                "operation" to "start",
+                "outcome" to "failure",
+                "reason_code" to "operation_failed"
+            )
+            logger.warn("event=assistant_conversation operation=start outcome=failure reasonCode=operation_failed")
+            throw exception
+        }
     }
 
+    @Transactional
     fun sendMessage(
         conversationId: String,
         text: String,
@@ -48,6 +72,7 @@ class AssistantConversationService(
         return handleMessage(getConversation(conversationId), text, inputType, voiceTranscript, voiceTranscriptMetadata, audioMetadata, attachments, imageObservations)
     }
 
+    @Transactional
     fun sendMessage(
         conversationId: String,
         hotelId: String,
@@ -76,23 +101,73 @@ class AssistantConversationService(
         attachments: List<ConversationAttachment>,
         imageObservations: List<ImageObservation>
     ): ConversationTurnResult {
-        val result = stateMachine.handleUserMessage(
-            conversation = conversation,
-            command = ConversationCommand(
-                messageId = newId("message"),
-                text = text,
-                inputType = inputType,
-                voiceTranscript = voiceTranscript,
-                voiceTranscriptMetadata = voiceTranscriptMetadata,
-                audioMetadata = audioMetadata,
-                attachments = attachments,
-                imageObservations = imageObservations
+        val timer = observability.startTimer()
+        var outcome = "failure"
+        var reasonCode = "operation_failed"
+        try {
+            val result = stateMachine.handleUserMessage(
+                conversation = conversation,
+                command = ConversationCommand(
+                    messageId = newId("message"),
+                    text = text,
+                    inputType = inputType,
+                    voiceTranscript = voiceTranscript,
+                    voiceTranscriptMetadata = voiceTranscriptMetadata,
+                    audioMetadata = audioMetadata,
+                    attachments = attachments,
+                    imageObservations = imageObservations
+                )
             )
-        )
 
-        return result.copy(
-            conversation = conversationRepository.save(result.conversation)
-        )
+            val saved = result.copy(
+                conversation = conversationRepository.save(result.conversation)
+            )
+            outcome = messageOutcome(saved.conversation)
+            reasonCode = "none"
+            observability.incrementCounter(
+                "hotelopai.assistant.message.total",
+                "operation" to "send",
+                "outcome" to outcome
+            )
+            return saved
+        } catch (exception: ConversationConcurrencyException) {
+            outcome = "concurrency_conflict"
+            reasonCode = "concurrency_conflict"
+            observability.incrementCounter(
+                "hotelopai.assistant.message.total",
+                "operation" to "send",
+                "outcome" to outcome,
+                "reason_code" to reasonCode
+            )
+            logger.warn("event=assistant_message operation=send outcome=concurrency_conflict reasonCode=concurrency_conflict")
+            throw exception
+        } catch (exception: IllegalArgumentException) {
+            reasonCode = "validation_failure"
+            observability.incrementCounter(
+                "hotelopai.assistant.message.total",
+                "operation" to "send",
+                "outcome" to outcome,
+                "reason_code" to reasonCode
+            )
+            throw exception
+        } catch (exception: RuntimeException) {
+            observability.incrementCounter(
+                "hotelopai.assistant.message.total",
+                "operation" to "send",
+                "outcome" to outcome,
+                "reason_code" to reasonCode
+            )
+            logger.warn("event=assistant_message operation=send outcome=failure reasonCode=operation_failed")
+            throw exception
+        } finally {
+            observability.stopTimer(
+                timer,
+                "hotelopai.assistant.interpretation.duration",
+                "operation" to "send",
+                "outcome" to outcome,
+                "reason_code" to reasonCode
+            )
+        }
     }
 
     @Transactional
@@ -100,7 +175,7 @@ class AssistantConversationService(
         conversationId: String,
         idempotencyKey: String
     ): ConversationTurnResult =
-        confirmTask(getConversation(conversationId), idempotencyKey)
+        confirmTask(getConversationForUpdate(conversationId), idempotencyKey)
 
     @Transactional
     fun confirmTask(
@@ -109,7 +184,7 @@ class AssistantConversationService(
         userId: String,
         idempotencyKey: String
     ): ConversationTurnResult {
-        val conversation = getConversation(conversationId, hotelId, userId)
+        val conversation = getConversationForUpdate(conversationId, hotelId, userId)
         return confirmTask(conversation, idempotencyKey)
     }
 
@@ -117,79 +192,172 @@ class AssistantConversationService(
         conversation: Conversation,
         idempotencyKey: String
     ): ConversationTurnResult {
-        require(idempotencyKey.isNotBlank()) { "idempotencyKey must not be blank" }
+        val timer = observability.startTimer()
+        var outcome = "failure"
+        var reasonCode = "operation_failed"
 
-        val existingConfirmation =
-            taskConfirmationRepository.findByConversationIdAndIdempotencyKey(conversation.id, idempotencyKey)
+        try {
+            require(idempotencyKey.isNotBlank()) { "idempotencyKey must not be blank" }
+            val existingConfirmation =
+                taskConfirmationRepository.findByConversationIdAndIdempotencyKey(conversation.id, idempotencyKey)
 
-        if (existingConfirmation != null) {
-            val confirmedConversation = if (
-                conversation.state == com.hotelopai.assistant.domain.ConversationState.TASK_CREATED &&
-                conversation.createdTaskId == existingConfirmation.createdTaskId &&
-                conversation.confirmationIdempotencyKey == idempotencyKey
-            ) {
-                conversation
-            } else {
-                conversation.taskCreated(
-                    taskId = existingConfirmation.createdTaskId,
-                    idempotencyKey = idempotencyKey
+            if (existingConfirmation != null) {
+                outcome = "duplicate"
+                reasonCode = "idempotency_reuse"
+                observability.incrementCounter(
+                    "hotelopai.assistant.confirmation.total",
+                    "operation" to "confirm",
+                    "outcome" to outcome,
+                    "reason_code" to reasonCode
                 )
+                logger.info("event=assistant_confirmation operation=confirm outcome=duplicate reasonCode=idempotency_reuse")
+                return existingConfirmationResult(conversation, existingConfirmation, idempotencyKey)
             }
 
-            val savedConversation = if (confirmedConversation === conversation) {
-                conversation
-            } else {
-                conversationRepository.save(confirmedConversation)
+            val candidate = conversation.createTaskCandidate(idempotencyKey)
+            taskConfirmationRepository.findByConversationIdAndDraftIdentity(
+                conversationId = conversation.id,
+                draftId = candidate.draftId,
+                draftVersion = candidate.draftVersion
+            )?.let { existingDraftConfirmation ->
+                outcome = "duplicate"
+                reasonCode = "draft_already_confirmed"
+                observability.incrementCounter(
+                    "hotelopai.assistant.confirmation.total",
+                    "operation" to "confirm",
+                    "outcome" to outcome,
+                    "reason_code" to reasonCode
+                )
+                logger.info("event=assistant_confirmation operation=confirm outcome=duplicate reasonCode=draft_already_confirmed")
+                return existingConfirmationResult(conversation, existingDraftConfirmation, idempotencyKey)
             }
 
+            require(conversation.state == ConversationState.WAITING_FOR_CONFIRMATION) {
+                "Conversation must be waiting for confirmation before task creation"
+            }
+
+            val createCommand = candidate.toCreateTaskCommand(
+                hotelId = conversation.hotelId,
+                now = Instant.now()
+            )
+
+            val createdTask = taskApplicationPort.createTask(createCommand)
+            val now = Instant.now()
+            taskAttachmentLinker.linkConfirmedTask(
+                conversation = conversation,
+                taskId = createdTask.id,
+                now = now
+            )
+
+            val confirmedConversation = conversation.taskCreated(
+                taskId = createdTask.id.toString(),
+                idempotencyKey = idempotencyKey,
+                now = now
+            )
+
+            taskConfirmationRepository.save(
+                TaskConfirmationRecord(
+                    conversationId = conversation.id,
+                    idempotencyKey = idempotencyKey,
+                    createdTaskId = createdTask.id.toString(),
+                    draftId = candidate.draftId,
+                    draftVersion = candidate.draftVersion,
+                    preview = candidate.preview
+                )
+            )
+
+            val savedConversation = conversationRepository.save(confirmedConversation)
+            outcome = "success"
+            reasonCode = "none"
+            observability.incrementCounter(
+                "hotelopai.assistant.confirmation.total",
+                "operation" to "confirm",
+                "outcome" to outcome
+            )
             return ConversationTurnResult(
                 conversation = savedConversation,
-                taskCreationCandidate = savedConversation.createTaskCandidate(idempotencyKey),
-                createdTaskId = existingConfirmation.createdTaskId
+                taskCreationCandidate = candidate,
+                createdTaskId = createdTask.id.toString()
+            )
+        } catch (exception: ConversationConcurrencyException) {
+            outcome = "conflict"
+            reasonCode = "concurrency_conflict"
+            observability.incrementCounter(
+                "hotelopai.assistant.confirmation.total",
+                "operation" to "confirm",
+                "outcome" to outcome,
+                "reason_code" to reasonCode
+            )
+            logger.warn("event=assistant_confirmation operation=confirm outcome=conflict reasonCode=concurrency_conflict")
+            throw exception
+        } catch (exception: IllegalArgumentException) {
+            outcome = "conflict"
+            reasonCode = "invalid_state"
+            observability.incrementCounter(
+                "hotelopai.assistant.confirmation.total",
+                "operation" to "confirm",
+                "outcome" to outcome,
+                "reason_code" to reasonCode
+            )
+            logger.warn("event=assistant_confirmation operation=confirm outcome=conflict reasonCode=invalid_state")
+            throw exception
+        } catch (exception: RuntimeException) {
+            observability.incrementCounter(
+                "hotelopai.assistant.confirmation.total",
+                "operation" to "confirm",
+                "outcome" to outcome,
+                "reason_code" to reasonCode
+            )
+            logger.warn("event=assistant_confirmation operation=confirm outcome=failure reasonCode=operation_failed")
+            throw exception
+        } finally {
+            observability.stopTimer(
+                timer,
+                "hotelopai.assistant.confirmation.duration",
+                "operation" to "confirm",
+                "outcome" to outcome,
+                "reason_code" to reasonCode
+            )
+        }
+    }
+
+    private fun existingConfirmationResult(
+        conversation: Conversation,
+        existingConfirmation: TaskConfirmationRecord,
+        requestedIdempotencyKey: String
+    ): ConversationTurnResult {
+        val confirmedConversation = if (
+            conversation.state == ConversationState.TASK_CREATED &&
+            conversation.createdTaskId == existingConfirmation.createdTaskId
+        ) {
+            conversation
+        } else {
+            conversation.taskCreated(
+                taskId = existingConfirmation.createdTaskId,
+                idempotencyKey = existingConfirmation.idempotencyKey
             )
         }
 
-        require(conversation.state == com.hotelopai.assistant.domain.ConversationState.WAITING_FOR_CONFIRMATION) {
-            "Conversation must be waiting for confirmation before task creation"
+        val savedConversation = if (confirmedConversation === conversation) {
+            conversation
+        } else {
+            conversationRepository.save(confirmedConversation)
         }
-
-        val candidate = conversation.createTaskCandidate(idempotencyKey)
-        val createCommand = candidate.toCreateTaskCommand(
-            hotelId = conversation.hotelId,
-            now = Instant.now()
-        )
-        val createdTask = taskApplicationPort.createTask(createCommand)
-        val now = Instant.now()
-        taskAttachmentLinker.linkConfirmedTask(
-            conversation = conversation,
-            taskId = createdTask.id,
-            now = now
-        )
-
-        val confirmedConversation = conversation.taskCreated(
-            taskId = createdTask.id.toString(),
-            idempotencyKey = idempotencyKey,
-            now = now
-        )
-
-        taskConfirmationRepository.save(
-            TaskConfirmationRecord(
-                conversationId = conversation.id,
-                idempotencyKey = idempotencyKey,
-                createdTaskId = createdTask.id.toString(),
-                draftId = candidate.draftId,
-                draftVersion = candidate.draftVersion,
-                preview = candidate.preview
-            )
-        )
 
         return ConversationTurnResult(
-            conversation = conversationRepository.save(confirmedConversation),
-            taskCreationCandidate = candidate,
-            createdTaskId = createdTask.id.toString()
+            conversation = savedConversation,
+            taskCreationCandidate = TaskCreationCandidate(
+                conversationId = existingConfirmation.conversationId,
+                draftId = existingConfirmation.draftId,
+                draftVersion = existingConfirmation.draftVersion,
+                preview = existingConfirmation.preview,
+                idempotencyKey = requestedIdempotencyKey
+            ),
+            createdTaskId = existingConfirmation.createdTaskId
         )
     }
 
+    @Transactional
     fun resetConversation(conversationId: String): ConversationTurnResult {
         val conversation = getConversation(conversationId)
         val result = stateMachine.reset(conversation)
@@ -199,6 +367,7 @@ class AssistantConversationService(
         )
     }
 
+    @Transactional
     fun resetConversation(conversationId: String, hotelId: String, userId: String): ConversationTurnResult {
         val conversation = getConversation(conversationId, hotelId, userId)
         val result = stateMachine.reset(conversation)
@@ -216,6 +385,14 @@ class AssistantConversationService(
         conversationRepository.findByIdAndHotelIdAndUserId(conversationId, hotelId, userId)
             ?: throw ConversationNotFoundException(conversationId)
 
+    private fun getConversationForUpdate(conversationId: String): Conversation =
+        conversationRepository.findByIdForUpdate(conversationId)
+            ?: throw ConversationNotFoundException(conversationId)
+
+    private fun getConversationForUpdate(conversationId: String, hotelId: String, userId: String): Conversation =
+        conversationRepository.findByIdAndHotelIdAndUserIdForUpdate(conversationId, hotelId, userId)
+            ?: throw ConversationNotFoundException(conversationId)
+
     private fun validateAttachments(attachments: List<ConversationAttachment>) {
         require(attachments.size <= 3) { "at most 3 attachments are allowed" }
         val ids = attachments.map { it.id }
@@ -229,4 +406,17 @@ class AssistantConversationService(
 
     private fun newId(prefix: String): String =
         "$prefix-${UUID.randomUUID()}"
+
+    private fun messageOutcome(conversation: Conversation): String =
+        when {
+            conversation.state == ConversationState.WAITING_FOR_CONFIRMATION && conversation.taskPreview != null -> "preview"
+            conversation.state == ConversationState.WAITING_FOR_USER_ANSWER ||
+                conversation.followUpQuestion != null ||
+                conversation.missingFields.isNotEmpty() -> "clarification"
+            else -> "completed"
+        }
+
+    companion object {
+        private val logger = LoggerFactory.getLogger(AssistantConversationService::class.java)
+    }
 }

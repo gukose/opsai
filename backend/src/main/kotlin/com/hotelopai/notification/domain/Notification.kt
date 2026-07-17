@@ -14,6 +14,7 @@ data class Notification(
     val title: String,
     val body: String,
     val sourceTaskId: UUID? = null,
+    val sourceEventId: UUID? = null,
     val readAt: Instant? = null,
     override val version: Long = 0,
     override val createdAt: Instant = Instant.now(),

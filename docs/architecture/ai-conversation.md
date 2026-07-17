@@ -103,9 +103,12 @@ The AI engine may read UniMock data through integration services. It must never 
 - All task creation goes through domain services.
 - Every AI response used for task creation must be schema-validated.
 - User confirmation is required before task creation unless the task type is explicitly configured as a flash task.
+- Confirmation is idempotent by key and guarded by draft identity: one `(conversationId, draftId, draftVersion)` can create at most one task.
+- Assistant conversation persistence uses row-version optimistic concurrency. Stale aggregate writes fail with a controlled conflict instead of overwriting newer messages, previews, imports, or task-created state.
 - PMS writes must be idempotent where possible.
 - Store enough logs to reconstruct why a task was created.
 - `REGISTERED` attachments are metadata identity only. They are not uploaded, stored, downloadable, provider-accessible, or analyzed by default.
+- Attachment registration may use an optional `Idempotency-Key`; identical scoped retries return the same registered metadata identity and same-key metadata mismatches fail with conflict.
 - `VISION_ANALYSIS` observations are advisory. LOW confidence cannot independently create a preview or task, and HIGH confidence still requires required-field validation, preview, and explicit confirmation.
 - No local URI, storage URL, base64, raw binary, provider secret, or raw provider payload may enter interpreter prompts.
 

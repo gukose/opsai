@@ -17,6 +17,7 @@ import com.hotelopai.employee.domain.Employee
 import com.hotelopai.employee.domain.Skill
 import com.hotelopai.hotel.application.HotelRepository
 import com.hotelopai.hotel.domain.Hotel
+import com.hotelopai.shared.security.PermissionCodes
 import com.hotelopai.shared.kernel.UuidV7Generator
 import org.springframework.boot.ApplicationRunner
 import org.springframework.context.annotation.Bean
@@ -193,9 +194,28 @@ class AuthSeedDataService(
         private const val ADMIN_EMPLOYEE_NUMBER = "EMP-ADMIN"
 
         private val AUTH_PERMISSION_SEEDS = listOf(
-            PermissionSeed("AUTH_LOGIN", "Login to Hotel OpAI"),
-            PermissionSeed("AUTH_MANAGE", "Manage authentication sessions"),
-            PermissionSeed("AUTH_VIEW", "View current user session")
+            PermissionSeed(PermissionCodes.AUTH_LOGIN, "Login to Hotel OpAI"),
+            PermissionSeed(PermissionCodes.AUTH_MANAGE, "Manage authentication sessions"),
+            PermissionSeed(PermissionCodes.AUTH_VIEW, "View current user session"),
+            PermissionSeed(PermissionCodes.TASK_READ, "Read hotel tasks"),
+            PermissionSeed(PermissionCodes.TASK_CREATE, "Create hotel tasks"),
+            PermissionSeed(PermissionCodes.TASK_ASSIGN, "Assign hotel tasks"),
+            PermissionSeed(PermissionCodes.TASK_START, "Start hotel tasks"),
+            PermissionSeed(PermissionCodes.TASK_PAUSE, "Pause hotel tasks"),
+            PermissionSeed(PermissionCodes.TASK_RESUME, "Resume hotel tasks"),
+            PermissionSeed(PermissionCodes.TASK_COMPLETE, "Complete hotel tasks"),
+            PermissionSeed(PermissionCodes.TASK_CANCEL, "Cancel hotel tasks"),
+            PermissionSeed(PermissionCodes.TASK_MARK_OVERDUE, "Mark hotel tasks overdue"),
+            PermissionSeed(PermissionCodes.TASK_ATTACHMENT_READ, "Read task attachments"),
+            PermissionSeed(PermissionCodes.ASSISTANT_USE, "Use assistant"),
+            PermissionSeed(PermissionCodes.ASSISTANT_CONFIRM_TASK, "Confirm assistant task"),
+            PermissionSeed(PermissionCodes.ASSISTANT_ATTACHMENT_REGISTER, "Register assistant attachment metadata"),
+            PermissionSeed(PermissionCodes.ASSISTANT_VISION_IMPORT, "Import assistant vision analysis"),
+            PermissionSeed(PermissionCodes.NOTIFICATION_READ, "Read notifications"),
+            PermissionSeed(PermissionCodes.NOTIFICATION_MARK_READ, "Mark notifications read"),
+            PermissionSeed(PermissionCodes.DASHBOARD_READ, "Read dashboard summary"),
+            PermissionSeed(PermissionCodes.REPORT_READ, "Read task reports"),
+            PermissionSeed(PermissionCodes.DEV_PMS_ACCESS, "Access local Dev PMS proxy")
         )
     }
 

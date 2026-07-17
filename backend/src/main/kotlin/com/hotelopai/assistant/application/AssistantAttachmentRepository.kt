@@ -12,4 +12,13 @@ interface AssistantAttachmentRepository {
         hotelId: String,
         userId: String
     ): RegisteredConversationAttachment?
+
+    fun findByRegistrationIdempotencyKey(
+        conversationId: String,
+        hotelId: String,
+        userId: String,
+        registrationIdempotencyKey: String
+    ): RegisteredConversationAttachment?
 }
+
+class AssistantAttachmentIdempotencyConflictException(message: String) : RuntimeException(message)

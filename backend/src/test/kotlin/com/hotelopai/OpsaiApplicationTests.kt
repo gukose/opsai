@@ -35,6 +35,6 @@ class OpsaiApplicationTests : PostgresIntegrationTestSupport() {
         )
 
         assertEquals(1, publicSchemaCount)
-        assertEquals(12L, publicFlywayHistoryCount)
+        assertEquals(16L, publicFlywayHistoryCount)
     }
 }
