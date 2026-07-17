@@ -28,6 +28,16 @@ jobs:
       - name: Run backend and UniMock tests
         run: ./gradlew :backend:test :unimock:test
 
+      - name: Upload backend test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-reports
+          path: |
+            backend/build/test-results/test/
+            backend/build/reports/tests/test/
+          if-no-files-found: warn
+
       - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
