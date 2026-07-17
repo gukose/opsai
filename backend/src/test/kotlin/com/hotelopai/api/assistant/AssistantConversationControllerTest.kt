@@ -17,6 +17,8 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -94,6 +96,56 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
         assertEquals(200, resetResponse.statusCode())
         assertContains(resetResponse.body(), """"state":"IDLE"""")
         assertContains(resetResponse.body(), """"taskPreview":null""")
+    }
+
+    @Test
+    fun `concurrent confirmation of same draft creates one task`() {
+        val login = login()
+        val conversationId = startConversation(login)
+        val message = post(
+            path = "/api/v1/assistant/conversations/$conversationId/messages",
+            body = """{"text":"Room 101 AC not working","inputType":"TEXT"}""",
+            bearerToken = login.accessToken
+        )
+        assertEquals(200, message.statusCode(), message.body())
+
+        val executor = Executors.newFixedThreadPool(2)
+        val futures = listOf("confirm-concurrent-1", "confirm-concurrent-2").map { key ->
+            executor.submit<HttpResponse<String>> {
+                post(
+                    path = "/api/v1/assistant/conversations/$conversationId/confirm",
+                    body = """{"idempotencyKey":"$key"}""",
+                    bearerToken = login.accessToken
+                )
+            }
+        }
+        executor.shutdown()
+        assertTrue(executor.awaitTermination(10, TimeUnit.SECONDS))
+
+        val responses = futures.map { it.get() }
+
+        responses.forEach { response ->
+            assertEquals(200, response.statusCode(), response.body())
+            assertContains(response.body(), """"state":"TASK_CREATED"""")
+        }
+        val createdTaskIds = responses.map { extractCreatedTaskId(it.body()) }.toSet()
+        assertThat(createdTaskIds).hasSize(1)
+        assertEquals(
+            1,
+            jdbcTemplate.queryForObject(
+                "select count(*) from assistant_task_confirmation where conversation_id = ?",
+                Int::class.java,
+                conversationId
+            )
+        )
+        assertEquals(
+            0,
+            jdbcTemplate.queryForObject(
+                "select count(*) from task_attachment_link where conversation_id = ?",
+                Int::class.java,
+                conversationId
+            )
+        )
     }
 
     @Test
@@ -262,6 +314,177 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
         assertEquals(login.userId, row["user_id"])
         assertEquals("REGISTERED", row["storage_status"])
         assertEquals(null, row["storage_reference"])
+    }
+
+    @Test
+    fun `attachment registration without idempotency header creates distinct registrations`() {
+        val login = login()
+        val conversationId = startConversation(login)
+        val body = registrationBody("IMAGE", "retry-free.jpg", "image/jpeg", 100, widthPx = 100, heightPx = 100)
+
+        val first = post(
+            path = "/api/v1/assistant/conversations/$conversationId/attachments",
+            body = body,
+            bearerToken = login.accessToken
+        )
+        val second = post(
+            path = "/api/v1/assistant/conversations/$conversationId/attachments",
+            body = body,
+            bearerToken = login.accessToken
+        )
+
+        assertEquals(200, first.statusCode(), first.body())
+        assertEquals(200, second.statusCode(), second.body())
+        assertThat(extractAttachmentId(first.body())).isNotEqualTo(extractAttachmentId(second.body()))
+    }
+
+    @Test
+    fun `attachment registration idempotency key returns existing attachment for identical metadata`() {
+        val login = login()
+        val conversationId = startConversation(login)
+        val body = registrationBody("IMAGE", "idempotent.jpg", "image/jpeg", 100, widthPx = 100, heightPx = 100)
+        val headers = mapOf("Idempotency-Key" to "attachment-key-1")
+
+        val first = post(
+            path = "/api/v1/assistant/conversations/$conversationId/attachments",
+            body = body,
+            bearerToken = login.accessToken,
+            headers = headers
+        )
+        val second = post(
+            path = "/api/v1/assistant/conversations/$conversationId/attachments",
+            body = body,
+            bearerToken = login.accessToken,
+            headers = headers
+        )
+
+        assertEquals(200, first.statusCode(), first.body())
+        assertEquals(200, second.statusCode(), second.body())
+        val attachmentId = extractAttachmentId(first.body())
+        assertEquals(attachmentId, extractAttachmentId(second.body()))
+        assertEquals(
+            1,
+            jdbcTemplate.queryForObject(
+                "select count(*) from assistant_attachment where conversation_id = ? and registration_idempotency_key = ?",
+                Int::class.java,
+                conversationId,
+                "attachment-key-1"
+            )
+        )
+    }
+
+    @Test
+    fun `concurrent attachment registration with same idempotency key creates one row`() {
+        val login = login()
+        val conversationId = startConversation(login)
+        val body = registrationBody("IMAGE", "concurrent.jpg", "image/jpeg", 100, widthPx = 100, heightPx = 100)
+        val executor = Executors.newFixedThreadPool(2)
+        val futures = (1..2).map {
+            executor.submit<HttpResponse<String>> {
+                post(
+                    path = "/api/v1/assistant/conversations/$conversationId/attachments",
+                    body = body,
+                    bearerToken = login.accessToken,
+                    headers = mapOf("Idempotency-Key" to "attachment-key-concurrent")
+                )
+            }
+        }
+        executor.shutdown()
+        assertTrue(executor.awaitTermination(10, TimeUnit.SECONDS))
+
+        val responses = futures.map { it.get() }
+
+        responses.forEach { assertEquals(200, it.statusCode(), it.body()) }
+        assertThat(responses.map { extractAttachmentId(it.body()) }.toSet()).hasSize(1)
+        assertEquals(
+            1,
+            jdbcTemplate.queryForObject(
+                "select count(*) from assistant_attachment where conversation_id = ? and registration_idempotency_key = ?",
+                Int::class.java,
+                conversationId,
+                "attachment-key-concurrent"
+            )
+        )
+    }
+
+    @Test
+    fun `attachment registration idempotency key rejects different metadata`() {
+        val login = login()
+        val conversationId = startConversation(login)
+        val headers = mapOf("Idempotency-Key" to "attachment-key-conflict")
+        val first = post(
+            path = "/api/v1/assistant/conversations/$conversationId/attachments",
+            body = registrationBody("IMAGE", "same-key.jpg", "image/jpeg", 100, widthPx = 100, heightPx = 100),
+            bearerToken = login.accessToken,
+            headers = headers
+        )
+        assertEquals(200, first.statusCode(), first.body())
+
+        listOf(
+            registrationBody("IMAGE", "different-name.jpg", "image/jpeg", 100, widthPx = 100, heightPx = 100),
+            registrationBody("IMAGE", "same-key.jpg", "image/png", 100, widthPx = 100, heightPx = 100),
+            registrationBody("IMAGE", "same-key.jpg", "image/jpeg", 101, widthPx = 100, heightPx = 100)
+        ).forEach { changedBody ->
+            val conflict = post(
+                path = "/api/v1/assistant/conversations/$conversationId/attachments",
+                body = changedBody,
+                bearerToken = login.accessToken,
+                headers = headers
+            )
+
+            assertEquals(409, conflict.statusCode(), conflict.body())
+            assertContains(conflict.body(), """"title":"Attachment registration conflict"""")
+        }
+    }
+
+    @Test
+    fun `attachment registration idempotency key is scoped by conversation user and hotel`() {
+        val login = login()
+        val conversationId = startConversation(login)
+        val otherConversationId = startConversation(login)
+        val crossUser = conversationRepository.save(
+            Conversation(
+                id = "conversation-idem-cross-user-${UuidV7Generator.generate()}",
+                hotelId = login.hotelId,
+                userId = "other-user"
+            )
+        )
+        val crossHotel = conversationRepository.save(
+            Conversation(
+                id = "conversation-idem-cross-hotel-${UuidV7Generator.generate()}",
+                hotelId = UuidV7Generator.generate().toString(),
+                userId = login.userId
+            )
+        )
+        val key = "attachment-key-scope"
+        val body = registrationBody("IMAGE", "scoped.jpg", "image/jpeg", 100, widthPx = 100, heightPx = 100)
+
+        val first = post(
+            path = "/api/v1/assistant/conversations/$conversationId/attachments",
+            body = body,
+            bearerToken = login.accessToken,
+            headers = mapOf("Idempotency-Key" to key)
+        )
+        val sameUserOtherConversation = post(
+            path = "/api/v1/assistant/conversations/$otherConversationId/attachments",
+            body = body,
+            bearerToken = login.accessToken,
+            headers = mapOf("Idempotency-Key" to key)
+        )
+
+        assertEquals(200, first.statusCode(), first.body())
+        assertEquals(200, sameUserOtherConversation.statusCode(), sameUserOtherConversation.body())
+        assertThat(extractAttachmentId(first.body())).isNotEqualTo(extractAttachmentId(sameUserOtherConversation.body()))
+
+        listOf(crossUser.id, crossHotel.id).forEach { inaccessibleConversationId ->
+            val inaccessible = post(
+                path = "/api/v1/assistant/conversations/$inaccessibleConversationId/attachments",
+                body = body,
+                bearerToken = login.accessToken,
+                headers = mapOf("Idempotency-Key" to key)
+            )
+            assertEquals(404, inaccessible.statusCode(), inaccessible.body())
+        }
     }
 
     @Test
@@ -614,7 +837,8 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
     private fun post(
         path: String,
         body: String,
-        bearerToken: String? = null
+        bearerToken: String? = null,
+        headers: Map<String, String> = emptyMap()
     ): HttpResponse<String> {
         val requestBuilder = HttpRequest.newBuilder()
             .uri(URI.create("http://localhost:$port$path"))
@@ -623,6 +847,7 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
         if (bearerToken != null) {
             requestBuilder.header("Authorization", "Bearer $bearerToken")
         }
+        headers.forEach { (name, value) -> requestBuilder.header(name, value) }
 
         return httpClient.send(
             requestBuilder.build(),
