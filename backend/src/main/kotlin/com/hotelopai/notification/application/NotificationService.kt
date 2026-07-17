@@ -4,6 +4,7 @@ import com.hotelopai.notification.domain.Notification
 import com.hotelopai.notification.domain.NotificationRecipient
 import com.hotelopai.notification.domain.NotificationType
 import com.hotelopai.observability.OperationalObservability
+import com.hotelopai.shared.kernel.toPersistencePrecision
 import com.hotelopai.shared.security.CurrentUserContext
 import com.hotelopai.task.domain.Task
 import com.hotelopai.task.domain.TaskAssigneeType
@@ -107,7 +108,7 @@ class NotificationService(
 
             return notificationRepository.save(
                 notification.markRead(
-                    now = now,
+                    now = now.toPersistencePrecision(),
                     updatedBy = currentUser.userId.toString()
                 )
             ).also {

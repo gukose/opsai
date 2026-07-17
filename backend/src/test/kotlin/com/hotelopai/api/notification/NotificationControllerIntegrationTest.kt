@@ -142,6 +142,7 @@ class NotificationControllerIntegrationTest : PostgresIntegrationTestSupport() {
         val firstReadAt = Instant.parse(firstBody.path("readAt").asText())
         val secondReadAt = Instant.parse(secondBody.path("readAt").asText())
         assertThat(secondReadAt).isEqualTo(firstReadAt)
+        assertThat(firstReadAt.nano % 1_000).isZero()
         assertThat(persistedAfterFirst.status).isEqualTo(NotificationStatus.READ)
         assertThat(persistedAfterFirst.readAt).isEqualTo(firstReadAt)
         assertThat(persistedAfterSecond.status).isEqualTo(NotificationStatus.READ)

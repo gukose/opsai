@@ -19,6 +19,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 import java.math.BigDecimal
+import java.time.Instant
 import java.util.UUID
 
 @SpringBootTest
@@ -68,6 +69,9 @@ class VisionAnalysisServiceIntegrationTest : PostgresIntegrationTestSupport() {
         assertThat(analysis.providerMetadata).containsKey("fixtureKey")
         assertThat(analysis.providerMetadata.keys).doesNotContain("apiKey", "providerSecret", "rawPayload", "storageReference")
         assertThat(analysis.completedAt).isNotNull()
+        assertPersistencePrecision(analysis.completedAt)
+        assertPersistencePrecision(analysis.requestedAt)
+        assertPersistencePrecision(analysis.updatedAt)
         assertThat(analysis.failedAt).isNull()
         assertThat(taskCount()).isEqualTo(beforeTaskCount)
         assertThat(conversationRepository.findById(scope.conversationId)).isEqualTo(beforeConversation)
@@ -202,6 +206,9 @@ class VisionAnalysisServiceIntegrationTest : PostgresIntegrationTestSupport() {
         val second = visionAnalysisService.analyze(request)
 
         assertThat(second).isEqualTo(first)
+        assertPersistencePrecision(first.completedAt)
+        assertPersistencePrecision(first.requestedAt)
+        assertPersistencePrecision(first.updatedAt)
         assertThat(
             jdbcTemplate.queryForObject(
                 "select count(*) from vision_analysis where idempotency_key = 'idem-duplicate'",
@@ -226,6 +233,9 @@ class VisionAnalysisServiceIntegrationTest : PostgresIntegrationTestSupport() {
         assertThat(failed.status).isEqualTo(VisionAnalysisStatus.FAILED)
         assertThat(failed.failureCode).isEqualTo("PROVIDER_FAILURE")
         assertThat(failed.failedAt).isNotNull()
+        assertPersistencePrecision(failed.failedAt)
+        assertPersistencePrecision(failed.requestedAt)
+        assertPersistencePrecision(failed.updatedAt)
 
         val duplicateFailed = visionAnalysisService.analyze(failingRequest)
         assertThat(duplicateFailed).isEqualTo(failed)
@@ -247,6 +257,9 @@ class VisionAnalysisServiceIntegrationTest : PostgresIntegrationTestSupport() {
         assertThat(retried.status).isEqualTo(VisionAnalysisStatus.COMPLETED)
         assertThat(retried.attemptCount).isEqualTo(2)
         assertThat(retried.detectedLocationHint).isEqualTo("window")
+        assertPersistencePrecision(retried.completedAt)
+        assertPersistencePrecision(retried.requestedAt)
+        assertPersistencePrecision(retried.updatedAt)
         assertThat(
             counter(
                 "hotelopai.vision.analysis.total",
@@ -347,6 +360,11 @@ class VisionAnalysisServiceIntegrationTest : PostgresIntegrationTestSupport() {
             .counter()
             ?.count()
             ?: 0.0
+
+    private fun assertPersistencePrecision(instant: Instant?) {
+        assertThat(instant).isNotNull()
+        assertThat(requireNotNull(instant).nano % 1_000).isZero()
+    }
 
     private data class Scope(
         val conversationId: String,
