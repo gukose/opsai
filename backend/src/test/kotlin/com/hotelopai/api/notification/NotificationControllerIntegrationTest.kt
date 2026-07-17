@@ -7,6 +7,7 @@ import com.hotelopai.hotel.domain.Hotel
 import com.hotelopai.notification.application.NotificationRepository
 import com.hotelopai.notification.domain.Notification
 import com.hotelopai.notification.domain.NotificationRecipient
+import com.hotelopai.notification.domain.NotificationStatus
 import com.hotelopai.notification.domain.NotificationType
 import com.hotelopai.shared.kernel.UuidV7Generator
 import com.hotelopai.support.PostgresIntegrationTestSupport
@@ -16,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 import java.net.URI
 import java.net.http.HttpClient
@@ -38,6 +40,9 @@ class NotificationControllerIntegrationTest : PostgresIntegrationTestSupport() {
 
     @Autowired
     private lateinit var notificationRepository: NotificationRepository
+
+    @Autowired
+    private lateinit var jdbcTemplate: JdbcTemplate
 
     private val httpClient = HttpClient.newHttpClient()
 
@@ -105,16 +110,28 @@ class NotificationControllerIntegrationTest : PostgresIntegrationTestSupport() {
     @Test
     fun `mark read is idempotent for accessible notification`() {
         val login = login()
+        val title = "Readable notification ${UuidV7Generator.generate()}"
         val notification = notificationRepository.save(
             notification(
                 hotelId = login.hotelId,
                 recipient = NotificationRecipient.User(login.userId),
-                title = "Readable notification"
+                title = title
+            )
+        )
+        val unrelated = notificationRepository.save(
+            notification(
+                hotelId = login.hotelId,
+                recipient = NotificationRecipient.User(login.userId),
+                title = "Unrelated readable notification ${UuidV7Generator.generate()}"
             )
         )
 
         val first = post("/api/v1/notifications/${notification.id}/read", "", login.accessToken)
+        val persistedAfterFirst = notificationRepository.findById(notification.id)
+            ?: error("notification should exist after first mark-read")
         val second = post("/api/v1/notifications/${notification.id}/read", "", login.accessToken)
+        val persistedAfterSecond = notificationRepository.findById(notification.id)
+            ?: error("notification should exist after second mark-read")
 
         assertThat(first.statusCode()).isEqualTo(200)
         assertThat(second.statusCode()).isEqualTo(200)
@@ -122,7 +139,21 @@ class NotificationControllerIntegrationTest : PostgresIntegrationTestSupport() {
         val secondBody = json(second.body())
         assertThat(firstBody.path("status").asText()).isEqualTo("READ")
         assertThat(secondBody.path("status").asText()).isEqualTo("READ")
-        assertThat(firstBody.path("readAt").asText()).isEqualTo(secondBody.path("readAt").asText())
+        val firstReadAt = Instant.parse(firstBody.path("readAt").asText())
+        val secondReadAt = Instant.parse(secondBody.path("readAt").asText())
+        assertThat(secondReadAt).isEqualTo(firstReadAt)
+        assertThat(persistedAfterFirst.status).isEqualTo(NotificationStatus.READ)
+        assertThat(persistedAfterFirst.readAt).isEqualTo(firstReadAt)
+        assertThat(persistedAfterSecond.status).isEqualTo(NotificationStatus.READ)
+        assertThat(persistedAfterSecond.readAt).isEqualTo(firstReadAt)
+        assertThat(notificationRepository.findById(unrelated.id)?.status).isEqualTo(NotificationStatus.UNREAD)
+        assertThat(
+            jdbcTemplate.queryForObject(
+                "select count(*) from notifications where id = ?",
+                Long::class.java,
+                notification.id
+            )
+        ).isEqualTo(1L)
     }
 
     @Test
