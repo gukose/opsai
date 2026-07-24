@@ -8,6 +8,7 @@ import com.hotelopai.auth.domain.Permission
 import com.hotelopai.auth.domain.RefreshSession
 import com.hotelopai.auth.domain.Role
 import com.hotelopai.auth.domain.User
+import com.hotelopai.shared.kernel.PersistenceInstant
 import org.springframework.stereotype.Repository
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -88,12 +89,12 @@ class JpaRefreshSessionRepositoryAdapter(
                     deviceName = refreshSession.deviceName
                     ipAddress = refreshSession.ipAddress
                     userAgent = refreshSession.userAgent
-                    expiresAt = refreshSession.expiresAt
-                    revokedAt = refreshSession.revokedAt
-                    lastUsedAt = refreshSession.lastUsedAt
-                    createdAt = refreshSession.createdAt
+                    expiresAt = PersistenceInstant.toPersistencePrecision(refreshSession.expiresAt)
+                    revokedAt = PersistenceInstant.toPersistencePrecisionOrNull(refreshSession.revokedAt)
+                    lastUsedAt = PersistenceInstant.toPersistencePrecisionOrNull(refreshSession.lastUsedAt)
+                    createdAt = PersistenceInstant.toPersistencePrecision(refreshSession.createdAt)
                     createdBy = refreshSession.createdBy
-                    updatedAt = refreshSession.updatedAt
+                    updatedAt = PersistenceInstant.toPersistencePrecision(refreshSession.updatedAt)
                     updatedBy = refreshSession.updatedBy
                 } ?: RefreshSessionPersistenceMapper.toEntity(refreshSession)
             )

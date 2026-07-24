@@ -3,6 +3,7 @@ package com.hotelopai.vision.infrastructure.persistence
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.hotelopai.shared.kernel.PersistenceInstant
 import com.hotelopai.vision.application.VisionAnalysisRepository
 import com.hotelopai.vision.domain.VisionAnalysis
 import com.hotelopai.vision.domain.VisionAnalysisStatus
@@ -25,6 +26,7 @@ class VisionAnalysisPersistenceRepository(
     private val objectMapper = objectMapper.copy().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
     override fun save(analysis: VisionAnalysis): VisionAnalysis {
+        val normalized = analysis.normalizedForPersistence()
         jdbcTemplate.update(
             """
             insert into vision_analysis (
@@ -94,10 +96,10 @@ class VisionAnalysisPersistenceRepository(
                 failed_at = excluded.failed_at,
                 updated_at = excluded.updated_at
             """.trimIndent(),
-            analysis.toSqlParameters(objectMapper)
+            normalized.toSqlParameters(objectMapper)
         )
 
-        return analysis
+        return normalized
     }
 
     @Transactional(readOnly = true)
@@ -201,6 +203,15 @@ private fun VisionAnalysis.toSqlParameters(objectMapper: ObjectMapper): MapSqlPa
         .addValue("failedAt", failedAt?.let(Timestamp::from))
         .addValue("createdAt", Timestamp.from(createdAt))
         .addValue("updatedAt", Timestamp.from(updatedAt))
+
+private fun VisionAnalysis.normalizedForPersistence(): VisionAnalysis =
+    copy(
+        requestedAt = PersistenceInstant.toPersistencePrecision(requestedAt),
+        completedAt = PersistenceInstant.toPersistencePrecisionOrNull(completedAt),
+        failedAt = PersistenceInstant.toPersistencePrecisionOrNull(failedAt),
+        createdAt = PersistenceInstant.toPersistencePrecision(createdAt),
+        updatedAt = PersistenceInstant.toPersistencePrecision(updatedAt)
+    )
 
 private fun ResultSet.toVisionAnalysis(objectMapper: ObjectMapper): VisionAnalysis =
     VisionAnalysis(

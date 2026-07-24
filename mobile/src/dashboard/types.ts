@@ -81,7 +81,7 @@ export function dashboardSummaryFromResponse(response: DashboardSummaryDto): Das
       title: notification.title,
       body: notification.body,
       createdAt: notification.createdAt,
-      sourceTaskId: notification.sourceTaskId
+      sourceTaskId: notification.sourceTaskId ?? null
     }))
   };
 }

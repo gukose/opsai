@@ -18,6 +18,8 @@ Required feature roots include:
 - `hotel`
 - `employee`
 - `integration`
+- `pms`
+- `reservation`
 - `shared`
 - `common`
 - `config`
@@ -25,3 +27,8 @@ Required feature roots include:
 Keep the handbook and implementation aligned. If the code diverges, the code
 must be moved back to the handbook layout rather than duplicating a second
 package strategy in the docs.
+
+The `reservation` feature root owns the canonical reservation aggregate,
+provider-neutral PMS mapping boundary, durable snapshot repository, explicit
+on-demand synchronization service, and reservation sync state. Provider DTOs
+remain under `integration/*` and PMS-facing models remain under `pms`.

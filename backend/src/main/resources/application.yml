@@ -28,14 +28,121 @@ ops:
         refresh-token-ttl: P30D
       seed:
         enabled: false
+    scheduler:
+      enabled: true
+      instance-id: backend
+      default-lock-timeout: PT10M
+      shutdown-timeout: PT30S
+      lease-renewal-enabled: true
+      lease-renewal-interval: PT1M
+      lease-renewal-safety-margin: PT30S
+    pms:
+      active-provider: internal-demo
+      providers:
+        internal-demo:
+          enabled: true
+          display-name: Internal Demo PMS
+          authentication:
+            mode: NONE
+          request-timeout: PT5S
+        apaleo:
+          enabled: false
+          display-name: Apaleo Sandbox PMS
+          endpoint: https://api.apaleo.com
+          production-approved: false
+          allowed-profiles:
+            - apaleo-sandbox
+            - local
+            - test
+          authentication:
+            mode: OAUTH2_CLIENT_CREDENTIALS
+            oauth2-client-credentials:
+              token-url: https://identity.apaleo.com/connect/token
+              client-id-reference: env:APALEO_CLIENT_ID
+              client-secret-reference: env:APALEO_CLIENT_SECRET
+              scopes:
+                - properties.read
+                - units.read
+                - reservations.read
+          request-timeout: PT5S
+          settings:
+            max-pages: "2"
+            page-size: "100"
+            health-check-timeout: PT2S
+            retry-max-attempts: "2"
+            retry-initial-backoff: PT0.1S
+            retry-max-backoff: PT1S
+            max-rate-limit-delay: PT2S
+            circuit-failure-threshold: "3"
+            circuit-open-duration: PT30S
+            circuit-half-open-max-attempts: "1"
+            token-expiry-safety-window: PT60S
+            webhook-token-reference: env:APALEO_WEBHOOK_TOKEN
+    task:
+      overdue:
+        enabled: true
+        lock-timeout: PT10M
+      overdue-check-interval-ms: 300000
+    reservation:
+      webhooks:
+        enabled: false
+        processing-enabled: false
+        max-request-bytes: 65536
+        timestamp-tolerance: PT10M
+        batch-size: 10
+        max-attempts: 3
+        initial-backoff: PT1M
+        max-backoff: PT15M
+        abandoned-processing-timeout: PT15M
+        completed-retention: P30D
+        rejected-retention: P7D
+        cleanup-batch-size: 100
+        schedule:
+          enabled: false
+          execution-interval: PT1M
+          startup-delay: PT2M
+          batch-size: 10
+          max-records-per-execution: 10
+          lock-timeout: PT5M
+          allowed-profiles: []
+          retention-cleanup-enabled: false
+          cleanup-max-records: 100
+          dead-letter-retention: P90D
+          cleanup-lock-timeout: PT5M
+      sync:
+        operations:
+          enabled-automatic-triggers: false
+          max-window: P31D
+          history-retention: P180D
+          lock-ttl: PT15M
+          max-page-size: 100
+        schedule:
+          enabled: false
+          property-scope: configured
+          window-strategy: LOOKBACK_LOOKAHEAD
+          lookback-days: 1
+          lookahead-days: 14
+          timezone: UTC
+          execution-interval: PT30M
+          startup-delay: PT2M
+          max-runs-per-execution: 1
+          stale-run-recovery-threshold: PT30M
+          lock-timeout: PT10M
+          allowed-profiles: []
+          retention-cleanup-enabled: false
+          retention-cleanup-max-runs: 100
     outbox:
       enabled: true
       poll-interval: PT5S
       batch-size: 25
       max-attempts: 5
       initial-retry-delay: PT10S
+      retry-multiplier: 2.0
       max-retry-delay: PT5M
       lock-timeout: PT5M
+      completed-retention: P14D
+      failed-retention: P30D
+      cleanup-batch-size: 100
       processor-id: backend
 
 assistant:
@@ -73,3 +180,15 @@ management:
 logging:
   level:
     root: INFO
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    urls:
+      - name: v1
+        url: /v3/api-docs/v1
+      - name: dev-pms
+        url: /v3/api-docs/dev-pms
+    urls-primary-name: v1

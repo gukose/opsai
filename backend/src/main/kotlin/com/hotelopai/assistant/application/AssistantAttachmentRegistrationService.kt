@@ -5,6 +5,7 @@ import com.hotelopai.assistant.domain.AttachmentType
 import com.hotelopai.assistant.domain.ConversationAttachment
 import com.hotelopai.assistant.domain.RegisteredConversationAttachment
 import com.hotelopai.observability.OperationalObservability
+import com.hotelopai.shared.kernel.PersistenceInstant
 import com.hotelopai.shared.kernel.UuidV7Generator
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -42,7 +43,7 @@ class AssistantAttachmentRegistrationService(
                 }
             }
 
-            val now = Instant.now()
+            val now = PersistenceInstant.toPersistencePrecision(Instant.now())
             val attachment = RegisteredConversationAttachment(
                 id = UuidV7Generator.generate(now),
                 conversationId = conversationId,

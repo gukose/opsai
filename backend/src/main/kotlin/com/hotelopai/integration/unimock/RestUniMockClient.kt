@@ -29,10 +29,6 @@ import com.hotelopai.integration.unimock.dto.UniMockRoomOccupancyDto
 import com.hotelopai.integration.unimock.dto.UniMockRoomStatusDto
 import com.hotelopai.integration.unimock.dto.UniMockRoomStatusUpdateRequestDto
 import com.hotelopai.shared.kernel.CorrelationIdContextHolder
-import com.hotelopai.shared.pms.MaintenanceCompletionPort
-import com.hotelopai.shared.pms.MaintenanceCompletionRequest
-import com.hotelopai.shared.pms.MaintenanceCompletionResult
-import com.hotelopai.shared.pms.PmsCompletionException
 import org.springframework.http.MediaType
 import java.io.IOException
 import java.net.URI
@@ -45,7 +41,7 @@ import kotlin.math.min
 class RestUniMockClient(
     private val properties: UniMockClientProperties,
     private val objectMapper: ObjectMapper
-) : UniMockClient, MaintenanceCompletionPort {
+) : UniMockClient {
     private val httpClient: HttpClient = HttpClient.newBuilder()
         .connectTimeout(properties.connectTimeout)
         .build()
@@ -92,20 +88,8 @@ class RestUniMockClient(
             .toUpdateResult()
 
     override fun updateMaintenance(request: PmsMaintenanceUpdateRequest): PmsUpdateResult =
-        try {
-            post("/maintenance/updates", request.toUniMockRequest(), object : TypeReference<UniMockPmsUpdateResponseDto>() {})
-                .toUpdateResult()
-        } catch (exception: UniMockClientException) {
-            throw PmsCompletionException(exception.message ?: "UniMock maintenance update failed", exception)
-        }
-
-    override fun updateMaintenance(request: MaintenanceCompletionRequest): MaintenanceCompletionResult =
-        try {
-            post("/maintenance/updates", request.toUniMockRequest(), object : TypeReference<UniMockPmsUpdateResponseDto>() {})
-                .toMaintenanceCompletionResult()
-        } catch (exception: UniMockClientException) {
-            throw PmsCompletionException(exception.message ?: "UniMock maintenance update failed", exception)
-        }
+        post("/maintenance/updates", request.toUniMockRequest(), object : TypeReference<UniMockPmsUpdateResponseDto>() {})
+            .toUpdateResult()
 
     override fun createEvent(request: PmsEventCreateRequest): PmsEvent =
         post("/events", request.toUniMockRequest(), object : TypeReference<UniMockEventDto>() {})
@@ -417,24 +401,8 @@ private fun UniMockPmsUpdateResponseDto.toUpdateResult(): PmsUpdateResult =
         status = status
     )
 
-private fun UniMockPmsUpdateResponseDto.toMaintenanceCompletionResult(): MaintenanceCompletionResult =
-    MaintenanceCompletionResult(
-        verificationLogId = verificationLogId,
-        entityId = entityId,
-        operation = operation,
-        status = status
-    )
-
 private fun PmsRoomStatusUpdateRequest.toUniMockRequest(): UniMockRoomStatusUpdateRequestDto =
     UniMockRoomStatusUpdateRequestDto(status = status)
-
-private fun MaintenanceCompletionRequest.toUniMockRequest(): UniMockMaintenanceUpdateRequestDto =
-    UniMockMaintenanceUpdateRequestDto(
-        roomNumber = roomNumber,
-        issueTypeCode = issueTypeCode,
-        description = description,
-        status = status
-    )
 
 private fun PmsMaintenanceUpdateRequest.toUniMockRequest(): UniMockMaintenanceUpdateRequestDto =
     UniMockMaintenanceUpdateRequestDto(

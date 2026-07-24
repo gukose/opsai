@@ -1,6 +1,7 @@
 package com.hotelopai.vision.infrastructure.persistence
 
 import com.hotelopai.vision.application.VisionAnalysisImportRepository
+import com.hotelopai.shared.kernel.PersistenceInstant
 import com.hotelopai.vision.domain.VisionAnalysisImport
 import com.hotelopai.vision.domain.VisionAnalysisImportStatus
 import org.springframework.dao.EmptyResultDataAccessException
@@ -18,6 +19,7 @@ class VisionAnalysisImportPersistenceRepository(
     private val jdbcTemplate: NamedParameterJdbcTemplate
 ) : VisionAnalysisImportRepository {
     override fun save(record: VisionAnalysisImport): VisionAnalysisImport {
+        val normalized = record.normalizedForPersistence()
         jdbcTemplate.update(
             """
             insert into vision_analysis_import (
@@ -51,9 +53,9 @@ class VisionAnalysisImportPersistenceRepository(
                 failure_code = excluded.failure_code,
                 updated_at = excluded.updated_at
             """.trimIndent(),
-            record.toSqlParameters()
+            normalized.toSqlParameters()
         )
-        return record
+        return normalized
     }
 
     @Transactional(readOnly = true)
@@ -100,6 +102,12 @@ private fun VisionAnalysisImport.toSqlParameters(): MapSqlParameterSource =
         .addValue("failureCode", failureCode)
         .addValue("createdAt", Timestamp.from(createdAt))
         .addValue("updatedAt", Timestamp.from(updatedAt))
+
+private fun VisionAnalysisImport.normalizedForPersistence(): VisionAnalysisImport =
+    copy(
+        createdAt = PersistenceInstant.toPersistencePrecision(createdAt),
+        updatedAt = PersistenceInstant.toPersistencePrecision(updatedAt)
+    )
 
 private fun ResultSet.toVisionAnalysisImport(): VisionAnalysisImport =
     VisionAnalysisImport(

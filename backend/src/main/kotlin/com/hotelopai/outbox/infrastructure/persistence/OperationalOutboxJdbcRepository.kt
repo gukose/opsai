@@ -1,8 +1,10 @@
 package com.hotelopai.outbox.infrastructure.persistence
 
 import com.hotelopai.outbox.application.OperationalOutboxRepository
+import com.hotelopai.outbox.application.OperationalOutboxStateCounts
 import com.hotelopai.outbox.domain.OperationalOutboxEvent
 import com.hotelopai.outbox.domain.OperationalOutboxStatus
+import com.hotelopai.shared.kernel.PersistenceInstant
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
@@ -18,6 +20,7 @@ class OperationalOutboxJdbcRepository(
     private val jdbcTemplate: NamedParameterJdbcTemplate
 ) : OperationalOutboxRepository {
     override fun save(event: OperationalOutboxEvent): OperationalOutboxEvent {
+        val normalized = event.normalizedForPersistence()
         jdbcTemplate.update(
             """
             insert into operational_outbox (
@@ -30,9 +33,9 @@ class OperationalOutboxJdbcRepository(
                 :lastFailureCode, :lastFailureMessage, :createdAt, :updatedAt
             )
             """.trimIndent(),
-            event.toParams()
+            normalized.toParams()
         )
-        return event
+        return normalized
     }
 
     @Transactional(readOnly = true)
@@ -64,26 +67,39 @@ class OperationalOutboxJdbcRepository(
     override fun claimDue(now: Instant, batchSize: Int, processorId: String): List<OperationalOutboxEvent> =
         jdbcTemplate.query(
             """
-            with candidates as (
-                select id
+            with locked as (
+                select
+                    id,
+                    created_at
                 from operational_outbox
                 where status = 'PENDING'
                   and next_attempt_at <= :now
-                order by created_at asc
+                order by created_at asc, id asc
                 limit :batchSize
                 for update skip locked
+            ),
+            candidates as (
+                select
+                    id,
+                    row_number() over (order by created_at asc, id asc) as claim_order
+                from locked
+            ),
+            updated as (
+                update operational_outbox event
+                set status = 'PROCESSING',
+                    locked_at = :now,
+                    locked_by = :processorId,
+                    updated_at = :now
+                from candidates
+                where event.id = candidates.id
+                returning event.*, candidates.claim_order
             )
-            update operational_outbox event
-            set status = 'PROCESSING',
-                locked_at = :now,
-                locked_by = :processorId,
-                updated_at = :now
-            from candidates
-            where event.id = candidates.id
-            returning event.*
+            select *
+            from updated
+            order by claim_order asc
             """.trimIndent(),
             mapOf(
-                "now" to now.toTimestamp(),
+                "now" to PersistenceInstant.toPersistencePrecision(now).toTimestamp(),
                 "batchSize" to batchSize,
                 "processorId" to processorId.take(128)
             ),
@@ -103,7 +119,7 @@ class OperationalOutboxJdbcRepository(
                 updated_at = :now
             where id = :id
             """.trimIndent(),
-            mapOf("id" to id, "now" to now.toTimestamp())
+            mapOf("id" to id, "now" to PersistenceInstant.toPersistencePrecision(now).toTimestamp())
         )
     }
 
@@ -131,10 +147,10 @@ class OperationalOutboxJdbcRepository(
             mapOf(
                 "id" to id,
                 "attemptCount" to attemptCount,
-                "nextAttemptAt" to nextAttemptAt.toTimestamp(),
+                "nextAttemptAt" to PersistenceInstant.toPersistencePrecision(nextAttemptAt).toTimestamp(),
                 "failureCode" to failureCode,
                 "failureMessage" to failureMessage,
-                "now" to now.toTimestamp()
+                "now" to PersistenceInstant.toPersistencePrecision(now).toTimestamp()
             )
         )
     }
@@ -163,7 +179,7 @@ class OperationalOutboxJdbcRepository(
                 "attemptCount" to attemptCount,
                 "failureCode" to failureCode,
                 "failureMessage" to failureMessage,
-                "now" to now.toTimestamp()
+                "now" to PersistenceInstant.toPersistencePrecision(now).toTimestamp()
             )
         )
     }
@@ -180,8 +196,56 @@ class OperationalOutboxJdbcRepository(
             where status = 'PROCESSING'
               and locked_at < :cutoff
             """.trimIndent(),
-            mapOf("cutoff" to cutoff.toTimestamp(), "now" to now.toTimestamp())
+            mapOf(
+                "cutoff" to PersistenceInstant.toPersistencePrecision(cutoff).toTimestamp(),
+                "now" to PersistenceInstant.toPersistencePrecision(now).toTimestamp()
+            )
         )
+
+    override fun cleanupTerminal(completedBefore: Instant, failedBefore: Instant, batchSize: Int): Int =
+        jdbcTemplate.update(
+            """
+            with candidates as (
+                select id
+                from operational_outbox
+                where (status = 'COMPLETED' and processed_at < :completedBefore)
+                   or (status = 'FAILED' and updated_at < :failedBefore)
+                order by updated_at asc
+                limit :batchSize
+            )
+            delete from operational_outbox event
+            using candidates
+            where event.id = candidates.id
+            """.trimIndent(),
+            mapOf(
+                "completedBefore" to PersistenceInstant.toPersistencePrecision(completedBefore).toTimestamp(),
+                "failedBefore" to PersistenceInstant.toPersistencePrecision(failedBefore).toTimestamp(),
+                "batchSize" to batchSize
+            )
+        )
+
+    @Transactional(readOnly = true)
+    override fun countStates(): OperationalOutboxStateCounts =
+        jdbcTemplate.query(
+            """
+            select
+                count(*) filter (where status = 'PENDING' and attempt_count = 0) as pending,
+                count(*) filter (where status = 'PENDING' and attempt_count > 0) as retrying,
+                count(*) filter (where status = 'PROCESSING') as locked,
+                count(*) filter (where status = 'COMPLETED') as completed,
+                count(*) filter (where status = 'FAILED') as dead_letter
+            from operational_outbox
+            """.trimIndent(),
+            { rs, _ ->
+                OperationalOutboxStateCounts(
+                    pending = rs.getLong("pending"),
+                    retrying = rs.getLong("retrying"),
+                    locked = rs.getLong("locked"),
+                    completed = rs.getLong("completed"),
+                    deadLetter = rs.getLong("dead_letter")
+                )
+            }
+        ).single()
 
     private fun OperationalOutboxEvent.toParams(): MapSqlParameterSource =
         MapSqlParameterSource()
@@ -201,6 +265,15 @@ class OperationalOutboxJdbcRepository(
             .addValue("lastFailureMessage", lastFailureMessage)
             .addValue("createdAt", createdAt.toTimestamp())
             .addValue("updatedAt", updatedAt.toTimestamp())
+
+    private fun OperationalOutboxEvent.normalizedForPersistence(): OperationalOutboxEvent =
+        copy(
+            nextAttemptAt = PersistenceInstant.toPersistencePrecision(nextAttemptAt),
+            lockedAt = PersistenceInstant.toPersistencePrecisionOrNull(lockedAt),
+            processedAt = PersistenceInstant.toPersistencePrecisionOrNull(processedAt),
+            createdAt = PersistenceInstant.toPersistencePrecision(createdAt),
+            updatedAt = PersistenceInstant.toPersistencePrecision(updatedAt)
+        )
 
     private fun mapEvent(rs: ResultSet, @Suppress("UNUSED_PARAMETER") rowNum: Int): OperationalOutboxEvent =
         OperationalOutboxEvent(

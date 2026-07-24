@@ -5,12 +5,14 @@ import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 
 data class RecordedHttpRequest(
     val method: String,
     val path: String,
+    val query: String?,
     val body: String,
     val headers: Map<String, List<String>>
 )
@@ -19,12 +21,14 @@ data class MockHttpResponse(
     val status: Int,
     val body: String = "",
     val contentType: String = "application/json",
-    val delayMs: Long = 0
+    val delayMs: Long = 0,
+    val headers: Map<String, String> = emptyMap()
 )
 
 class MockHttpServer {
     private val server = HttpServer.create(InetSocketAddress(0), 0)
     private val stubs = ConcurrentHashMap<String, MockHttpResponse>()
+    private val stubSequences = ConcurrentHashMap<String, ConcurrentLinkedQueue<MockHttpResponse>>()
     private val recordedRequests = CopyOnWriteArrayList<RecordedHttpRequest>()
 
     init {
@@ -47,8 +51,13 @@ class MockHttpServer {
         stubs[key(method, path)] = response
     }
 
+    fun stubSequence(method: String, path: String, responses: List<MockHttpResponse>) {
+        stubSequences[key(method, path)] = ConcurrentLinkedQueue(responses)
+    }
+
     fun reset() {
         stubs.clear()
+        stubSequences.clear()
         recordedRequests.clear()
     }
 
@@ -65,12 +74,15 @@ class MockHttpServer {
         recordedRequests += RecordedHttpRequest(
             method = method,
             path = path,
+            query = exchange.requestURI.rawQuery,
             body = requestBody,
             headers = exchange.requestHeaders.mapKeys { it.key.lowercase() }
                 .mapValues { it.value.toList() }
         )
 
-        val response = stubs[key(method, path)] ?: MockHttpResponse(
+        val response = stubSequences[key(method, path)]?.poll()
+            ?: stubs[key(method, path)]
+            ?: MockHttpResponse(
             status = 404,
             body = """{"message":"Not found"}"""
         )
@@ -81,6 +93,9 @@ class MockHttpServer {
 
         val bytes = response.body.toByteArray(StandardCharsets.UTF_8)
         exchange.responseHeaders.add("Content-Type", response.contentType)
+        response.headers.forEach { (key, value) ->
+            exchange.responseHeaders.add(key, value)
+        }
         exchange.sendResponseHeaders(response.status, bytes.size.toLong())
         exchange.responseBody.use { output ->
             output.write(bytes)

@@ -1,6 +1,7 @@
 package com.hotelopai.task.infrastructure.persistence
 
 import com.hotelopai.task.application.TaskAttachmentLinkRepository
+import com.hotelopai.shared.kernel.PersistenceInstant
 import com.hotelopai.task.domain.TaskAttachmentLink
 import com.hotelopai.task.domain.TaskAttachmentLinkView
 import com.hotelopai.task.domain.TaskAttachmentSourceType
@@ -18,7 +19,8 @@ class TaskAttachmentLinkPersistenceRepository(
     private val jdbcTemplate: NamedParameterJdbcTemplate
 ) : TaskAttachmentLinkRepository {
     override fun saveAll(links: List<TaskAttachmentLink>): List<TaskAttachmentLink> {
-        links.forEach { link ->
+        val normalized = links.map { it.normalizedForPersistence() }
+        normalized.forEach { link ->
             jdbcTemplate.update(
                 """
                 insert into task_attachment_link (
@@ -49,7 +51,7 @@ class TaskAttachmentLinkPersistenceRepository(
                 link.toSqlParameters()
             )
         }
-        return links
+        return normalized
     }
 
     @Transactional(readOnly = true)
@@ -95,6 +97,9 @@ private fun TaskAttachmentLink.toSqlParameters(): MapSqlParameterSource =
         .addValue("analysisId", analysisId)
         .addValue("analysisImportId", analysisImportId)
         .addValue("createdAt", Timestamp.from(createdAt))
+
+private fun TaskAttachmentLink.normalizedForPersistence(): TaskAttachmentLink =
+    copy(createdAt = PersistenceInstant.toPersistencePrecision(createdAt))
 
 private fun ResultSet.toTaskAttachmentLinkView(): TaskAttachmentLinkView =
     TaskAttachmentLinkView(

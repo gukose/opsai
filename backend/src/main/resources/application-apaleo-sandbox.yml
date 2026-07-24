@@ -1,0 +1,44 @@
+ops:
+  ai:
+    pms:
+      active-provider: apaleo
+      providers:
+        internal-demo:
+          enabled: true
+          display-name: Internal Demo PMS
+          authentication:
+            mode: NONE
+          request-timeout: PT5S
+        apaleo:
+          enabled: true
+          display-name: Apaleo Sandbox PMS
+          hotel-property-identifier: ${APALEO_PROPERTY_ID:}
+          endpoint: ${APALEO_BASE_URL:https://api.apaleo.com}
+          production-approved: ${APALEO_PRODUCTION_APPROVED:false}
+          allowed-profiles:
+            - apaleo-sandbox
+            - local
+            - test
+          authentication:
+            mode: OAUTH2_CLIENT_CREDENTIALS
+            oauth2-client-credentials:
+              token-url: ${APALEO_TOKEN_URL:https://identity.apaleo.com/connect/token}
+              client-id-reference: env:APALEO_CLIENT_ID
+              client-secret-reference: env:APALEO_CLIENT_SECRET
+              scopes:
+                - properties.read
+                - units.read
+                - reservations.read
+          request-timeout: ${APALEO_REQUEST_TIMEOUT:PT5S}
+          settings:
+            max-pages: ${APALEO_MAX_PAGES:2}
+            page-size: ${APALEO_PAGE_SIZE:100}
+            health-check-timeout: ${APALEO_HEALTH_CHECK_TIMEOUT:PT2S}
+            retry-max-attempts: ${APALEO_RETRY_MAX_ATTEMPTS:2}
+            retry-initial-backoff: ${APALEO_RETRY_INITIAL_BACKOFF:PT0.1S}
+            retry-max-backoff: ${APALEO_RETRY_MAX_BACKOFF:PT1S}
+            max-rate-limit-delay: ${APALEO_MAX_RATE_LIMIT_DELAY:PT2S}
+            circuit-failure-threshold: ${APALEO_CIRCUIT_FAILURE_THRESHOLD:3}
+            circuit-open-duration: ${APALEO_CIRCUIT_OPEN_DURATION:PT30S}
+            circuit-half-open-max-attempts: ${APALEO_CIRCUIT_HALF_OPEN_MAX_ATTEMPTS:1}
+            token-expiry-safety-window: ${APALEO_TOKEN_EXPIRY_SAFETY_WINDOW:PT60S}

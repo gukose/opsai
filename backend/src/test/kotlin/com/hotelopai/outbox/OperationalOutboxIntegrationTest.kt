@@ -97,6 +97,33 @@ class OperationalOutboxIntegrationTest : PostgresIntegrationTestSupport() {
     }
 
     @Test
+    fun `outbox repository save returns timestamps at persistence precision`() {
+        val hotel = hotel()
+        val event = eventFor(
+            taskId = UuidV7Generator.generate(),
+            hotelId = hotel.id,
+            nextAttemptAt = Instant.parse("2026-07-17T10:00:00.123456789Z"),
+            lockedAt = Instant.parse("2026-07-17T10:01:00.987654321Z"),
+            processedAt = null
+        ).copy(
+            createdAt = Instant.parse("2026-07-17T09:59:00.111111999Z"),
+            updatedAt = Instant.parse("2026-07-17T09:59:30.222222999Z")
+        )
+
+        val saved = outboxRepository.save(event)
+
+        assertThat(saved.nextAttemptAt).isEqualTo(Instant.parse("2026-07-17T10:00:00.123456Z"))
+        assertThat(saved.lockedAt).isEqualTo(Instant.parse("2026-07-17T10:01:00.987654Z"))
+        assertThat(saved.createdAt).isEqualTo(Instant.parse("2026-07-17T09:59:00.111111Z"))
+        assertThat(saved.updatedAt).isEqualTo(Instant.parse("2026-07-17T09:59:30.222222Z"))
+        val reloaded = outboxRepository.findById(saved.id) ?: error("outbox event not found")
+        assertThat(reloaded.nextAttemptAt).isEqualTo(saved.nextAttemptAt)
+        assertThat(reloaded.lockedAt).isEqualTo(saved.lockedAt)
+        assertThat(reloaded.createdAt).isEqualTo(saved.createdAt)
+        assertThat(reloaded.updatedAt).isEqualTo(saved.updatedAt)
+    }
+
+    @Test
     fun `notification source event uniqueness allows null legacy rows and rejects duplicate event ids`() {
         val hotel = hotel()
         val sourceEventId = UuidV7Generator.generate()
@@ -167,6 +194,24 @@ class OperationalOutboxIntegrationTest : PostgresIntegrationTestSupport() {
     }
 
     @Test
+    fun `claiming returns due events in deterministic created order`() {
+        val hotel = hotel()
+        val now = clock.instant()
+        val newer = outboxRepository.save(
+            eventFor(taskId = UuidV7Generator.generate(), hotelId = hotel.id)
+                .copy(createdAt = now.minus(Duration.ofMinutes(5)), updatedAt = now.minus(Duration.ofMinutes(5)))
+        )
+        val older = outboxRepository.save(
+            eventFor(taskId = UuidV7Generator.generate(), hotelId = hotel.id)
+                .copy(createdAt = now.minus(Duration.ofMinutes(10)), updatedAt = now.minus(Duration.ofMinutes(10)))
+        )
+
+        val claimed = outboxRepository.claimDue(clock.instant(), batchSize = 2, processorId = "ordered")
+
+        assertThat(claimed.map { it.id }).containsSubsequence(older.id, newer.id)
+    }
+
+    @Test
     fun `handler failure schedules retry then eventually fails with sanitized reason`() {
         val hotel = hotel()
         val retryEvent = outboxRepository.save(
@@ -184,10 +229,13 @@ class OperationalOutboxIntegrationTest : PostgresIntegrationTestSupport() {
         assertThat(retryable.status).isEqualTo(OperationalOutboxStatus.PENDING)
         assertThat(retryable.attemptCount).isEqualTo(1)
         assertThat(retryable.nextAttemptAt).isAfter(retryable.updatedAt)
+        assertThat(retryable.nextAttemptAt.nano % 1_000).isEqualTo(0)
+        assertThat(retryable.updatedAt.nano % 1_000).isEqualTo(0)
         assertThat(retryable.lastFailureCode).isEqualTo("malformed_payload")
         assertThat(retryable.lastFailureMessage).doesNotContain("{")
         assertThat(counter("hotelopai.outbox.event.total", "operation" to "process", "outcome" to "retry"))
             .isGreaterThanOrEqualTo(retryBefore + 1.0)
+        assertThat(Duration.between(retryable.updatedAt, retryable.nextAttemptAt)).isEqualTo(Duration.ofSeconds(10))
 
         val failedEvent = outboxRepository.save(
             eventFor(
@@ -203,6 +251,27 @@ class OperationalOutboxIntegrationTest : PostgresIntegrationTestSupport() {
         assertThat(failed.status).isEqualTo(OperationalOutboxStatus.FAILED)
         assertThat(failed.attemptCount).isEqualTo(5)
         assertThat(failed.lastFailureCode).isEqualTo("malformed_payload")
+        assertThat(failed.updatedAt).isNotNull
+    }
+
+    @Test
+    fun `retry backoff uses configured exponential multiplier and max delay`() {
+        val hotel = hotel()
+        val event = outboxRepository.save(
+            eventFor(
+                taskId = UuidV7Generator.generate(),
+                hotelId = hotel.id,
+                payloadJson = "{}",
+                attemptCount = 1
+            )
+        )
+
+        assertThat(outboxProcessor.processBatch()).isGreaterThanOrEqualTo(1)
+
+        val retryable = outboxRepository.findById(event.id) ?: error("missing retryable event")
+        assertThat(retryable.status).isEqualTo(OperationalOutboxStatus.PENDING)
+        assertThat(retryable.attemptCount).isEqualTo(2)
+        assertThat(Duration.between(retryable.updatedAt, retryable.nextAttemptAt)).isEqualTo(Duration.ofSeconds(20))
     }
 
     @Test
@@ -256,6 +325,96 @@ class OperationalOutboxIntegrationTest : PostgresIntegrationTestSupport() {
         assertThat(outboxRepository.findById(failed.id)?.status).isEqualTo(OperationalOutboxStatus.FAILED)
         assertThat(counter("hotelopai.outbox.event.total", "operation" to "recover", "outcome" to "recovered"))
             .isGreaterThanOrEqualTo(before + 1.0)
+    }
+
+    @Test
+    fun `retention cleanup removes only old terminal events and records metrics`() {
+        val hotel = hotel()
+        val now = clock.instant()
+        val oldCompleted = outboxRepository.save(
+            eventFor(
+                taskId = UuidV7Generator.generate(),
+                hotelId = hotel.id,
+                status = OperationalOutboxStatus.COMPLETED,
+                processedAt = now.minus(Duration.ofDays(15))
+            ).copy(updatedAt = now.minus(Duration.ofDays(15)))
+        )
+        val recentCompleted = outboxRepository.save(
+            eventFor(
+                taskId = UuidV7Generator.generate(),
+                hotelId = hotel.id,
+                status = OperationalOutboxStatus.COMPLETED,
+                processedAt = now.minus(Duration.ofDays(1))
+            ).copy(updatedAt = now.minus(Duration.ofDays(1)))
+        )
+        val oldFailed = outboxRepository.save(
+            eventFor(
+                taskId = UuidV7Generator.generate(),
+                hotelId = hotel.id,
+                status = OperationalOutboxStatus.FAILED,
+                attemptCount = 5
+            ).copy(updatedAt = now.minus(Duration.ofDays(31)))
+        )
+        val retrying = outboxRepository.save(
+            eventFor(
+                taskId = UuidV7Generator.generate(),
+                hotelId = hotel.id,
+                attemptCount = 2,
+                nextAttemptAt = now.minus(Duration.ofDays(31))
+            ).copy(updatedAt = now.minus(Duration.ofDays(31)))
+        )
+        val cleanupBefore = counter("hotelopai.outbox.event.total", "operation" to "cleanup", "outcome" to "success")
+
+        val removed = outboxProcessor.cleanup(now)
+
+        assertThat(removed).isGreaterThanOrEqualTo(2)
+        assertThat(outboxRepository.findById(oldCompleted.id)).isNull()
+        assertThat(outboxRepository.findById(oldFailed.id)).isNull()
+        assertThat(outboxRepository.findById(recentCompleted.id)).isNotNull
+        assertThat(outboxRepository.findById(retrying.id)).isNotNull
+        assertThat(counter("hotelopai.outbox.event.total", "operation" to "cleanup", "outcome" to "success"))
+            .isGreaterThanOrEqualTo(cleanupBefore + 2.0)
+    }
+
+    @Test
+    fun `state gauges expose pending retrying locked completed and dead letter counts`() {
+        val hotel = hotel()
+        val now = clock.instant()
+        outboxRepository.save(eventFor(taskId = UuidV7Generator.generate(), hotelId = hotel.id))
+        outboxRepository.save(eventFor(taskId = UuidV7Generator.generate(), hotelId = hotel.id, attemptCount = 1))
+        outboxRepository.save(
+            eventFor(
+                taskId = UuidV7Generator.generate(),
+                hotelId = hotel.id,
+                status = OperationalOutboxStatus.PROCESSING,
+                lockedAt = now,
+                lockedBy = "gauge"
+            )
+        )
+        outboxRepository.save(
+            eventFor(
+                taskId = UuidV7Generator.generate(),
+                hotelId = hotel.id,
+                status = OperationalOutboxStatus.COMPLETED,
+                processedAt = now
+            )
+        )
+        outboxRepository.save(
+            eventFor(
+                taskId = UuidV7Generator.generate(),
+                hotelId = hotel.id,
+                status = OperationalOutboxStatus.FAILED,
+                attemptCount = 5
+            )
+        )
+
+        outboxProcessor.cleanup(now)
+
+        assertThat(gauge("hotelopai.outbox.state.current", "status" to "pending")).isGreaterThanOrEqualTo(1.0)
+        assertThat(gauge("hotelopai.outbox.state.current", "status" to "retrying")).isGreaterThanOrEqualTo(1.0)
+        assertThat(gauge("hotelopai.outbox.state.current", "status" to "locked")).isGreaterThanOrEqualTo(1.0)
+        assertThat(gauge("hotelopai.outbox.state.current", "status" to "completed")).isGreaterThanOrEqualTo(1.0)
+        assertThat(gauge("hotelopai.outbox.state.current", "status" to "dead_letter")).isGreaterThanOrEqualTo(1.0)
     }
 
     @Test
@@ -388,4 +547,10 @@ class OperationalOutboxIntegrationTest : PostgresIntegrationTestSupport() {
 
     private fun timerCount(name: String): Long =
         meterRegistry.find(name).timer()?.count() ?: 0L
+
+    private fun gauge(name: String, vararg tags: Pair<String, String>): Double =
+        meterRegistry.find(name)
+            .tags(*tags.flatMap { listOf(it.first, it.second) }.toTypedArray())
+            .gauge()
+            ?.value() ?: 0.0
 }

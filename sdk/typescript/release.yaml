@@ -1,0 +1,18 @@
+apiVersion: v1
+contract:
+  normalizedSha256: a95af3f0379383cf29e5093fe43bc7fe0a7630a64027e239a4744e2753335935
+  snapshot: docs/api/openapi-v1.yaml
+exportManifest:
+  path: sdk/typescript/public-api-manifest.json
+  sha256: 0eeeb1f536a8ccf03b4d93b8fcf057826e53c1ae97711dbe7beb3ed5d551099c
+generator:
+  name: openapi-typescript
+  version: 7.10.1
+packageArchive:
+  outputDirectory: sdk/typescript/build/package
+  publish: false
+packageName: "@hotelopai/api-client"
+publicationAllowed: false
+releaseStatus: internal
+requiredVersionImpact: none
+version: 0.0.0

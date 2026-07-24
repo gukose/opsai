@@ -27,11 +27,14 @@ test("dashboard summary refreshes expired access token and retries once", async 
   const originalFetch = globalThis.fetch;
   const authorizations = [];
   globalThis.fetch = async (_url, init) => {
-    authorizations.push(init?.headers?.Authorization ?? null);
+    authorizations.push(new Headers(init?.headers).get("Authorization"));
     if (authorizations.length === 1) {
       return new Response(JSON.stringify({ title: "Unauthorized", status: 401 }), { status: 401 });
     }
-    return new Response(JSON.stringify(summaryResponse()), { status: 200 });
+    return new Response(JSON.stringify(summaryResponse()), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
   };
 
   try {

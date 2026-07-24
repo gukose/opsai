@@ -17,6 +17,7 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.time.Instant
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -362,6 +363,16 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
         assertEquals(200, second.statusCode(), second.body())
         val attachmentId = extractAttachmentId(first.body())
         assertEquals(attachmentId, extractAttachmentId(second.body()))
+        val firstCreatedAt = Instant.parse(extractAttachmentCreatedAt(first.body()))
+        val secondCreatedAt = Instant.parse(extractAttachmentCreatedAt(second.body()))
+        assertThat(secondCreatedAt).isEqualTo(firstCreatedAt)
+        assertThat(
+            jdbcTemplate.queryForObject(
+                "select created_at from assistant_attachment where id = ?::uuid",
+                java.sql.Timestamp::class.java,
+                attachmentId
+            )?.toInstant()
+        ).isEqualTo(firstCreatedAt)
         assertEquals(
             1,
             jdbcTemplate.queryForObject(
@@ -1042,6 +1053,13 @@ class AssistantConversationControllerTest : PostgresIntegrationTestSupport() {
             ?.groupValues
             ?.get(1)
             ?: error("attachmentId not found in response: $body")
+
+    private fun extractAttachmentCreatedAt(body: String): String =
+        Regex(""""createdAt":"([^"]+)"""")
+            .find(body)
+            ?.groupValues
+            ?.get(1)
+            ?: error("attachment createdAt not found in response: $body")
 
     private fun extractCreatedTaskId(body: String): String =
         Regex(""""createdTaskId":"([^"]+)"""")

@@ -83,8 +83,12 @@ The processor is controlled by `ops.ai.outbox`:
 - `batch-size`
 - `max-attempts`
 - `initial-retry-delay`
+- `retry-multiplier`
 - `max-retry-delay`
 - `lock-timeout`
+- `completed-retention`
+- `failed-retention`
+- `cleanup-batch-size`
 - `processor-id`
 
 Tests disable scheduling and invoke processing directly.
@@ -95,6 +99,11 @@ Failures use bounded exponential backoff. Failure records store stable reason
 codes and a sanitized fixed message. Raw exception messages, stack traces,
 payload JSON, SQL values, and sensitive content are not persisted.
 
+Backoff starts at `initial-retry-delay`, multiplies by `retry-multiplier` after
+each failed attempt, and is capped by `max-retry-delay`. `max-attempts` is the
+automatic delivery limit; once exhausted, the event moves to `FAILED`.
+`updated_at` on a retry or failed transition is the last-attempt timestamp.
+
 `PROCESSING` rows older than `lock-timeout` are recovered to `PENDING` with
 cleared lock fields and `next_attempt_at` set to the recovery time. `COMPLETED`
 and `FAILED` rows are never recovered for automatic retry.
@@ -102,6 +111,18 @@ and `FAILED` rows are never recovered for automatic retry.
 `FAILED` means automatic attempts are exhausted. Operational recovery should be a
 future admin/tooling workflow; direct manual database mutation is not the normal
 recovery path.
+
+## Retention
+
+The processor performs bounded cleanup after each processing pass. Cleanup is
+idempotent and removes only terminal events:
+
+- `COMPLETED` rows with `processed_at` older than `completed-retention`
+- `FAILED` rows with `updated_at` older than `failed-retention`
+
+Cleanup never removes `PENDING`, retrying `PENDING`, or `PROCESSING` rows. The
+delete batch is capped by `cleanup-batch-size` so long-running systems can shed
+old terminal history without unbounded delete work.
 
 ## Notification Idempotency
 
@@ -121,6 +142,7 @@ Sprint 8E adds:
 
 - `hotelopai.outbox.event.total`
 - `hotelopai.outbox.processing.duration`
+- `hotelopai.outbox.state.current`
 
 Allowed outbox tags are low cardinality:
 
@@ -128,10 +150,16 @@ Allowed outbox tags are low cardinality:
 - `event_type`
 - `outcome`
 - `reason_code`
+- `status`
 
-Outbox logs are limited to retry/failure/exhaustion/recovery and unknown payload
-cases. Logs must not include `payload_json`, task content, assistant text, media
-data, tokens, credentials, or resource identifiers.
+State gauge `status` values are `pending`, `retrying`, `locked`, `completed`,
+and `dead_letter`.
+
+Outbox logs are limited to lifecycle transitions: recovery and cleanup at
+`INFO`, successful/duplicate processing at `INFO`, retry scheduling at `WARN`,
+and terminal failure at `ERROR`. Logs must not include `payload_json`, task
+content, assistant text, media data, tokens, credentials, or resource
+identifiers.
 
 ## Deferred
 

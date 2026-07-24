@@ -14,6 +14,7 @@ export class AppApiError extends Error {
   readonly status?: number;
   readonly problem?: ProblemDetails;
   readonly correlationId?: string;
+  readonly apiVersion?: string | null;
   readonly cause?: unknown;
 
   constructor(
@@ -23,6 +24,7 @@ export class AppApiError extends Error {
       status?: number;
       problem?: ProblemDetails;
       correlationId?: string;
+      apiVersion?: string | null;
       cause?: unknown;
     }
   ) {
@@ -32,6 +34,7 @@ export class AppApiError extends Error {
     this.status = options.status;
     this.problem = options.problem;
     this.correlationId = options.correlationId;
+    this.apiVersion = options.apiVersion;
     this.cause = options.cause;
   }
 }

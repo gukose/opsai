@@ -5,6 +5,7 @@ import com.hotelopai.auth.domain.Permission
 import com.hotelopai.auth.domain.RefreshSession
 import com.hotelopai.auth.domain.Role
 import com.hotelopai.auth.domain.User
+import com.hotelopai.shared.kernel.PersistenceInstant
 
 internal object PermissionPersistenceMapper {
     fun toDomain(entity: PermissionJpaEntity): Permission =
@@ -27,9 +28,9 @@ internal object PermissionPersistenceMapper {
             name = domain.name
             description = domain.description
             version = domain.version.takeIf { it > 0 }
-            createdAt = domain.createdAt
+            createdAt = PersistenceInstant.toPersistencePrecision(domain.createdAt)
             createdBy = domain.createdBy
-            updatedAt = domain.updatedAt
+            updatedAt = PersistenceInstant.toPersistencePrecision(domain.updatedAt)
             updatedBy = domain.updatedBy
         }
 }
@@ -59,9 +60,9 @@ internal object RolePersistenceMapper {
             description = domain.description
             permissionIds = domain.permissionIds.toMutableSet()
             version = domain.version.takeIf { it > 0 }
-            createdAt = domain.createdAt
+            createdAt = PersistenceInstant.toPersistencePrecision(domain.createdAt)
             createdBy = domain.createdBy
-            updatedAt = domain.updatedAt
+            updatedAt = PersistenceInstant.toPersistencePrecision(domain.updatedAt)
             updatedBy = domain.updatedBy
         }
 }
@@ -95,9 +96,9 @@ internal object UserPersistenceMapper {
             status = domain.status
             roleIds = domain.roleIds.toMutableSet()
             version = domain.version.takeIf { it > 0 }
-            createdAt = domain.createdAt
+            createdAt = PersistenceInstant.toPersistencePrecision(domain.createdAt)
             createdBy = domain.createdBy
-            updatedAt = domain.updatedAt
+            updatedAt = PersistenceInstant.toPersistencePrecision(domain.updatedAt)
             updatedBy = domain.updatedBy
         }
 }
@@ -133,13 +134,13 @@ internal object RefreshSessionPersistenceMapper {
             deviceName = domain.deviceName
             ipAddress = domain.ipAddress
             userAgent = domain.userAgent
-            expiresAt = domain.expiresAt
-            revokedAt = domain.revokedAt
-            lastUsedAt = domain.lastUsedAt
+            expiresAt = PersistenceInstant.toPersistencePrecision(domain.expiresAt)
+            revokedAt = PersistenceInstant.toPersistencePrecisionOrNull(domain.revokedAt)
+            lastUsedAt = PersistenceInstant.toPersistencePrecisionOrNull(domain.lastUsedAt)
             version = domain.version.takeIf { it > 0 }
-            createdAt = domain.createdAt
+            createdAt = PersistenceInstant.toPersistencePrecision(domain.createdAt)
             createdBy = domain.createdBy
-            updatedAt = domain.updatedAt
+            updatedAt = PersistenceInstant.toPersistencePrecision(domain.updatedAt)
             updatedBy = domain.updatedBy
         }
 }

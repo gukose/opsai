@@ -2,33 +2,43 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { HttpTaskApi } from "../api/task/TaskApi.ts";
+import { MobileHotelOpAiClient } from "../api/hotelOpAiClient.ts";
 import { taskAttachmentFromResponse } from "./types.ts";
 
 test("task attachment API requests selected task attachment endpoint", async () => {
   const calls = [];
-  const api = new HttpTaskApi({
-    async get(path) {
-      calls.push(path);
-      return [];
-    },
-    async post() {
-      throw new Error("unexpected post");
-    },
-    async put() {
-      throw new Error("unexpected put");
-    },
-    async patch() {
-      throw new Error("unexpected patch");
-    },
-    async delete() {
-      throw new Error("unexpected delete");
-    }
-  });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    calls.push({
+      url: String(input),
+      authorization: new Headers(init?.headers).get("Authorization")
+    });
+    return new Response(JSON.stringify([]), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  };
 
-  const response = await api.getTaskAttachments("task-1");
+  const api = new HttpTaskApi(
+    new MobileHotelOpAiClient({
+      baseUrl: "http://localhost:8080",
+      accessTokenProvider: () => "token"
+    })
+  );
 
-  assert.deepEqual(response, []);
-  assert.deepEqual(calls, ["/api/v1/tasks/task-1/attachments"]);
+  try {
+    const response = await api.getTaskAttachments("task-1");
+
+    assert.deepEqual(response, []);
+    assert.deepEqual(calls, [
+      {
+        url: "http://localhost:8080/api/v1/tasks/task-1/attachments",
+        authorization: "Bearer token"
+      }
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("task attachment response maps metadata and provenance without unsafe media fields", () => {

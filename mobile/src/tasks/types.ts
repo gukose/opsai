@@ -78,10 +78,10 @@ export function taskDetailFromResponse(task: TaskResponseDto): TaskDetail {
     ...summary,
     hotelId: task.hotelId,
     createdAt: task.createdAt,
-    startedAt: task.startedAt,
-    completedAt: task.completedAt,
-    cancelledAt: task.cancelledAt,
-    overdueAt: task.overdueAt,
+    startedAt: task.startedAt ?? null,
+    completedAt: task.completedAt ?? null,
+    cancelledAt: task.cancelledAt ?? null,
+    overdueAt: task.overdueAt ?? null,
     assigneeType: task.assignment?.assigneeType ?? null,
     assigneeId: task.assignment?.assigneeId ?? null,
     assignedAt: task.assignment?.assignedAt ?? null,
@@ -93,18 +93,39 @@ export function taskAttachmentFromResponse(attachment: TaskAttachmentResponseDto
   return {
     attachmentId: attachment.attachmentId,
     conversationId: attachment.conversationId,
-    type: attachment.type,
+    type: taskAttachmentType(attachment.type),
     originalFileName: attachment.originalFileName,
     declaredMimeType: attachment.declaredMimeType,
     declaredSizeBytes: attachment.declaredSizeBytes,
     widthPx: attachment.widthPx ?? null,
     heightPx: attachment.heightPx ?? null,
-    storageStatus: attachment.storageStatus,
-    sourceType: attachment.sourceType,
+    storageStatus: registeredStorageStatus(attachment.storageStatus),
+    sourceType: taskAttachmentSourceType(attachment.sourceType),
     analysisId: attachment.analysisId ?? null,
     analysisImportId: attachment.analysisImportId ?? null,
     createdAt: attachment.createdAt
   };
+}
+
+function taskAttachmentType(value: string): TaskAttachmentMetadata["type"] {
+  if (value === "IMAGE" || value === "PDF" || value === "DOCUMENT") {
+    return value;
+  }
+  throw new Error(`Unsupported task attachment type: ${value}`);
+}
+
+function registeredStorageStatus(value: string): TaskAttachmentMetadata["storageStatus"] {
+  if (value === "REGISTERED") {
+    return value;
+  }
+  throw new Error(`Unsupported task attachment storage status: ${value}`);
+}
+
+function taskAttachmentSourceType(value: string): TaskAttachmentMetadata["sourceType"] {
+  if (value === "ASSISTANT_MESSAGE" || value === "VISION_ANALYSIS") {
+    return value;
+  }
+  throw new Error(`Unsupported task attachment source type: ${value}`);
 }
 
 export function taskSummariesFromListResponse(response: TaskListResponseDto): TaskSummary[] {

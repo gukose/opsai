@@ -110,6 +110,42 @@ class AuthPersistenceRepositoryIntegrationTest : PostgresIntegrationTestSupport(
     }
 
     @Test
+    fun `refresh session timestamps match immediate return and reload precision`() {
+        val hotel = hotelRepository.save(Hotel(code = "auth-precision-hotel", name = "Auth Precision Hotel"))
+        val user = userRepository.save(
+            User(
+                hotelId = hotel.id,
+                email = EmailAddress.of("precision@example.com"),
+                displayName = "Precision User",
+                passwordHash = "password-hash"
+            )
+        )
+        val sessionCreatedAt = Instant.parse("2026-01-01T00:00:00.123456789Z")
+        val session = RefreshSession(
+            userId = user.id,
+            hotelId = hotel.id,
+            refreshTokenHash = "hash-precision",
+            deviceId = "device-precision",
+            createdAt = sessionCreatedAt,
+            expiresAt = Instant.parse("2026-01-01T01:00:00.987654321Z")
+        )
+
+        val saved = refreshSessionRepository.save(session)
+        val used = refreshSessionRepository.save(
+            saved.markUsed(now = Instant.parse("2026-01-01T00:10:00.222222999Z"))
+        )
+        val revoked = refreshSessionRepository.save(
+            used.revoke(now = Instant.parse("2026-01-01T00:20:00.333333999Z"))
+        )
+
+        assertThat(saved.createdAt).isEqualTo(Instant.parse("2026-01-01T00:00:00.123456Z"))
+        assertThat(saved.expiresAt).isEqualTo(Instant.parse("2026-01-01T01:00:00.987654Z"))
+        assertThat(used.lastUsedAt).isEqualTo(Instant.parse("2026-01-01T00:10:00.222222Z"))
+        assertThat(revoked.revokedAt).isEqualTo(Instant.parse("2026-01-01T00:20:00.333333Z"))
+        assertThat(refreshSessionRepository.findById(saved.id)).isEqualTo(revoked)
+    }
+
+    @Test
     fun `allows same user email in different hotels but scopes queries by hotel`() {
         val firstHotel = hotelRepository.save(Hotel(code = "hotel-a", name = "Hotel A"))
         val secondHotel = hotelRepository.save(Hotel(code = "hotel-b", name = "Hotel B"))

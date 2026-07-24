@@ -6,6 +6,7 @@ import com.hotelopai.task.application.TaskStateHistoryEntry
 import com.hotelopai.task.domain.Task
 import com.hotelopai.task.domain.TaskAssignment
 import com.hotelopai.task.domain.TaskTransition
+import com.hotelopai.shared.kernel.PersistenceInstant
 import com.hotelopai.shared.kernel.UuidV7Generator
 
 internal object TaskPersistenceMapper {
@@ -54,32 +55,47 @@ internal object TaskPersistenceMapper {
         entity.apply { updateFrom(domain) }
 
     private fun TaskJpaEntity.updateFrom(domain: Task) {
-        hotelId = domain.hotelId
-        intentType = domain.intentType
-        source = domain.source
-        title = domain.title
-        description = domain.description
-        roomNumber = domain.roomNumber?.trim()?.takeIf { it.isNotBlank() }
-        priority = domain.priority
-        status = domain.status
+        val normalized = domain.normalizedForPersistence()
+        hotelId = normalized.hotelId
+        intentType = normalized.intentType
+        source = normalized.source
+        title = normalized.title
+        description = normalized.description
+        roomNumber = normalized.roomNumber?.trim()?.takeIf { it.isNotBlank() }
+        priority = normalized.priority
+        status = normalized.status
         slaDeadline = domain.slaDeadline
-        assigneeType = domain.assignment?.assigneeType
-        assigneeId = domain.assignment?.assigneeId
-        assigneeDisplayName = domain.assignment?.displayName
-        assignedAt = domain.assignment?.assignedAt
-        startedAt = domain.startedAt
-        completedAt = domain.completedAt
-        cancelledAt = domain.cancelledAt
-        overdueAt = domain.overdueAt
-        createdAt = domain.createdAt
-        updatedAt = domain.updatedAt
+        assigneeType = normalized.assignment?.assigneeType
+        assigneeId = normalized.assignment?.assigneeId
+        assigneeDisplayName = normalized.assignment?.displayName
+        assignedAt = normalized.assignment?.assignedAt
+        startedAt = normalized.startedAt
+        completedAt = normalized.completedAt
+        cancelledAt = normalized.cancelledAt
+        overdueAt = normalized.overdueAt
+        createdAt = normalized.createdAt
+        updatedAt = normalized.updatedAt
     }
+
+    private fun Task.normalizedForPersistence(): Task =
+        copy(
+            assignment = assignment?.copy(
+                assignedAt = PersistenceInstant.toPersistencePrecision(assignment.assignedAt)
+            ),
+            createdAt = PersistenceInstant.toPersistencePrecision(createdAt),
+            updatedAt = PersistenceInstant.toPersistencePrecision(updatedAt),
+            startedAt = PersistenceInstant.toPersistencePrecisionOrNull(startedAt),
+            completedAt = PersistenceInstant.toPersistencePrecisionOrNull(completedAt),
+            cancelledAt = PersistenceInstant.toPersistencePrecisionOrNull(cancelledAt),
+            overdueAt = PersistenceInstant.toPersistencePrecisionOrNull(overdueAt)
+        )
 }
 
 internal object TaskStateHistoryPersistenceMapper {
     fun toEntity(entry: TaskStateHistoryEntry): TaskStateHistoryJpaEntity =
         TaskStateHistoryJpaEntity().apply {
-            id = UuidV7Generator.generate(entry.occurredAt)
+            val occurredAt = PersistenceInstant.toPersistencePrecision(entry.occurredAt)
+            id = UuidV7Generator.generate(occurredAt)
             taskId = entry.taskId
             hotelId = entry.hotelId
             fromStatus = entry.fromStatus
@@ -87,15 +103,16 @@ internal object TaskStateHistoryPersistenceMapper {
             operation = entry.operation
             note = entry.note
             correlationId = entry.correlationId
-            createdAt = entry.occurredAt
-            updatedAt = entry.occurredAt
+            createdAt = occurredAt
+            updatedAt = occurredAt
         }
 }
 
 internal object TaskLogPersistenceMapper {
     fun toEntity(entry: TaskLogEntry): TaskLogJpaEntity =
         TaskLogJpaEntity().apply {
-            id = UuidV7Generator.generate(entry.occurredAt)
+            val occurredAt = PersistenceInstant.toPersistencePrecision(entry.occurredAt)
+            id = UuidV7Generator.generate(occurredAt)
             taskId = entry.taskId
             hotelId = entry.hotelId
             operation = entry.operation
@@ -108,7 +125,7 @@ internal object TaskLogPersistenceMapper {
             fromStatus = entry.fromStatus
             toStatus = entry.toStatus
             correlationId = entry.correlationId
-            createdAt = entry.occurredAt
-            updatedAt = entry.occurredAt
+            createdAt = occurredAt
+            updatedAt = occurredAt
         }
 }

@@ -1,4 +1,10 @@
-import type { ApiClient } from "../client/ApiClient";
+import {
+  AuthController_login,
+  AuthController_logout,
+  AuthController_me,
+  AuthController_refresh
+} from "@hotelopai/api-client";
+import { MobileHotelOpAiClient } from "../hotelOpAiClient";
 import type {
   AuthSessionResponseDto,
   CurrentUserResponseDto,
@@ -18,25 +24,33 @@ export interface AuthApi {
 }
 
 export class HttpAuthApi implements AuthApi {
-  private readonly client: ApiClient;
+  private readonly client: MobileHotelOpAiClient;
 
-  constructor(client: ApiClient) {
+  constructor(client: MobileHotelOpAiClient) {
     this.client = client;
   }
 
   login(request: LoginRequestDto): Promise<AuthSessionResponseDto> {
-    return this.client.post("/api/v1/auth/login", request, { skipAuth: true });
+    return this.client.call(
+      "POST",
+      (sdk, signal) => AuthController_login(sdk, { body: request, signal }),
+      { authenticated: false }
+    );
   }
 
   refresh(request: RefreshRequestDto): Promise<AuthSessionResponseDto> {
-    return this.client.post("/api/v1/auth/refresh", request, { skipAuth: true });
+    return this.client.call(
+      "POST",
+      (sdk, signal) => AuthController_refresh(sdk, { body: request, signal }),
+      { authenticated: false }
+    );
   }
 
   logout(): Promise<LogoutResponseDto> {
-    return this.client.post("/api/v1/auth/logout", {}, {});
+    return this.client.call("POST", (sdk, signal) => AuthController_logout(sdk, { signal }));
   }
 
   me(): Promise<CurrentUserResponseDto> {
-    return this.client.get("/api/v1/auth/me");
+    return this.client.call("GET", (sdk, signal) => AuthController_me(sdk, { signal }));
   }
 }

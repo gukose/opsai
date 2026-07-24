@@ -56,9 +56,18 @@ Local/test Dev PMS:
 
 - `DEV_PMS_ACCESS`
 
+Internal PMS operations:
+
+- `PMS_OPERATIONS_ACCESS`
+
+Internal reservation sync operations:
+
+- `RESERVATION_SYNC_OPERATIONS`
+
 ## Role Matrix
 
-`ADMIN` receives all existing and new permissions, including `DEV_PMS_ACCESS`.
+`ADMIN` receives all existing and new permissions, including `DEV_PMS_ACCESS`,
+`PMS_OPERATIONS_ACCESS`, and `RESERVATION_SYNC_OPERATIONS`.
 
 `MANAGER` receives operational task management, assistant, notification,
 dashboard, and reporting permissions. It does not receive `DEV_PMS_ACCESS`.
@@ -105,6 +114,10 @@ vision import, dashboard, report, cancel, mark-overdue, or Dev PMS permissions.
 - `GET /api/v1/dashboard/summary`: `DASHBOARD_READ`
 - `GET /api/v1/dashboard/reports/tasks`: `REPORT_READ`
 - all `/api/v1/dev/pms/**` endpoints: `DEV_PMS_ACCESS`
+- all `/api/v1/internal/pms/**` endpoints: `PMS_OPERATIONS_ACCESS`
+- all `/api/v1/internal/reservations/**` sync, scheduled sync, webhook inbox,
+  webhook processing scheduler, dead-letter retry, and cleanup endpoints:
+  `RESERVATION_SYNC_OPERATIONS`
 
 Login, refresh, CORS preflight, actuator health, and actuator info keep their
 existing public behavior.

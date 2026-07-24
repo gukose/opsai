@@ -186,6 +186,35 @@ class AssistantPersistenceRepositoryIntegrationTest : PostgresIntegrationTestSup
     }
 
     @Test
+    fun `conversation row timestamps normalize while message json timestamps remain unchanged`() {
+        val messageCreatedAt = Instant.parse("2026-07-10T10:00:00.111111999Z")
+        val conversation = Conversation(
+            id = "conversation-precision-1",
+            hotelId = "hotel-opai-demo",
+            userId = "user-1",
+            messages = listOf(
+                ConversationMessage(
+                    id = "message-precision-1",
+                    role = MessageRole.USER,
+                    inputType = InputType.TEXT,
+                    text = "Precision message",
+                    createdAt = messageCreatedAt
+                )
+            ),
+            createdAt = Instant.parse("2026-07-10T09:59:00.123456789Z"),
+            updatedAt = Instant.parse("2026-07-10T10:01:00.987654321Z")
+        )
+
+        val saved = conversationRepository.save(conversation)
+        val reloaded = conversationRepository.findById(conversation.id) ?: error("conversation not found")
+
+        assertThat(saved.createdAt).isEqualTo(Instant.parse("2026-07-10T09:59:00.123456Z"))
+        assertThat(saved.updatedAt).isEqualTo(Instant.parse("2026-07-10T10:01:00.987654Z"))
+        assertThat(reloaded).isEqualTo(saved)
+        assertThat(reloaded.messages.single().createdAt).isEqualTo(messageCreatedAt)
+    }
+
+    @Test
     fun `task confirmation repository saves and loads idempotency record`() {
         val conversation = Conversation(
             id = "conversation-confirmation-1",
@@ -220,6 +249,44 @@ class AssistantPersistenceRepositoryIntegrationTest : PostgresIntegrationTestSup
                 3
             )
         ).isEqualTo(record)
+    }
+
+    @Test
+    fun `task confirmation createdAt matches immediate return and reload precision`() {
+        val conversation = Conversation(
+            id = "conversation-confirmation-precision-1",
+            hotelId = "hotel-opai-demo",
+            userId = "user-1",
+            createdAt = Instant.parse("2026-07-10T10:00:00Z"),
+            updatedAt = Instant.parse("2026-07-10T10:00:00Z")
+        )
+        val record = TaskConfirmationRecord(
+            conversationId = conversation.id,
+            idempotencyKey = "confirm-precision-502",
+            createdTaskId = "018f6b7a-4f22-7caa-8f60-9e4b0f7f3333",
+            draftId = "draft-precision-502",
+            draftVersion = 4,
+            preview = taskPreview(),
+            createdAt = Instant.parse("2026-07-10T10:02:00.123456789Z")
+        )
+
+        conversationRepository.save(conversation)
+        val saved = taskConfirmationRepository.save(record)
+
+        assertThat(saved.createdAt).isEqualTo(Instant.parse("2026-07-10T10:02:00.123456Z"))
+        assertThat(
+            taskConfirmationRepository.findByConversationIdAndIdempotencyKey(
+                conversation.id,
+                "confirm-precision-502"
+            )
+        ).isEqualTo(saved)
+        assertThat(
+            taskConfirmationRepository.findByConversationIdAndDraftIdentity(
+                conversation.id,
+                "draft-precision-502",
+                4
+            )
+        ).isEqualTo(saved)
     }
 
     private fun taskPreview(): TaskPreview =

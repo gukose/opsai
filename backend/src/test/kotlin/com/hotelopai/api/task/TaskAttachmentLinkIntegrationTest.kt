@@ -96,6 +96,12 @@ class TaskAttachmentLinkIntegrationTest : PostgresIntegrationTestSupport() {
         assertThat(links.body()).contains(firstRelevant.toString(), secondRelevant.toString(), "ASSISTANT_MESSAGE")
         assertThat(links.body()).doesNotContain(oldAttachment.toString(), "storageReference", "downloadUrl", "localReference", "base64")
         assertThat(linkCount(taskId)).isEqualTo(2)
+        val linkCreatedAtNanos = jdbcTemplate.queryForList(
+            "select created_at from task_attachment_link where task_id = ?::uuid",
+            java.sql.Timestamp::class.java,
+            taskId
+        ).map { requireNotNull(it).toInstant().nano }
+        assertThat(linkCreatedAtNanos).allMatch { it % 1_000 == 0 }
 
         val duplicate = confirm(login, conversationId, "confirm-links-1")
         assertEquals(200, duplicate.statusCode(), duplicate.body())

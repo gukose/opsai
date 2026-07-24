@@ -3,6 +3,7 @@ package com.hotelopai.employee.infrastructure.persistence
 import com.hotelopai.employee.domain.Department
 import com.hotelopai.employee.domain.Employee
 import com.hotelopai.employee.domain.Skill
+import com.hotelopai.shared.kernel.PersistenceInstant
 
 internal object DepartmentPersistenceMapper {
     fun toDomain(entity: DepartmentJpaEntity): Department =
@@ -27,9 +28,9 @@ internal object DepartmentPersistenceMapper {
             name = domain.name
             isActive = domain.isActive
             version = domain.version.takeIf { it > 0 }
-            createdAt = domain.createdAt
+            createdAt = PersistenceInstant.toPersistencePrecision(domain.createdAt)
             createdBy = domain.createdBy
-            updatedAt = domain.updatedAt
+            updatedAt = PersistenceInstant.toPersistencePrecision(domain.updatedAt)
             updatedBy = domain.updatedBy
         }
 }
@@ -59,9 +60,9 @@ internal object SkillPersistenceMapper {
             description = domain.description
             isActive = domain.isActive
             version = domain.version.takeIf { it > 0 }
-            createdAt = domain.createdAt
+            createdAt = PersistenceInstant.toPersistencePrecision(domain.createdAt)
             createdBy = domain.createdBy
-            updatedAt = domain.updatedAt
+            updatedAt = PersistenceInstant.toPersistencePrecision(domain.updatedAt)
             updatedBy = domain.updatedBy
         }
 }
@@ -97,9 +98,9 @@ internal object EmployeePersistenceMapper {
             roleIds = domain.roleIds.toMutableSet()
             skillIds = domain.skillIds.toMutableSet()
             version = domain.version.takeIf { it > 0 }
-            createdAt = domain.createdAt
+            createdAt = PersistenceInstant.toPersistencePrecision(domain.createdAt)
             createdBy = domain.createdBy
-            updatedAt = domain.updatedAt
+            updatedAt = PersistenceInstant.toPersistencePrecision(domain.updatedAt)
             updatedBy = domain.updatedBy
         }
 }

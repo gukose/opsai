@@ -5,15 +5,23 @@ import io.micrometer.core.instrument.Tags
 import io.micrometer.core.instrument.Timer
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 @Component
 class OperationalObservability(
     private val meterRegistry: MeterRegistry? = null
 ) {
+    private val gauges = ConcurrentHashMap<String, AtomicLong>()
+
     fun incrementCounter(name: String, vararg tags: Pair<String, String>) {
+        incrementCounter(name, 1.0, *tags)
+    }
+
+    fun incrementCounter(name: String, amount: Double, vararg tags: Pair<String, String>) {
         val registry = meterRegistry ?: return
         runCatching {
-            registry.counter(name, safeTags(tags)).increment()
+            registry.counter(name, safeTags(tags)).increment(amount.coerceAtLeast(0.0))
         }
     }
 
@@ -25,6 +33,20 @@ class OperationalObservability(
         if (sample == null) return
         runCatching {
             sample.stop(Timer.builder(name).tags(safeTags(tags)).register(registry))
+        }
+    }
+
+    fun setGauge(name: String, value: Long, vararg tags: Pair<String, String>) {
+        val registry = meterRegistry ?: return
+        runCatching {
+            val safeTags = safeTags(tags)
+            val key = "$name|${safeTags.joinToString(",") { "${it.key}=${it.value}" }}"
+            val gauge = gauges.computeIfAbsent(key) {
+                AtomicLong(0).also {
+                    registry.gauge(name, safeTags, it)
+                }
+            }
+            gauge.set(value.coerceAtLeast(0L))
         }
     }
 
@@ -46,6 +68,7 @@ class OperationalObservability(
             normalized.startsWith("/api/v1/dashboard/reports") -> "reporting"
             normalized.startsWith("/api/v1/dashboard") -> "dashboard"
             normalized.startsWith("/api/v1/dev/pms") -> "dev_pms"
+            normalized.startsWith("/api/v1/internal/pms") -> "internal_pms"
             normalized.startsWith("/actuator") -> "actuator"
             else -> "other"
         }
@@ -105,9 +128,12 @@ class OperationalObservability(
             "source_type",
             "endpoint_group",
             "event_type",
+            "failure_category",
+            "job",
             "reason_code",
             "range",
-            "transition"
+            "transition",
+            "trigger"
         )
 
         fun noop(): OperationalObservability = OperationalObservability(null)

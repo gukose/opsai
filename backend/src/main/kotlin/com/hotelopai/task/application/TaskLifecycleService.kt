@@ -9,10 +9,12 @@ import com.hotelopai.task.domain.TaskSource
 import com.hotelopai.task.domain.TaskStatus
 import com.hotelopai.task.domain.TaskTransition
 import com.hotelopai.observability.OperationalObservability
+import com.hotelopai.shared.kernel.PersistenceInstant
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.beans.factory.annotation.Autowired
+import java.time.Clock
 import java.time.Instant
 import java.util.UUID
 
@@ -25,7 +27,8 @@ class TaskLifecycleService @Autowired constructor(
     private val taskLogRecorder: TaskLogRecorder = TaskLogRecorder(NoOpTaskLogRepository),
     private val completionPolicy: CompletionPolicy,
     private val taskNotificationPublisher: TaskNotificationPublisher = NoOpTaskNotificationPublisher,
-    private val observability: OperationalObservability = OperationalObservability.noop()
+    private val observability: OperationalObservability = OperationalObservability.noop(),
+    private val clock: Clock = Clock.systemUTC()
 ) : TaskApplicationPort {
     constructor(taskRepository: TaskRepository) : this(
         taskRepository = taskRepository,
@@ -38,9 +41,10 @@ class TaskLifecycleService @Autowired constructor(
     )
 
     fun createTask(request: CreateTaskCommand): Task =
-        createTask(request, Instant.now())
+        createTask(request, PersistenceInstant.now(clock))
 
     override fun createTask(request: CreateTaskCommand, now: Instant): Task {
+        val persistedNow = PersistenceInstant.toPersistencePrecision(now)
         return try {
             val task = Task.create(
                 hotelId = request.hotelId,
@@ -51,7 +55,7 @@ class TaskLifecycleService @Autowired constructor(
                 roomNumber = request.roomNumber,
                 priority = request.priority,
                 slaDeadline = request.slaDeadline,
-                createdAt = now
+                createdAt = persistedNow
             )
 
             val saved = taskRepository.save(task)
@@ -60,29 +64,29 @@ class TaskLifecycleService @Autowired constructor(
                 after = saved,
                 operation = TaskTransition.CREATE,
                 note = "Task created",
-                now = now
+                now = persistedNow
             )
             recordTaskLog(
                 task = saved,
                 operation = TaskTransition.CREATE,
                 outcome = TaskLogOutcome.SUCCESS,
                 message = "Task created",
-                now = now
+                now = persistedNow
             )
             val created = if (request.assignment != null) {
                 mutate(
                     taskId = saved.id.toString(),
                     hotelId = saved.hotelId,
                     operation = TaskTransition.ASSIGN,
-                    now = now,
-                    mutation = { current ->
-                        current.assign(request.assignment.toDomain(now), now)
+                    now = persistedNow,
+                    mutation = { current, normalizedNow ->
+                        current.assign(request.assignment.toDomain(normalizedNow), normalizedNow)
                     }
                 )
             } else {
                 saved
             }
-            taskNotificationPublisher.taskCreated(created, now)
+            taskNotificationPublisher.taskCreated(created, persistedNow)
             recordLifecycle(operation = TaskTransition.CREATE, outcome = "success", reasonCode = "none")
             created
         } catch (exception: RuntimeException) {
@@ -118,13 +122,13 @@ class TaskLifecycleService @Autowired constructor(
             hotelId = hotelId,
             operation = TaskTransition.ASSIGN,
             now = now,
-            mutation = { task ->
-                task.assign(request.assignment.toDomain(now), now)
+            mutation = { task, normalizedNow ->
+                task.assign(request.assignment.toDomain(normalizedNow), normalizedNow)
             }
         )
 
     fun startTask(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task =
-        mutate(taskId = taskId, hotelId = hotelId, operation = TaskTransition.START, now = now, mutation = { it.start(now) })
+        mutate(taskId = taskId, hotelId = hotelId, operation = TaskTransition.START, now = now, mutation = { task, normalizedNow -> task.start(normalizedNow) })
 
     fun progressTask(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task =
         resumeTask(taskId, hotelId, now)
@@ -133,10 +137,10 @@ class TaskLifecycleService @Autowired constructor(
         pauseTask(taskId, hotelId, now)
 
     fun pauseTask(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task =
-        mutate(taskId = taskId, hotelId = hotelId, operation = TaskTransition.PAUSE, now = now, mutation = { it.wait(now) })
+        mutate(taskId = taskId, hotelId = hotelId, operation = TaskTransition.PAUSE, now = now, mutation = { task, normalizedNow -> task.wait(normalizedNow) })
 
     fun resumeTask(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task =
-        mutate(taskId = taskId, hotelId = hotelId, operation = TaskTransition.RESUME, now = now, mutation = { it.progress(now) })
+        mutate(taskId = taskId, hotelId = hotelId, operation = TaskTransition.RESUME, now = now, mutation = { task, normalizedNow -> task.progress(normalizedNow) })
 
     fun completeTask(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task =
         run {
@@ -146,10 +150,10 @@ class TaskLifecycleService @Autowired constructor(
                 hotelId = hotelId,
                 operation = TaskTransition.COMPLETE,
                 now = now,
-                mutation = { task ->
-                    val decision = completionPolicy.evaluate(task, now)
+                mutation = { task, normalizedNow ->
+                    val decision = completionPolicy.evaluate(task, normalizedNow)
                     verificationLogId = decision.verificationLogId
-                    task.complete(now)
+                    task.complete(normalizedNow)
                 },
                 successMessage = { _, _ ->
                     verificationLogId?.let { "Task completed after PMS verification $it" } ?: "Task completed"
@@ -158,37 +162,38 @@ class TaskLifecycleService @Autowired constructor(
         }
 
     fun cancelTask(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task =
-        mutate(taskId = taskId, hotelId = hotelId, operation = TaskTransition.CANCEL, now = now, mutation = { it.cancel(now) })
+        mutate(taskId = taskId, hotelId = hotelId, operation = TaskTransition.CANCEL, now = now, mutation = { task, normalizedNow -> task.cancel(normalizedNow) })
 
     fun markOverdue(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task =
-        mutate(taskId = taskId, hotelId = hotelId, operation = TaskTransition.OVERDUE, now = now, mutation = { it.markOverdue(now) })
+        mutate(taskId = taskId, hotelId = hotelId, operation = TaskTransition.OVERDUE, now = now, mutation = { task, normalizedNow -> task.markOverdue(normalizedNow) })
 
     private fun mutate(
         taskId: String,
         hotelId: UUID,
         operation: TaskTransition,
         now: Instant,
-        mutation: (Task) -> Task,
+        mutation: (Task, Instant) -> Task,
         successMessage: (Task, Task) -> String = { before, after ->
             "Task ${operation.name.lowercase()} succeeded from ${before.status} to ${after.status}"
         }
     ): Task {
+        val persistedNow = PersistenceInstant.toPersistencePrecision(now)
         val parsedTaskId = taskId.toTaskId()
         val task = taskRepository.findByIdAndHotelId(parsedTaskId, hotelId)
             ?: run {
                 recordLifecycle(operation = operation, outcome = "not_found", reasonCode = "task_not_found")
                 logger.info("event=task_lifecycle operation=${operation.name.lowercase()} outcome=not_found reasonCode=task_not_found")
                 throw TaskNotFoundException(parsedTaskId)
-            }
+        }
         return try {
-            val updated = mutation(task)
+            val updated = mutation(task, persistedNow)
             val saved = taskRepository.save(updated)
             recordStateHistory(
                 before = task,
                 after = saved,
                 operation = operation,
                 note = "Task transitioned from ${task.status} to ${saved.status}",
-                now = now
+                now = persistedNow
             )
             recordTaskLog(
                 task = saved,
@@ -197,7 +202,7 @@ class TaskLifecycleService @Autowired constructor(
                 message = successMessage(task, saved),
                 fromStatus = task.status,
                 toStatus = saved.status,
-                now = now
+                now = persistedNow
             )
             recordLifecycle(operation = operation, outcome = "success", reasonCode = "none")
             saved
@@ -211,7 +216,7 @@ class TaskLifecycleService @Autowired constructor(
                     message = exception.message ?: "Task ${operation.name.lowercase()} failed",
                     fromStatus = task.status,
                     toStatus = null,
-                    occurredAt = now
+                    occurredAt = persistedNow
                 )
             )
             recordLifecycle(operation = operation, outcome = "failure", reasonCode = "transition_failed")

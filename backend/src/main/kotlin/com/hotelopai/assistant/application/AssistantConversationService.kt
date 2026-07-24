@@ -9,6 +9,7 @@ import com.hotelopai.assistant.domain.TaskCreationCandidate
 import com.hotelopai.assistant.domain.VoiceTranscriptMetadata
 import com.hotelopai.assistant.domain.ConversationState
 import com.hotelopai.observability.OperationalObservability
+import com.hotelopai.shared.kernel.PersistenceInstant
 import com.hotelopai.task.application.TaskApplicationPort
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -236,13 +237,13 @@ class AssistantConversationService(
                 "Conversation must be waiting for confirmation before task creation"
             }
 
+            val now = PersistenceInstant.toPersistencePrecision(Instant.now())
             val createCommand = candidate.toCreateTaskCommand(
                 hotelId = conversation.hotelId,
-                now = Instant.now()
+                now = now
             )
 
             val createdTask = taskApplicationPort.createTask(createCommand)
-            val now = Instant.now()
             taskAttachmentLinker.linkConfirmedTask(
                 conversation = conversation,
                 taskId = createdTask.id,

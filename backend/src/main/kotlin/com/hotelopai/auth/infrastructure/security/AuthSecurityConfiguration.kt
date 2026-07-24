@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpServletResponse
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.annotation.Order
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -46,6 +47,7 @@ class AuthSecurityConfiguration(
         }
 
     @Bean
+    @Order(1)
     fun securityFilterChain(
         http: HttpSecurity,
         jwtDecoder: JwtDecoder,
@@ -84,6 +86,14 @@ class AuthSecurityConfiguration(
             .authorizeHttpRequests {
                 it.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 it.requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
+                it.requestMatchers("/api/v1/integrations/**").permitAll()
+                it.requestMatchers(
+                    HttpMethod.GET,
+                    "/v3/api-docs",
+                    "/v3/api-docs/**",
+                    "/swagger-ui.html",
+                    "/swagger-ui/**"
+                ).permitAll()
                 it.requestMatchers(
                     HttpMethod.GET,
                     "/actuator/health",

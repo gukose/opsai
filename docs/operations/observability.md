@@ -44,6 +44,13 @@ metrics and are not exported through a public actuator metrics endpoint.
 - `hotelopai.security.denial.total`
 - `hotelopai.rate_limit.rejection.total`
 - `hotelopai.outbox.event.total`
+- `hotelopai.scheduler.job.total`
+- `hotelopai.scheduler.lease.renewal.total`
+
+## Gauges
+
+- `hotelopai.outbox.state.current`
+- `hotelopai.scheduler.lease.renewal.active`
 
 ## Timers
 
@@ -56,6 +63,7 @@ metrics and are not exported through a public actuator metrics endpoint.
 - `hotelopai.notification.list.duration`
 - `hotelopai.task.search.duration`
 - `hotelopai.outbox.processing.duration`
+- `hotelopai.scheduler.job.duration`
 
 The task-search timer is recorded at the task search application boundary.
 
@@ -71,6 +79,7 @@ Only these low-cardinality tags are allowed:
 - `source_type`
 - `endpoint_group`
 - `event_type`
+- `job`
 - `reason_code`
 - `range`
 - `transition`
@@ -96,12 +105,24 @@ Common values include:
   `operation_failed`, `validation_failure`, `task_not_found`,
   `limit_exceeded`, `concurrency_conflict`, and
   `idempotency_metadata_mismatch`
-- `operation` for outbox: `enqueue`, `process`, `recover`
+- `operation` for outbox: `enqueue`, `process`, `recover`, `cleanup`
 - `outcome` for outbox: `success`, `duplicate`, `retry`, `failed`,
   `recovered`
 - `reason_code` for outbox: `none`, `event_already_exists`,
   `malformed_payload`, `unknown_payload_version`, `payload_mismatch`,
-  `task_not_found`, `unsupported_event`, `handler_failure`, `stale_lock`
+  `task_not_found`, `unsupported_event`, `handler_failure`, `stale_lock`,
+  `retention`
+- `status` for outbox state gauges: `pending`, `retrying`, `locked`,
+  `completed`, `dead_letter`
+- `job` for scheduler metrics: `operational_outbox_processor`,
+  `task_overdue_scheduler`, or another stable configured job name
+- `outcome` for scheduler metrics: `started`, `success`, `failure`, `skipped`
+- `reason_code` for scheduler metrics: `none`, `overlap`, `lock_held`,
+  `shutdown`, `scheduler_disabled`, `unexpected_failure`
+- `outcome` for scheduler lease renewal: `attempt`, `success`, `failure`,
+  `ownership_lost`
+- `reason_code` for scheduler lease renewal: `none`, `ownership_lost`,
+  `renewal_failed`, `unexpected_failure`
 
 ## Sensitive Data Policy
 

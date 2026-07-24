@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { HttpDashboardApi } from "../api/dashboard/DashboardApi.ts";
+import { MobileHotelOpAiClient } from "../api/hotelOpAiClient.ts";
 import { taskReportingFromResponse } from "./types.ts";
 
 test("maps task reporting response into reporting summary", () => {
@@ -100,23 +101,45 @@ test("maps empty and unknown reporting buckets safely", () => {
 
 test("dashboard API requests task reports with the selected range", async () => {
   const calls = [];
-  const api = new HttpDashboardApi({
-    get: async (path) => {
-      calls.push(path);
-      return {};
-    },
-    post: async () => {
-      throw new Error("not used");
-    }
-  });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    calls.push({
+      url: String(input),
+      authorization: new Headers(init?.headers).get("Authorization")
+    });
+    return new Response(JSON.stringify({}), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  };
 
-  await api.getTaskReport();
-  await api.getTaskReport("shift");
-  await api.getTaskReport("7d");
+  const api = new HttpDashboardApi(
+    new MobileHotelOpAiClient({
+      baseUrl: "http://localhost:8080",
+      accessTokenProvider: () => "token"
+    })
+  );
 
-  assert.deepEqual(calls, [
-    "/api/v1/dashboard/reports/tasks?range=today",
-    "/api/v1/dashboard/reports/tasks?range=shift",
-    "/api/v1/dashboard/reports/tasks?range=7d"
-  ]);
+  try {
+    await api.getTaskReport();
+    await api.getTaskReport("shift");
+    await api.getTaskReport("7d");
+
+    assert.deepEqual(calls, [
+      {
+        url: "http://localhost:8080/api/v1/dashboard/reports/tasks?range=today",
+        authorization: "Bearer token"
+      },
+      {
+        url: "http://localhost:8080/api/v1/dashboard/reports/tasks?range=shift",
+        authorization: "Bearer token"
+      },
+      {
+        url: "http://localhost:8080/api/v1/dashboard/reports/tasks?range=7d",
+        authorization: "Bearer token"
+      }
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

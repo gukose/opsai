@@ -4,7 +4,7 @@ import com.hotelopai.notification.domain.Notification
 import com.hotelopai.notification.domain.NotificationRecipient
 import com.hotelopai.notification.domain.NotificationType
 import com.hotelopai.observability.OperationalObservability
-import com.hotelopai.shared.kernel.toPersistencePrecision
+import com.hotelopai.shared.kernel.PersistenceInstant
 import com.hotelopai.shared.security.CurrentUserContext
 import com.hotelopai.task.domain.Task
 import com.hotelopai.task.domain.TaskAssigneeType
@@ -26,6 +26,7 @@ class NotificationService(
         sourceEventId: UUID?,
         now: Instant
     ): TaskCreatedNotificationDelivery {
+        val persistedNow = PersistenceInstant.toPersistencePrecision(now)
         sourceEventId?.let { eventId ->
             notificationRepository.findBySourceEventId(eventId)?.let {
                 return TaskCreatedNotificationDelivery(notification = it, created = false)
@@ -45,8 +46,8 @@ class NotificationService(
                     body = "${task.title} was created.",
                     sourceTaskId = task.id,
                     sourceEventId = sourceEventId,
-                    createdAt = now,
-                    updatedAt = now
+                    createdAt = persistedNow,
+                    updatedAt = persistedNow
                 )
             )
             recordNotification("create", "success", "none")
@@ -108,7 +109,7 @@ class NotificationService(
 
             return notificationRepository.save(
                 notification.markRead(
-                    now = now.toPersistencePrecision(),
+                    now = PersistenceInstant.toPersistencePrecision(now),
                     updatedBy = currentUser.userId.toString()
                 )
             ).also {

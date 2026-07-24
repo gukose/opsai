@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildTaskListPath } from "../api/task/TaskApi.ts";
+import { buildTaskListQuery } from "../api/task/TaskApi.ts";
 import { emptyTaskFilters, shouldClearVisibleTasksBeforeLoad, taskSummariesFromListResponse } from "./types.ts";
 
 const baseTask = {
@@ -24,11 +24,11 @@ const baseTask = {
 };
 
 test("empty filter state produces existing no-query task request", () => {
-  assert.equal(buildTaskListPath(emptyTaskFilters()), "/api/v1/tasks");
+  assert.deepEqual(buildTaskListQuery(emptyTaskFilters()), {});
 });
 
 test("task filters map to API query parameters", () => {
-  const path = buildTaskListPath({
+  const query = buildTaskListQuery({
     q: " ac ",
     status: ["CREATED", "STARTED"],
     priority: ["HIGH", "URGENT"],
@@ -37,10 +37,14 @@ test("task filters map to API query parameters", () => {
     createdTo: "2026-07-15T00:00:00Z"
   });
 
-  assert.equal(
-    path,
-    "/api/v1/tasks?q=ac&status=CREATED%2CSTARTED&priority=HIGH%2CURGENT&assignment=mine&createdFrom=2026-07-14T00%3A00%3A00Z&createdTo=2026-07-15T00%3A00%3A00Z"
-  );
+  assert.deepEqual(query, {
+    q: "ac",
+    status: "CREATED,STARTED",
+    priority: "HIGH,URGENT",
+    assignment: "mine",
+    createdFrom: "2026-07-14T00:00:00Z",
+    createdTo: "2026-07-15T00:00:00Z"
+  });
 });
 
 test("filtered backend paged response maps into task summaries", () => {
@@ -82,5 +86,5 @@ test("empty filtered result is handled", () => {
 test("filtered request failure preserves visible task list policy and clear restores unfiltered", () => {
   assert.equal(shouldClearVisibleTasksBeforeLoad(emptyTaskFilters()), true);
   assert.equal(shouldClearVisibleTasksBeforeLoad({ ...emptyTaskFilters(), q: "ac" }), false);
-  assert.equal(buildTaskListPath({ ...emptyTaskFilters(), q: "" }), "/api/v1/tasks");
+  assert.deepEqual(buildTaskListQuery({ ...emptyTaskFilters(), q: "" }), {});
 });

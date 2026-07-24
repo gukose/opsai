@@ -7,6 +7,7 @@ import com.hotelopai.auth.domain.User
 import com.hotelopai.auth.domain.UserStatus
 import com.hotelopai.employee.application.EmployeeRepository
 import com.hotelopai.hotel.application.HotelRepository
+import com.hotelopai.shared.kernel.PersistenceInstant
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
@@ -28,7 +29,7 @@ class AuthenticationApplicationService(
     private val clock: Clock
 ) {
     fun login(command: LoginCommand): AuthSessionResult {
-        val now = clock.instant()
+        val now = PersistenceInstant.now(clock)
         val hotel = hotelRepository.findByCode(command.hotelCode.trim())
             ?: throw InvalidCredentialsException()
         val user = userRepository.findByHotelIdAndEmail(hotel.id, EmailAddress.of(command.email).value)
@@ -43,7 +44,7 @@ class AuthenticationApplicationService(
     }
 
     fun refresh(command: RefreshCommand): AuthSessionResult {
-        val now = clock.instant()
+        val now = PersistenceInstant.now(clock)
         val tokenHash = refreshTokenCodec.hash(command.refreshToken)
         val session = refreshSessionRepository.findByRefreshTokenHash(tokenHash)
             ?: throw InvalidRefreshTokenException()
@@ -56,7 +57,7 @@ class AuthenticationApplicationService(
     }
 
     fun logout(command: LogoutCommand) {
-        val now = clock.instant()
+        val now = PersistenceInstant.now(clock)
         val session = refreshSessionRepository.findById(command.sessionId)
             ?: throw InvalidAccessSessionException()
         if (session.revokedAt == null) {
@@ -87,7 +88,7 @@ class AuthenticationApplicationService(
             ipAddress = command.ipAddress,
             userAgent = command.userAgent,
             createdAt = now,
-            expiresAt = now.plus(authSessionPolicy.refreshTokenTtl())
+            expiresAt = PersistenceInstant.toPersistencePrecision(now.plus(authSessionPolicy.refreshTokenTtl()))
         )
         val savedSession = refreshSessionRepository.save(session)
         val currentUser = buildCurrentUser(user, hotel)
@@ -117,7 +118,7 @@ class AuthenticationApplicationService(
         val nextRefreshToken = refreshTokenCodec.generate()
         val rotated = session.rotate(
             nextRefreshTokenHash = refreshTokenCodec.hash(nextRefreshToken),
-            nextExpiresAt = now.plus(authSessionPolicy.refreshTokenTtl()),
+            nextExpiresAt = PersistenceInstant.toPersistencePrecision(now.plus(authSessionPolicy.refreshTokenTtl())),
             now = now
         ).copy(
             deviceId = command.deviceId?.takeIf { it.isNotBlank() } ?: session.deviceId,

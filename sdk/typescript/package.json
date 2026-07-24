@@ -1,0 +1,44 @@
+{
+  "name": "@hotelopai/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Generated TypeScript client for the reviewed Hotel OpAI public v1 API contract.",
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "generate": "node scripts/generate-client.mjs",
+    "verify": "node scripts/verify-client.mjs",
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "generate:exports": "node scripts/release-governance.mjs generate-export-manifest",
+    "verify:exports": "node scripts/release-governance.mjs verify-export-manifest",
+    "generate:release-metadata": "node scripts/release-governance.mjs generate-release-metadata",
+    "verify:version": "node scripts/release-governance.mjs verify-version",
+    "generate:release-notes": "node scripts/release-governance.mjs generate-release-notes",
+    "verify:release-notes": "node scripts/release-governance.mjs verify-release-notes",
+    "pack:local": "node scripts/release-governance.mjs pack",
+    "verify:packed": "node scripts/release-governance.mjs verify-packed",
+    "verify:release-readiness": "node scripts/release-governance.mjs verify-release-readiness"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.10.1",
+    "typescript": "5.9.3",
+    "yaml": "2.9.0"
+  }
+}

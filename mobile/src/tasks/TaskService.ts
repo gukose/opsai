@@ -1,6 +1,6 @@
 import { appApiBaseUrl } from "../config/appConfig";
-import { FetchApiClient } from "../api/client/FetchApiClient";
 import { HttpTaskApi, TaskListFilters } from "../api/task/TaskApi";
+import { MobileHotelOpAiClient } from "../api/hotelOpAiClient";
 import {
   TaskDetail,
   TaskFilterState,
@@ -15,7 +15,7 @@ export class TaskService {
 
   constructor(accessTokenProvider: () => string | null, refreshAccessToken?: () => Promise<string | null>) {
     this.taskApi = new HttpTaskApi(
-      new FetchApiClient({
+      new MobileHotelOpAiClient({
         baseUrl: appApiBaseUrl,
         accessTokenProvider,
         refreshAccessToken

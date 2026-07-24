@@ -45,8 +45,11 @@ test("session restore clears stale stored session when auth and refresh are reje
   const originalFetch = globalThis.fetch;
   const store = createMemorySessionStore(sessionSnapshot());
   const calls = [];
-  globalThis.fetch = async (url) => {
-    calls.push(String(url));
+  globalThis.fetch = async (url, init) => {
+    calls.push({
+      url: String(url),
+      authorization: new Headers(init?.headers).get("Authorization")
+    });
     return new Response(JSON.stringify({ title: "Unauthorized", status: 401 }), { status: 401 });
   };
 
@@ -56,8 +59,16 @@ test("session restore clears stale stored session when auth and refresh are reje
 
     assert.equal(restored, null);
     assert.equal(store.cleared, true);
-    assert.equal(calls.some((url) => url.endsWith("/api/v1/auth/me")), true);
-    assert.equal(calls.some((url) => url.endsWith("/api/v1/auth/refresh")), true);
+    assert.equal(calls.some((call) => call.url.endsWith("/api/v1/auth/me")), true);
+    assert.equal(calls.some((call) => call.url.endsWith("/api/v1/auth/refresh")), true);
+    assert.equal(
+      calls.find((call) => call.url.endsWith("/api/v1/auth/me"))?.authorization,
+      "Bearer stored-access-token"
+    );
+    assert.equal(
+      calls.find((call) => call.url.endsWith("/api/v1/auth/refresh"))?.authorization,
+      null
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

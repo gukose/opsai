@@ -2,6 +2,7 @@ package com.hotelopai.outbox.application
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.hotelopai.observability.OperationalObservability
+import com.hotelopai.shared.kernel.PersistenceInstant
 import com.hotelopai.outbox.domain.OperationalOutboxAggregateTypes
 import com.hotelopai.outbox.domain.OperationalOutboxEvent
 import com.hotelopai.outbox.domain.OperationalOutboxEventTypes
@@ -20,11 +21,12 @@ class TaskCreatedOutboxPublisher(
     private val observability: OperationalObservability = OperationalObservability.noop()
 ) : TaskNotificationPublisher {
     override fun taskCreated(task: Task, now: Instant) {
+        val persistedNow = PersistenceInstant.toPersistencePrecision(now)
         val payload = TaskCreatedOutboxPayload(
             payloadVersion = TaskCreatedOutboxPayload.VERSION,
             taskId = task.id,
             hotelId = task.hotelId,
-            createdAt = now.toString()
+            createdAt = persistedNow.toString()
         )
         val event = OperationalOutboxEvent(
             eventType = OperationalOutboxEventTypes.TASK_CREATED,
@@ -32,9 +34,9 @@ class TaskCreatedOutboxPublisher(
             aggregateId = task.id,
             hotelId = task.hotelId,
             payloadJson = objectMapper.writeValueAsString(payload),
-            nextAttemptAt = now,
-            createdAt = now,
-            updatedAt = now
+            nextAttemptAt = persistedNow,
+            createdAt = persistedNow,
+            updatedAt = persistedNow
         )
 
         try {

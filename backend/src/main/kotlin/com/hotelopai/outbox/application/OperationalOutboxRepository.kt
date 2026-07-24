@@ -33,4 +33,16 @@ interface OperationalOutboxRepository {
     )
 
     fun recoverStale(cutoff: Instant, now: Instant): Int
+
+    fun cleanupTerminal(completedBefore: Instant, failedBefore: Instant, batchSize: Int): Int
+
+    fun countStates(): OperationalOutboxStateCounts
 }
+
+data class OperationalOutboxStateCounts(
+    val pending: Long,
+    val retrying: Long,
+    val locked: Long,
+    val completed: Long,
+    val deadLetter: Long
+)

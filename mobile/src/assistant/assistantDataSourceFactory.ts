@@ -3,7 +3,7 @@ import {
   assistantStaticMockEnabled
 } from "../config/assistantConfig";
 import { appApiBaseUrl } from "../config/appConfig";
-import { FetchApiClient } from "../api/client/FetchApiClient";
+import { MobileHotelOpAiClient } from "../api/hotelOpAiClient";
 import { CurrentUserSnapshot } from "../session/sessionTypes";
 import { AssistantDataSource } from "./assistantDataSource";
 import { BackendAssistantDataSource } from "./backendAssistantDataSource";
@@ -20,7 +20,7 @@ export function createAssistantHomeDataSource(
 ): AssistantDataSource {
   if (assistantDataSourceMode === "backend") {
     return new BackendAssistantDataSource(
-      new FetchApiClient({
+      new MobileHotelOpAiClient({
         baseUrl: appApiBaseUrl,
         accessTokenProvider: options.accessTokenProvider
       }),

@@ -26,3 +26,9 @@ assistant:
       max-output-tokens: ${OPENAI_MAX_OUTPUT_TOKENS:400}
       temperature: ${OPENAI_TEMPERATURE:0.0}
       retries: ${OPENAI_RETRIES:1}
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

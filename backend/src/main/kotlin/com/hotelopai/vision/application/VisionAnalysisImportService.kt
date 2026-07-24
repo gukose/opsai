@@ -10,6 +10,7 @@ import com.hotelopai.assistant.domain.ImageObservation
 import com.hotelopai.assistant.domain.ImageObservationSource
 import com.hotelopai.assistant.domain.InputType
 import com.hotelopai.observability.OperationalObservability
+import com.hotelopai.shared.kernel.PersistenceInstant
 import com.hotelopai.shared.kernel.UuidV7Generator
 import com.hotelopai.vision.domain.VisionAnalysis
 import com.hotelopai.vision.domain.VisionAnalysisImport
@@ -82,7 +83,7 @@ class VisionAnalysisImportService(
             throw VisionAnalysisImportConflictException("Completed vision analysis has no usable observations")
         }
 
-        val now = Instant.now()
+        val now = PersistenceInstant.toPersistencePrecision(Instant.now())
         val importRecord = VisionAnalysisImport(
             id = UuidV7Generator.generate(now),
             analysisId = analysis.id,
@@ -126,7 +127,7 @@ class VisionAnalysisImportService(
             message.imageObservations.any { it.analysisId == analysis.id.toString() }
         }?.id ?: throw VisionAnalysisImportConflictException("Vision analysis import did not persist a conversation message")
 
-        visionAnalysisImportRepository.save(importRecord.complete(messageId = messageId))
+        visionAnalysisImportRepository.save(importRecord.complete(messageId = messageId, now = now))
         outcome = "success"
         reasonCode = "none"
         recordImport(outcome, reasonCode)

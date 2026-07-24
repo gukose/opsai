@@ -1,6 +1,6 @@
 import type { CurrentUserSnapshot } from "../session/sessionTypes";
 import { HttpAssistantApi } from "../api/assistant/AssistantApi";
-import type { ApiClient } from "../api/client/ApiClient";
+import type { MobileHotelOpAiClient } from "../api/hotelOpAiClient";
 import { AppApiError } from "../api/client/AppApiError";
 import {
   assistantInterpretationFailureMessage,
@@ -24,7 +24,7 @@ export class BackendAssistantDataSource implements AssistantDataSource {
   private readonly api: HttpAssistantApi;
   private readonly currentUserProvider: () => CurrentUserSnapshot | null;
 
-  constructor(client: ApiClient, currentUserProvider: () => CurrentUserSnapshot | null) {
+  constructor(client: MobileHotelOpAiClient, currentUserProvider: () => CurrentUserSnapshot | null) {
     this.api = new HttpAssistantApi(client);
     this.currentUserProvider = currentUserProvider;
   }

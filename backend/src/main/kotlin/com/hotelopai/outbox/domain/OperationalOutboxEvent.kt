@@ -41,10 +41,19 @@ enum class OperationalOutboxStatus {
 
 object OperationalOutboxEventTypes {
     const val TASK_CREATED = "TASK_CREATED"
+    const val RESERVATION_IMPORTED = "RESERVATION_IMPORTED"
+    const val RESERVATION_UPDATED = "RESERVATION_UPDATED"
+    const val RESERVATION_STATUS_CHANGED = "RESERVATION_STATUS_CHANGED"
+    const val GUEST_CHECKED_IN = "GUEST_CHECKED_IN"
+    const val GUEST_CHECKED_OUT = "GUEST_CHECKED_OUT"
+    const val RESERVATION_CANCELLED = "RESERVATION_CANCELLED"
+    const val RESERVATION_MARKED_NO_SHOW = "RESERVATION_MARKED_NO_SHOW"
+    const val ROOM_ASSIGNMENT_CHANGED = "ROOM_ASSIGNMENT_CHANGED"
 }
 
 object OperationalOutboxAggregateTypes {
     const val TASK = "TASK"
+    const val RESERVATION = "RESERVATION"
 }
 
 data class TaskCreatedOutboxPayload(

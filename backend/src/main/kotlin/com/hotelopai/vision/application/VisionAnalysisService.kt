@@ -7,7 +7,7 @@ import com.hotelopai.assistant.domain.AttachmentStorageStatus
 import com.hotelopai.assistant.domain.AttachmentType
 import com.hotelopai.observability.OperationalObservability
 import com.hotelopai.shared.kernel.UuidV7Generator
-import com.hotelopai.shared.kernel.toPersistencePrecision
+import com.hotelopai.shared.kernel.PersistenceInstant
 import com.hotelopai.vision.domain.VisionAnalysis
 import com.hotelopai.vision.domain.VisionAnalysisProviderMode
 import com.hotelopai.vision.domain.VisionAnalysisStatus
@@ -99,7 +99,7 @@ class VisionAnalysisService(
             idempotencyKey = command.idempotencyKey
         ) ?: throw VisionAnalysisNotFoundException("Vision analysis not found for retry")
 
-        val retry = existing.retry(Instant.now().toPersistencePrecision())
+        val retry = existing.retry(PersistenceInstant.toPersistencePrecision(Instant.now()))
         analysisRepository.save(retry)
         val finalAnalysis = process(retry, command)
         outcome = analysisOutcome(finalAnalysis)
@@ -138,7 +138,7 @@ class VisionAnalysisService(
 
         require(attachment.type == AttachmentType.IMAGE) { "Only IMAGE attachments can be analyzed" }
 
-        val now = Instant.now().toPersistencePrecision()
+        val now = PersistenceInstant.toPersistencePrecision(Instant.now())
         return VisionAnalysis(
             id = UuidV7Generator.generate(now),
             attachmentId = attachment.id,
@@ -188,19 +188,19 @@ class VisionAnalysisService(
             return analysis.markIneligible(
                 code = "DETERMINISTIC_FIXTURES_DISABLED",
                 message = "Deterministic vision fixtures are not enabled",
-                now = Instant.now().toPersistencePrecision()
+                now = PersistenceInstant.toPersistencePrecision(Instant.now())
             )
         }
 
         return runCatching {
             visionAnalysisPort.analyze(request)
         }.fold(
-            onSuccess = { result -> analysis.complete(result, Instant.now().toPersistencePrecision()) },
+            onSuccess = { result -> analysis.complete(result, PersistenceInstant.toPersistencePrecision(Instant.now())) },
             onFailure = { failure ->
                 analysis.fail(
                     code = "PROVIDER_FAILURE",
                     message = failure.message?.take(500) ?: "Vision provider failed",
-                    now = Instant.now().toPersistencePrecision()
+                    now = PersistenceInstant.toPersistencePrecision(Instant.now())
                 )
             }
         )
@@ -215,14 +215,14 @@ class VisionAnalysisService(
             return analysis.markIneligible(
                 code = "PROVIDER_MEDIA_UNAVAILABLE",
                 message = "Attachment is registered metadata only and has no provider-accessible media",
-                now = Instant.now().toPersistencePrecision()
+                now = PersistenceInstant.toPersistencePrecision(Instant.now())
             )
         }
 
         return runCatching {
             visionAnalysisPort.analyze(request)
         }.fold(
-            onSuccess = { result -> analysis.complete(result, Instant.now().toPersistencePrecision()) },
+            onSuccess = { result -> analysis.complete(result, PersistenceInstant.toPersistencePrecision(Instant.now())) },
             onFailure = { failure ->
                 val code = if (failure is VisionAnalysisProviderUnavailableException) {
                     "PROVIDER_UNAVAILABLE"
@@ -232,7 +232,7 @@ class VisionAnalysisService(
                 analysis.fail(
                     code = code,
                     message = failure.message?.take(500) ?: "Vision provider failed",
-                    now = Instant.now().toPersistencePrecision()
+                    now = PersistenceInstant.toPersistencePrecision(Instant.now())
                 )
             }
         )

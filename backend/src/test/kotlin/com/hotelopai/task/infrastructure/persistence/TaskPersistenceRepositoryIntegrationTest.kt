@@ -3,6 +3,7 @@ package com.hotelopai.task.infrastructure.persistence
 import com.hotelopai.task.application.TaskLifecycleService
 import com.hotelopai.task.application.TaskNotFoundException
 import com.hotelopai.task.application.TaskRepository
+import com.hotelopai.task.domain.TaskAssigneeType
 import com.hotelopai.task.domain.Task
 import com.hotelopai.task.domain.TaskIntentType
 import com.hotelopai.task.domain.TaskPriority
@@ -78,6 +79,58 @@ class TaskPersistenceRepositoryIntegrationTest : PostgresIntegrationTestSupport(
         assertThat(taskRepository.findById(saved.id)).isEqualTo(saved)
         assertThat(taskRepository.findById(saved.id)?.roomNumber).isEqualTo("101")
         assertThat(taskRepository.findAll()).contains(saved)
+    }
+
+    @Test
+    fun `task lifecycle persisted timestamps match immediate return and reload precision`() {
+        val hotel = hotelRepository.save(Hotel(code = "task-hotel-precision", name = "Task Precision Hotel"))
+        val createdAt = Instant.parse("2026-07-08T10:00:00.123456789Z")
+        val assignedAt = Instant.parse("2026-07-08T10:01:00.987654321Z")
+        val startedAt = Instant.parse("2026-07-08T10:02:00.555555999Z")
+        val created = taskLifecycleService.createTask(
+            com.hotelopai.task.application.CreateTaskCommand(
+                hotelId = hotel.id,
+                intentType = TaskIntentType.MAINTENANCE,
+                source = TaskSource.MANUAL,
+                title = "Precision task",
+                description = "Precision task description",
+                priority = TaskPriority.HIGH,
+                slaDeadline = Instant.parse("2026-07-08T12:00:00.123456789Z")
+            ),
+            now = createdAt
+        )
+        val assigned = taskLifecycleService.assignTask(
+            created.id.toString(),
+            created.hotelId,
+            com.hotelopai.task.application.AssignTaskCommand(
+                com.hotelopai.task.application.AssignmentCommand(
+                    assigneeType = TaskAssigneeType.USER,
+                    assigneeId = UUID.randomUUID().toString(),
+                    displayName = "Precision User"
+                )
+            ),
+            assignedAt
+        )
+        val started = taskLifecycleService.startTask(assigned.id.toString(), assigned.hotelId, startedAt)
+
+        val reloaded = taskRepository.findById(started.id) ?: error("task not found")
+        assertThat(created.createdAt).isEqualTo(Instant.parse("2026-07-08T10:00:00.123456Z"))
+        assertThat(assigned.assignment?.assignedAt).isEqualTo(Instant.parse("2026-07-08T10:01:00.987654Z"))
+        assertThat(started.startedAt).isEqualTo(Instant.parse("2026-07-08T10:02:00.555555Z"))
+        assertThat(reloaded).isEqualTo(started)
+
+        val history = taskStateHistoryJpaRepository.findAllByTaskIdOrderByCreatedAtAsc(started.id)
+        assertThat(history.map { it.createdAt }).contains(
+            Instant.parse("2026-07-08T10:00:00.123456Z"),
+            Instant.parse("2026-07-08T10:01:00.987654Z"),
+            Instant.parse("2026-07-08T10:02:00.555555Z")
+        )
+        assertThat(taskLogJpaRepository.findAllByTaskIdOrderByCreatedAtAsc(started.id).map { it.createdAt })
+            .contains(
+                Instant.parse("2026-07-08T10:00:00.123456Z"),
+                Instant.parse("2026-07-08T10:01:00.987654Z"),
+                Instant.parse("2026-07-08T10:02:00.555555Z")
+            )
     }
 
     @Test

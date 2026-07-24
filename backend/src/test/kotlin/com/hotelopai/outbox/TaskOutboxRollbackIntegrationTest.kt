@@ -3,6 +3,7 @@ package com.hotelopai.outbox
 import com.hotelopai.hotel.application.HotelRepository
 import com.hotelopai.hotel.domain.Hotel
 import com.hotelopai.outbox.application.OperationalOutboxRepository
+import com.hotelopai.outbox.application.OperationalOutboxStateCounts
 import com.hotelopai.outbox.domain.OperationalOutboxEvent
 import com.hotelopai.shared.kernel.UuidV7Generator
 import com.hotelopai.support.PostgresIntegrationTestSupport
@@ -106,6 +107,17 @@ class TaskOutboxRollbackIntegrationTest : PostgresIntegrationTestSupport() {
                 ) = Unit
 
                 override fun recoverStale(cutoff: Instant, now: Instant): Int = 0
+
+                override fun cleanupTerminal(completedBefore: Instant, failedBefore: Instant, batchSize: Int): Int = 0
+
+                override fun countStates(): OperationalOutboxStateCounts =
+                    OperationalOutboxStateCounts(
+                        pending = 0,
+                        retrying = 0,
+                        locked = 0,
+                        completed = 0,
+                        deadLetter = 0
+                    )
             }
     }
 }

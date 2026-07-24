@@ -8,9 +8,10 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "test": "node --no-warnings --test $(find src -name '*.test.mjs' -print | sort)"
+    "test": "node --no-warnings --import ./src/test/registerTsHooks.mjs --test $(find src -name '*.test.mjs' -print | sort)"
   },
   "dependencies": {
+    "@hotelopai/api-client": "file:../sdk/typescript",
     "expo": "~57.0.0",
     "expo-image-picker": "^57.0.4",
     "expo-secure-store": "~57.0.0",

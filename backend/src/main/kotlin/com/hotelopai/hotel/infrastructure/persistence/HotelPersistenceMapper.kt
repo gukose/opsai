@@ -1,6 +1,7 @@
 package com.hotelopai.hotel.infrastructure.persistence
 
 import com.hotelopai.hotel.domain.Hotel
+import com.hotelopai.shared.kernel.PersistenceInstant
 
 internal object HotelPersistenceMapper {
     fun toDomain(entity: HotelJpaEntity): Hotel =
@@ -23,9 +24,9 @@ internal object HotelPersistenceMapper {
             name = domain.name
             status = domain.status
             version = domain.version.takeIf { it > 0 }
-            createdAt = domain.createdAt
+            createdAt = PersistenceInstant.toPersistencePrecision(domain.createdAt)
             createdBy = domain.createdBy
-            updatedAt = domain.updatedAt
+            updatedAt = PersistenceInstant.toPersistencePrecision(domain.updatedAt)
             updatedBy = domain.updatedBy
         }
 }

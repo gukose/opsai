@@ -1,5 +1,5 @@
-import { FetchApiClient } from "../api/client/FetchApiClient";
 import { HttpDashboardApi } from "../api/dashboard/DashboardApi";
+import { MobileHotelOpAiClient } from "../api/hotelOpAiClient";
 import { appApiBaseUrl } from "../config/appConfig";
 import { dashboardSummaryFromResponse, taskReportingFromResponse } from "./types";
 import type { DashboardSummary, TaskReportingSummary } from "./types";
@@ -9,7 +9,7 @@ export class DashboardService {
 
   constructor(accessTokenProvider: () => string | null, refreshAccessToken?: () => Promise<string | null>) {
     this.dashboardApi = new HttpDashboardApi(
-      new FetchApiClient({
+      new MobileHotelOpAiClient({
         baseUrl: appApiBaseUrl,
         accessTokenProvider,
         refreshAccessToken

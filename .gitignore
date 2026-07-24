@@ -43,6 +43,8 @@ out/
 # Node
 node_modules/
 **/node_modules/
+/sdk/typescript/dist/
+/sdk/typescript/build/
 
 # Logs
 *.log

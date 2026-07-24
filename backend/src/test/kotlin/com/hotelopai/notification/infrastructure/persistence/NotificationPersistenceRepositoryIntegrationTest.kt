@@ -86,4 +86,31 @@ class NotificationPersistenceRepositoryIntegrationTest : PostgresIntegrationTest
             )
         ).containsExactly(saved)
     }
+
+    @Test
+    fun `save returns notification timestamps at persistence precision`() {
+        val hotel = hotelRepository.save(
+            Hotel(code = "notification-precision-${UuidV7Generator.generate()}", name = "Notification Precision Hotel")
+        )
+        val createdAt = Instant.parse("2026-07-14T12:00:00.123456789Z")
+        val readAt = Instant.parse("2026-07-14T12:05:00.987654321Z")
+        val notification = Notification(
+            hotelId = hotel.id,
+            recipient = NotificationRecipient.Role("ADMIN"),
+            type = NotificationType.TASK_CREATED,
+            status = NotificationStatus.READ,
+            title = "Task created",
+            body = "Precision task was created.",
+            readAt = readAt,
+            createdAt = createdAt,
+            updatedAt = readAt
+        )
+
+        val saved = notificationRepository.save(notification)
+
+        assertThat(saved.createdAt).isEqualTo(Instant.parse("2026-07-14T12:00:00.123456Z"))
+        assertThat(saved.readAt).isEqualTo(Instant.parse("2026-07-14T12:05:00.987654Z"))
+        assertThat(saved.updatedAt).isEqualTo(Instant.parse("2026-07-14T12:05:00.987654Z"))
+        assertThat(notificationRepository.findById(saved.id)).isEqualTo(saved)
+    }
 }

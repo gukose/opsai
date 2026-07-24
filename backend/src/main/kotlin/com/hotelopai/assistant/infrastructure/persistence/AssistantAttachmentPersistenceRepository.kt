@@ -4,6 +4,7 @@ import com.hotelopai.assistant.application.AssistantAttachmentRepository
 import com.hotelopai.assistant.domain.AttachmentStorageStatus
 import com.hotelopai.assistant.domain.AttachmentType
 import com.hotelopai.assistant.domain.RegisteredConversationAttachment
+import com.hotelopai.shared.kernel.PersistenceInstant
 import org.springframework.dao.EmptyResultDataAccessException
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
@@ -19,6 +20,7 @@ class AssistantAttachmentPersistenceRepository(
     private val jdbcTemplate: NamedParameterJdbcTemplate
 ) : AssistantAttachmentRepository {
     override fun save(attachment: RegisteredConversationAttachment): RegisteredConversationAttachment {
+        val normalized = attachment.normalizedForPersistence()
         val inserted = jdbcTemplate.update(
             """
             insert into assistant_attachment (
@@ -58,20 +60,20 @@ class AssistantAttachmentPersistenceRepository(
                 where registration_idempotency_key is not null
                 do nothing
             """.trimIndent(),
-            attachment.toSqlParameters()
+            normalized.toSqlParameters()
         )
 
         if (inserted == 1) {
-            return attachment
+            return normalized
         }
 
         return requireNotNull(
-            attachment.registrationIdempotencyKey
+            normalized.registrationIdempotencyKey
             ?.let {
                 findByRegistrationIdempotencyKey(
-                    conversationId = attachment.conversationId,
-                    hotelId = attachment.hotelId,
-                    userId = attachment.userId,
+                    conversationId = normalized.conversationId,
+                    hotelId = normalized.hotelId,
+                    userId = normalized.userId,
                     registrationIdempotencyKey = it
                 )
             }
@@ -182,6 +184,12 @@ private fun RegisteredConversationAttachment.toSqlParameters(): MapSqlParameterS
         .addValue("registrationIdempotencyKey", registrationIdempotencyKey)
         .addValue("createdAt", Timestamp.from(createdAt))
         .addValue("updatedAt", Timestamp.from(updatedAt))
+
+private fun RegisteredConversationAttachment.normalizedForPersistence(): RegisteredConversationAttachment =
+    copy(
+        createdAt = PersistenceInstant.toPersistencePrecision(createdAt),
+        updatedAt = PersistenceInstant.toPersistencePrecision(updatedAt)
+    )
 
 private fun ResultSet.toRegisteredAttachment(): RegisteredConversationAttachment =
     RegisteredConversationAttachment(

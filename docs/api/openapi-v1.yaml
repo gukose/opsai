@@ -1,0 +1,4347 @@
+openapi: 3.1.0
+info:
+  title: Hotel OpAI API
+  description: Stable v1 REST API. Product endpoints are path-versioned under /api/v1
+    and use ProblemDetail for error responses.
+  version: v1
+security:
+- bearerAuth: []
+paths:
+  /api/v1/tasks:
+    get:
+      tags:
+      - task-controller
+      operationId: TaskController_listTasks
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: priority
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: assignment
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: createdFrom
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: createdTo
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                oneOf:
+                - type: array
+                  items:
+                    $ref: "#/components/schemas/TaskResponse"
+                - $ref: "#/components/schemas/TaskPageResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+    post:
+      tags:
+      - task-controller
+      operationId: TaskController_createTask
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/tasks/{taskId}/start:
+    post:
+      tags:
+      - task-controller
+      operationId: TaskController_startTask
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/tasks/{taskId}/resume:
+    post:
+      tags:
+      - task-controller
+      operationId: TaskController_resumeTask
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/tasks/{taskId}/pause:
+    post:
+      tags:
+      - task-controller
+      operationId: TaskController_pauseTask
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/tasks/{taskId}/overdue:
+    post:
+      tags:
+      - task-controller
+      operationId: TaskController_overdueTask
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/tasks/{taskId}/complete:
+    post:
+      tags:
+      - task-controller
+      operationId: TaskController_completeTask
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/tasks/{taskId}/cancel:
+    post:
+      tags:
+      - task-controller
+      operationId: TaskController_cancelTask
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/tasks/{taskId}/assign:
+    post:
+      tags:
+      - task-controller
+      operationId: TaskController_assignTask
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignTaskRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/notifications/{notificationId}/read:
+    post:
+      tags:
+      - notification-controller
+      operationId: NotificationController_markRead
+      parameters:
+      - name: notificationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/NotificationResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/auth/refresh:
+    post:
+      tags:
+      - auth-controller
+      operationId: AuthController_refresh
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AuthSessionResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security: []
+  /api/v1/auth/logout:
+    post:
+      tags:
+      - auth-controller
+      operationId: AuthController_logout
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/auth/login:
+    post:
+      tags:
+      - auth-controller
+      operationId: AuthController_login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AuthSessionResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security: []
+  /api/v1/assistant/conversations:
+    post:
+      tags:
+      - assistant-conversation-controller
+      operationId: AssistantConversationController_startConversation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartConversationRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AssistantConversationResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/assistant/conversations/{conversationId}/vision-analyses/{analysisId}/import:
+    post:
+      tags:
+      - vision-analysis-import-controller
+      operationId: VisionAnalysisImportController_importVisionAnalysis
+      parameters:
+      - name: conversationId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: analysisId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportVisionAnalysisRequest"
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AssistantConversationResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/assistant/conversations/{conversationId}/reset:
+    post:
+      tags:
+      - assistant-conversation-controller
+      operationId: AssistantConversationController_resetConversation
+      parameters:
+      - name: conversationId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AssistantConversationResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/assistant/conversations/{conversationId}/messages:
+    post:
+      tags:
+      - assistant-conversation-controller
+      operationId: AssistantConversationController_sendMessage
+      parameters:
+      - name: conversationId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendAssistantMessageRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AssistantConversationResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/assistant/conversations/{conversationId}/confirm:
+    post:
+      tags:
+      - assistant-conversation-controller
+      operationId: AssistantConversationController_confirmTask
+      parameters:
+      - name: conversationId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmTaskRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AssistantConversationResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/assistant/conversations/{conversationId}/attachments:
+    post:
+      tags:
+      - assistant-conversation-controller
+      operationId: AssistantConversationController_registerAttachment
+      parameters:
+      - name: conversationId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterAssistantAttachmentRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RegisteredAssistantAttachmentResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/tasks/{taskId}:
+    get:
+      tags:
+      - task-controller
+      operationId: TaskController_getTask
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/tasks/{taskId}/attachments:
+    get:
+      tags:
+      - task-controller
+      operationId: TaskController_getTaskAttachments
+      parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskAttachmentResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/notifications:
+    get:
+      tags:
+      - notification-controller
+      operationId: NotificationController_listNotifications
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NotificationResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/dashboard/summary:
+    get:
+      tags:
+      - dashboard-controller
+      operationId: DashboardController_summary
+      parameters:
+      - name: range
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/DashboardSummaryResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/dashboard/reports/tasks:
+    get:
+      tags:
+      - dashboard-controller
+      operationId: DashboardController_taskReport
+      parameters:
+      - name: range
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TaskReportingResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+  /api/v1/auth/me:
+    get:
+      tags:
+      - auth-controller
+      operationId: AuthController_me
+      responses:
+        "200":
+          description: OK
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CurrentUserResponse"
+        "400":
+          description: Invalid request
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "401":
+          description: Authentication required
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "403":
+          description: Permission denied
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "404":
+          description: Resource not found
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "409":
+          description: Conflict
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "429":
+          description: Rate limit exceeded
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        "500":
+          description: Unexpected server error
+          headers:
+            X-API-Version:
+              description: API version that handled the request.
+              schema:
+                type: string
+                default: v1
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+      security:
+      - bearerAuth: []
+components:
+  schemas:
+    AssignmentRequest:
+      type: object
+      properties:
+        assigneeType:
+          type: string
+          enum:
+          - TEAM
+          - USER
+        assigneeId:
+          type: string
+        displayName:
+          type: string
+      required:
+      - assigneeId
+      - assigneeType
+      - displayName
+    CreateTaskRequest:
+      type: object
+      properties:
+        hotelId:
+          type: string
+        intentType:
+          type: string
+          enum:
+          - GUEST_REQUEST
+          - MAINTENANCE
+          - HOUSEKEEPING
+          - DAMAGE_REPORT
+          - LOST_AND_FOUND
+          - TRAY_REMOVAL
+          - LAUNDRY
+          - MINIBAR
+          - FLASH_TASK
+          - SHIFT_HANDOVER
+          - PUBLIC_AREA
+          - INVENTORY
+          - DELIVERIES
+        source:
+          type: string
+          enum:
+          - ASSISTANT
+          - MANUAL
+          - MOBILE
+          - API
+          - IMPORT
+        title:
+          type: string
+        description:
+          type: string
+        roomNumber:
+          type:
+          - string
+          - "null"
+        priority:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - URGENT
+        slaDeadline:
+          type: string
+          format: date-time
+        assignment:
+          oneOf:
+          - $ref: "#/components/schemas/AssignmentRequest"
+          - type: "null"
+      required:
+      - description
+      - hotelId
+      - intentType
+      - priority
+      - slaDeadline
+      - source
+      - title
+    TaskAssignmentResponse:
+      type: object
+      properties:
+        assigneeType:
+          type: string
+        assigneeId:
+          type: string
+        displayName:
+          type: string
+        assignedAt:
+          type: string
+          format: date-time
+      required:
+      - assignedAt
+      - assigneeId
+      - assigneeType
+      - displayName
+    TaskResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        hotelId:
+          type: string
+        intentType:
+          type: string
+        source:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        roomNumber:
+          type:
+          - string
+          - "null"
+        priority:
+          type: string
+        status:
+          type: string
+        slaDeadline:
+          type: string
+          format: date-time
+        assignment:
+          oneOf:
+          - $ref: "#/components/schemas/TaskAssignmentResponse"
+          - type: "null"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+        completedAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+        cancelledAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+        overdueAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+      required:
+      - createdAt
+      - description
+      - hotelId
+      - id
+      - intentType
+      - priority
+      - slaDeadline
+      - source
+      - status
+      - title
+      - updatedAt
+    AssignTaskRequest:
+      type: object
+      properties:
+        assigneeType:
+          type: string
+          enum:
+          - TEAM
+          - USER
+        assigneeId:
+          type: string
+        displayName:
+          type: string
+      required:
+      - assigneeId
+      - assigneeType
+      - displayName
+    NotificationRecipientResponse:
+      type: object
+      properties:
+        type:
+          type: string
+        userId:
+          type:
+          - string
+          - "null"
+        roleCode:
+          type:
+          - string
+          - "null"
+      required:
+      - type
+    NotificationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        hotelId:
+          type: string
+        recipient:
+          $ref: "#/components/schemas/NotificationRecipientResponse"
+        type:
+          type: string
+        status:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        sourceTaskId:
+          type:
+          - string
+          - "null"
+        readAt:
+          type:
+          - string
+          - "null"
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+      - body
+      - createdAt
+      - hotelId
+      - id
+      - recipient
+      - status
+      - title
+      - type
+      - updatedAt
+    RefreshRequest:
+      type: object
+      properties:
+        refreshToken:
+          type: string
+          minLength: 1
+        deviceId:
+          type:
+          - string
+          - "null"
+        deviceName:
+          type:
+          - string
+          - "null"
+        ipAddress:
+          type:
+          - string
+          - "null"
+        userAgent:
+          type:
+          - string
+          - "null"
+      required:
+      - refreshToken
+    AuthSessionResponse:
+      type: object
+      properties:
+        tokenType:
+          type: string
+        accessToken:
+          type: string
+        accessTokenExpiresAt:
+          type: string
+          format: date-time
+        refreshToken:
+          type: string
+        refreshTokenExpiresAt:
+          type: string
+          format: date-time
+        user:
+          $ref: "#/components/schemas/CurrentUserResponse"
+      required:
+      - accessToken
+      - accessTokenExpiresAt
+      - refreshToken
+      - refreshTokenExpiresAt
+      - tokenType
+      - user
+    CurrentUserResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        hotelId:
+          type: string
+          format: uuid
+        employeeId:
+          type:
+          - string
+          - "null"
+          format: uuid
+        email:
+          type: string
+        displayName:
+          type: string
+        hotelName:
+          type: string
+        roles:
+          type: array
+          items:
+            $ref: "#/components/schemas/RoleResponse"
+        permissions:
+          type: array
+          items:
+            $ref: "#/components/schemas/PermissionResponse"
+      required:
+      - displayName
+      - email
+      - hotelId
+      - hotelName
+      - permissions
+      - roles
+      - userId
+    PermissionResponse:
+      type: object
+      properties:
+        permissionId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+      required:
+      - code
+      - name
+      - permissionId
+    RoleResponse:
+      type: object
+      properties:
+        roleId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+      required:
+      - code
+      - name
+      - roleId
+    LoginRequest:
+      type: object
+      properties:
+        hotelCode:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          minLength: 1
+        deviceId:
+          type:
+          - string
+          - "null"
+        deviceName:
+          type:
+          - string
+          - "null"
+        ipAddress:
+          type:
+          - string
+          - "null"
+        userAgent:
+          type:
+          - string
+          - "null"
+      required:
+      - email
+      - hotelCode
+      - password
+    StartConversationRequest:
+      type: object
+      properties:
+        hotelId:
+          type: string
+        userId:
+          type: string
+      required:
+      - hotelId
+      - userId
+    AssistantConversationResponse:
+      type: object
+      properties:
+        conversationId:
+          type: string
+        state:
+          type: string
+        assistantMessage:
+          type: string
+        intent:
+          type: string
+        missingFields:
+          type: array
+          items:
+            $ref: "#/components/schemas/MissingFieldDto"
+        followUpQuestion:
+          oneOf:
+          - $ref: "#/components/schemas/FollowUpQuestionDto"
+          - type: "null"
+        taskPreview:
+          oneOf:
+          - $ref: "#/components/schemas/TaskPreviewDto"
+          - type: "null"
+        taskCreationRequest:
+          oneOf:
+          - $ref: "#/components/schemas/TaskCreationRequestDto"
+          - type: "null"
+        createdTaskId:
+          type:
+          - string
+          - "null"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConversationMessageDto"
+      required:
+      - assistantMessage
+      - conversationId
+      - intent
+      - messages
+      - missingFields
+      - state
+    AudioMetadataDto:
+      type: object
+      properties:
+        originalFileName:
+          type:
+          - string
+          - "null"
+        mimeType:
+          type:
+          - string
+          - "null"
+        durationMs:
+          type:
+          - integer
+          - "null"
+          format: int64
+        sizeBytes:
+          type:
+          - integer
+          - "null"
+          format: int64
+    ConversationMessageDto:
+      type: object
+      properties:
+        id:
+          type: string
+        role:
+          type: string
+        inputType:
+          type: string
+        text:
+          type:
+          - string
+          - "null"
+        voiceTranscript:
+          type:
+          - string
+          - "null"
+        voiceTranscriptMetadata:
+          oneOf:
+          - $ref: "#/components/schemas/VoiceTranscriptDto"
+          - type: "null"
+        audioMetadata:
+          oneOf:
+          - $ref: "#/components/schemas/AudioMetadataDto"
+          - type: "null"
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/MessageAttachmentDto"
+        imageObservations:
+          type: array
+          items:
+            $ref: "#/components/schemas/ImageObservationDto"
+        attachmentIds:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+      required:
+      - attachmentIds
+      - attachments
+      - createdAt
+      - id
+      - imageObservations
+      - inputType
+      - role
+    FollowUpOptionDto:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        value:
+          type: string
+      required:
+      - id
+      - label
+      - value
+    FollowUpQuestionDto:
+      type: object
+      properties:
+        id:
+          type: string
+        fieldKey:
+          type: string
+        prompt:
+          type: string
+        options:
+          type: array
+          items:
+            $ref: "#/components/schemas/FollowUpOptionDto"
+      required:
+      - fieldKey
+      - id
+      - options
+      - prompt
+    ImageObservationDto:
+      type: object
+      properties:
+        id:
+          type:
+          - string
+          - "null"
+        attachmentId:
+          type:
+          - string
+          - "null"
+        analysisId:
+          type:
+          - string
+          - "null"
+        text:
+          type:
+          - string
+          - "null"
+        source:
+          type:
+          - string
+          - "null"
+          enum:
+          - USER_PROVIDED
+          - VISION_ANALYSIS
+        advisory:
+          type:
+          - boolean
+          - "null"
+        order:
+          type:
+          - integer
+          - "null"
+          format: int32
+        providerId:
+          type:
+          - string
+          - "null"
+        description:
+          type:
+          - string
+          - "null"
+        confidence:
+          type:
+          - number
+          - "null"
+          format: double
+        imageBase64:
+          type:
+          - string
+          - "null"
+        imageBytes:
+          type:
+          - string
+          - "null"
+        imageUrl:
+          type:
+          - string
+          - "null"
+    MessageAttachmentDto:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type:
+          - string
+          - "null"
+          enum:
+          - IMAGE
+          - PDF
+          - DOCUMENT
+        originalFileName:
+          type:
+          - string
+          - "null"
+        mimeType:
+          type:
+          - string
+          - "null"
+        sizeBytes:
+          type:
+          - integer
+          - "null"
+          format: int64
+        widthPx:
+          type:
+          - integer
+          - "null"
+          format: int32
+        heightPx:
+          type:
+          - integer
+          - "null"
+          format: int32
+        localReference:
+          type:
+          - string
+          - "null"
+        storageStatus:
+          type:
+          - string
+          - "null"
+          enum:
+          - LOCAL_METADATA_ONLY
+          - REGISTERED
+        storageReference:
+          type:
+          - string
+          - "null"
+        hotelId:
+          type:
+          - string
+          - "null"
+        userId:
+          type:
+          - string
+          - "null"
+        ownerId:
+          type:
+          - string
+          - "null"
+      required:
+      - id
+    MissingFieldDto:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        required:
+          type: boolean
+      required:
+      - key
+      - label
+      - required
+    TaskCreationRequestDto:
+      type: object
+      properties:
+        conversationId:
+          type: string
+        draftId:
+          type: string
+        draftVersion:
+          type: integer
+          format: int32
+        idempotencyKey:
+          type: string
+        preview:
+          $ref: "#/components/schemas/TaskPreviewDto"
+      required:
+      - conversationId
+      - draftId
+      - draftVersion
+      - idempotencyKey
+      - preview
+    TaskPreviewDto:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        roomNumber:
+          type:
+          - string
+          - "null"
+        publicAreaId:
+          type:
+          - string
+          - "null"
+        assetId:
+          type:
+          - string
+          - "null"
+        assignedTeam:
+          type:
+          - string
+          - "null"
+        priority:
+          type:
+          - string
+          - "null"
+        slaMinutes:
+          type:
+          - integer
+          - "null"
+          format: int32
+        requiresPmsUpdate:
+          type: boolean
+      required:
+      - description
+      - requiresPmsUpdate
+      - title
+      - type
+    VoiceTranscriptDto:
+      type: object
+      properties:
+        transcript:
+          type:
+          - string
+          - "null"
+        languageCode:
+          type:
+          - string
+          - "null"
+        durationMs:
+          type:
+          - integer
+          - "null"
+          format: int64
+        source:
+          type:
+          - string
+          - "null"
+          enum:
+          - CLIENT_TRANSCRIPT
+        audioBase64:
+          type:
+          - string
+          - "null"
+        audioBytes:
+          type:
+          - string
+          - "null"
+        audioUrl:
+          type:
+          - string
+          - "null"
+        localAudioUri:
+          type:
+          - string
+          - "null"
+        fileUri:
+          type:
+          - string
+          - "null"
+    ImportVisionAnalysisRequest:
+      type: object
+      properties:
+        hotelId:
+          type:
+          - string
+          - "null"
+        userId:
+          type:
+          - string
+          - "null"
+        attachmentId:
+          type:
+          - string
+          - "null"
+        observationText:
+          type:
+          - string
+          - "null"
+        text:
+          type:
+          - string
+          - "null"
+        confidence:
+          type:
+          - number
+          - "null"
+          format: double
+        providerMetadata:
+          type:
+          - object
+          - "null"
+          additionalProperties: {}
+        providerId:
+          type:
+          - string
+          - "null"
+        storageReference:
+          type:
+          - string
+          - "null"
+        localReference:
+          type:
+          - string
+          - "null"
+        localUri:
+          type:
+          - string
+          - "null"
+        fileUri:
+          type:
+          - string
+          - "null"
+        deviceUri:
+          type:
+          - string
+          - "null"
+        mediaUrl:
+          type:
+          - string
+          - "null"
+        imageUrl:
+          type:
+          - string
+          - "null"
+        fileUrl:
+          type:
+          - string
+          - "null"
+        base64:
+          type:
+          - string
+          - "null"
+        binary:
+          type:
+          - string
+          - "null"
+        rawBytes:
+          type:
+          - string
+          - "null"
+    SendAssistantMessageRequest:
+      type: object
+      properties:
+        text:
+          type: string
+        inputType:
+          type: string
+          enum:
+          - TEXT
+          - VOICE_TRANSCRIPT
+          - VOICE
+          - IMAGE
+          - MIXED
+        transcript:
+          type:
+          - string
+          - "null"
+        voiceTranscript:
+          oneOf:
+          - $ref: "#/components/schemas/VoiceTranscriptDto"
+          - type: "null"
+        audioMetadata:
+          oneOf:
+          - $ref: "#/components/schemas/AudioMetadataDto"
+          - type: "null"
+        attachments:
+          type:
+          - array
+          - "null"
+          items:
+            $ref: "#/components/schemas/MessageAttachmentDto"
+        attachmentIds:
+          type:
+          - array
+          - "null"
+          items:
+            type: string
+        imageObservations:
+          type:
+          - array
+          - "null"
+          items:
+            $ref: "#/components/schemas/ImageObservationDto"
+        hotelId:
+          type:
+          - string
+          - "null"
+        userId:
+          type:
+          - string
+          - "null"
+        audioBase64:
+          type:
+          - string
+          - "null"
+        audioBytes:
+          type:
+          - string
+          - "null"
+        audioUrl:
+          type:
+          - string
+          - "null"
+        localAudioUri:
+          type:
+          - string
+          - "null"
+        fileUri:
+          type:
+          - string
+          - "null"
+        imageBase64:
+          type:
+          - string
+          - "null"
+        imageBytes:
+          type:
+          - string
+          - "null"
+        imageUrl:
+          type:
+          - string
+          - "null"
+      required:
+      - inputType
+      - text
+    ConfirmTaskRequest:
+      type: object
+      properties:
+        idempotencyKey:
+          type: string
+      required:
+      - idempotencyKey
+    RegisterAssistantAttachmentRequest:
+      type: object
+      properties:
+        type:
+          type:
+          - string
+          - "null"
+          enum:
+          - IMAGE
+          - PDF
+          - DOCUMENT
+        originalFileName:
+          type:
+          - string
+          - "null"
+        mimeType:
+          type:
+          - string
+          - "null"
+        sizeBytes:
+          type:
+          - integer
+          - "null"
+          format: int64
+        widthPx:
+          type:
+          - integer
+          - "null"
+          format: int32
+        heightPx:
+          type:
+          - integer
+          - "null"
+          format: int32
+        id:
+          type:
+          - string
+          - "null"
+        hotelId:
+          type:
+          - string
+          - "null"
+        userId:
+          type:
+          - string
+          - "null"
+        ownerId:
+          type:
+          - string
+          - "null"
+        storageReference:
+          type:
+          - string
+          - "null"
+        storageStatus:
+          type:
+          - string
+          - "null"
+        providerUrl:
+          type:
+          - string
+          - "null"
+        mediaUrl:
+          type:
+          - string
+          - "null"
+        imageUrl:
+          type:
+          - string
+          - "null"
+        fileUrl:
+          type:
+          - string
+          - "null"
+        imageBase64:
+          type:
+          - string
+          - "null"
+        imageBytes:
+          type:
+          - string
+          - "null"
+        base64:
+          type:
+          - string
+          - "null"
+        binary:
+          type:
+          - string
+          - "null"
+        rawBytes:
+          type:
+          - string
+          - "null"
+        localReference:
+          type:
+          - string
+          - "null"
+        localUri:
+          type:
+          - string
+          - "null"
+        fileUri:
+          type:
+          - string
+          - "null"
+        deviceUri:
+          type:
+          - string
+          - "null"
+    RegisteredAssistantAttachmentResponse:
+      type: object
+      properties:
+        attachmentId:
+          type: string
+        conversationId:
+          type: string
+        type:
+          type: string
+          enum:
+          - IMAGE
+          - PDF
+          - DOCUMENT
+        originalFileName:
+          type: string
+        mimeType:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+        widthPx:
+          type:
+          - integer
+          - "null"
+          format: int32
+        heightPx:
+          type:
+          - integer
+          - "null"
+          format: int32
+        storageStatus:
+          type: string
+          enum:
+          - LOCAL_METADATA_ONLY
+          - REGISTERED
+        storageReference:
+          type:
+          - string
+          - "null"
+        createdAt:
+          type: string
+      required:
+      - attachmentId
+      - conversationId
+      - createdAt
+      - mimeType
+      - originalFileName
+      - sizeBytes
+      - storageStatus
+      - type
+    TaskAttachmentResponse:
+      type: object
+      properties:
+        attachmentId:
+          type: string
+        conversationId:
+          type: string
+        type:
+          type: string
+        originalFileName:
+          type: string
+        declaredMimeType:
+          type: string
+        declaredSizeBytes:
+          type: integer
+          format: int64
+        widthPx:
+          type:
+          - integer
+          - "null"
+          format: int32
+        heightPx:
+          type:
+          - integer
+          - "null"
+          format: int32
+        storageStatus:
+          type: string
+        sourceType:
+          type: string
+        analysisId:
+          type:
+          - string
+          - "null"
+        analysisImportId:
+          type:
+          - string
+          - "null"
+        createdAt:
+          type: string
+          format: date-time
+      required:
+      - attachmentId
+      - conversationId
+      - createdAt
+      - declaredMimeType
+      - declaredSizeBytes
+      - originalFileName
+      - sourceType
+      - storageStatus
+      - type
+    DashboardNotificationSummaryResponse:
+      type: object
+      properties:
+        unread:
+          type: integer
+          format: int64
+        recent:
+          type: array
+          items:
+            $ref: "#/components/schemas/DashboardRecentNotificationResponse"
+      required:
+      - recent
+      - unread
+    DashboardRecentNotificationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        title:
+          type: string
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        sourceTaskId:
+          type:
+          - string
+          - "null"
+      required:
+      - body
+      - createdAt
+      - id
+      - title
+      - type
+    DashboardSlaSummaryResponse:
+      type: object
+      properties:
+        dueSoon:
+          type: integer
+          format: int64
+        overdue:
+          type: integer
+          format: int64
+        breached:
+          type: integer
+          format: int64
+      required:
+      - breached
+      - dueSoon
+      - overdue
+    DashboardSummaryResponse:
+      type: object
+      properties:
+        hotelId:
+          type: string
+        range:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+        tasks:
+          $ref: "#/components/schemas/DashboardTaskSummaryResponse"
+        sla:
+          $ref: "#/components/schemas/DashboardSlaSummaryResponse"
+        notifications:
+          $ref: "#/components/schemas/DashboardNotificationSummaryResponse"
+        workload:
+          $ref: "#/components/schemas/DashboardWorkloadSummaryResponse"
+      required:
+      - generatedAt
+      - hotelId
+      - notifications
+      - range
+      - sla
+      - tasks
+      - workload
+    DashboardTaskCreatedInRangeResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+          format: int64
+        statusCounts:
+          $ref: "#/components/schemas/DashboardTaskStatusCountsResponse"
+      required:
+      - statusCounts
+      - total
+    DashboardTaskCurrentSnapshotResponse:
+      type: object
+      properties:
+        active:
+          type: integer
+          format: int64
+        urgent:
+          type: integer
+          format: int64
+        unassigned:
+          type: integer
+          format: int64
+        completionPercent:
+          type: integer
+          format: int32
+        statusCounts:
+          $ref: "#/components/schemas/DashboardTaskStatusCountsResponse"
+      required:
+      - active
+      - completionPercent
+      - statusCounts
+      - unassigned
+      - urgent
+    DashboardTaskStatusCountsResponse:
+      type: object
+      properties:
+        created:
+          type: integer
+          format: int64
+        assigned:
+          type: integer
+          format: int64
+        started:
+          type: integer
+          format: int64
+        inProgress:
+          type: integer
+          format: int64
+        waiting:
+          type: integer
+          format: int64
+        overdue:
+          type: integer
+          format: int64
+        completed:
+          type: integer
+          format: int64
+        cancelled:
+          type: integer
+          format: int64
+      required:
+      - assigned
+      - cancelled
+      - completed
+      - created
+      - inProgress
+      - overdue
+      - started
+      - waiting
+    DashboardTaskSummaryResponse:
+      type: object
+      properties:
+        createdInRange:
+          $ref: "#/components/schemas/DashboardTaskCreatedInRangeResponse"
+        currentSnapshot:
+          $ref: "#/components/schemas/DashboardTaskCurrentSnapshotResponse"
+      required:
+      - createdInRange
+      - currentSnapshot
+    DashboardWorkloadSummaryResponse:
+      type: object
+      properties:
+        assignedToUser:
+          type: integer
+          format: int64
+        assignedToRole:
+          type: integer
+          format: int64
+        unassigned:
+          type: integer
+          format: int64
+      required:
+      - assignedToRole
+      - assignedToUser
+      - unassigned
+    TaskCreatedInRangeReportResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+          format: int64
+        byType:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaskReportBucketResponse"
+        byStatus:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaskReportBucketResponse"
+        byPriority:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaskReportBucketResponse"
+        sla:
+          $ref: "#/components/schemas/TaskCreatedInRangeSlaReportResponse"
+      required:
+      - byPriority
+      - byStatus
+      - byType
+      - sla
+      - total
+    TaskCreatedInRangeSlaReportResponse:
+      type: object
+      properties:
+        completedOnTime:
+          type: integer
+          format: int64
+        completedLate:
+          type: integer
+          format: int64
+        openWithinSla:
+          type: integer
+          format: int64
+        openOverdue:
+          type: integer
+          format: int64
+        cancelled:
+          type: integer
+          format: int64
+        breached:
+          type: integer
+          format: int64
+      required:
+      - breached
+      - cancelled
+      - completedLate
+      - completedOnTime
+      - openOverdue
+      - openWithinSla
+    TaskCurrentSnapshotReportResponse:
+      type: object
+      properties:
+        active:
+          type: integer
+          format: int64
+        byStatus:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaskReportBucketResponse"
+        byPriority:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaskReportBucketResponse"
+        sla:
+          $ref: "#/components/schemas/TaskCurrentSnapshotSlaReportResponse"
+      required:
+      - active
+      - byPriority
+      - byStatus
+      - sla
+    TaskCurrentSnapshotSlaReportResponse:
+      type: object
+      properties:
+        dueSoon:
+          type: integer
+          format: int64
+        overdue:
+          type: integer
+          format: int64
+      required:
+      - dueSoon
+      - overdue
+    TaskReportBucketResponse:
+      type: object
+      properties:
+        key:
+          type: string
+        count:
+          type: integer
+          format: int64
+      required:
+      - count
+      - key
+    TaskReportingResponse:
+      type: object
+      properties:
+        hotelId:
+          type: string
+        range:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+        window:
+          $ref: "#/components/schemas/TaskReportingWindowResponse"
+        createdInRange:
+          $ref: "#/components/schemas/TaskCreatedInRangeReportResponse"
+        currentSnapshot:
+          $ref: "#/components/schemas/TaskCurrentSnapshotReportResponse"
+      required:
+      - createdInRange
+      - currentSnapshot
+      - generatedAt
+      - hotelId
+      - range
+      - window
+    TaskReportingWindowResponse:
+      type: object
+      properties:
+        startInclusive:
+          type: string
+          format: date-time
+        endExclusive:
+          type: string
+          format: date-time
+        timeBasis:
+          type: string
+      required:
+      - endExclusive
+      - startInclusive
+      - timeBasis
+    ProblemDetail:
+      type: object
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+          format: int32
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+      required:
+      - title
+      - status
+      - detail
+    TaskPageResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaskResponse"
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+        hasNext: {}
+        hasPrevious: {}
+      required:
+      - items
+      - page
+      - size
+      - totalItems
+      - totalPages
+      - hasNext
+      - hasPrevious
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

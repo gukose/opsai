@@ -1,8 +1,8 @@
 import { appApiBaseUrl } from "../config/appConfig";
 import { AppApiError } from "../api/client/AppApiError";
-import { FetchApiClient } from "../api/client/FetchApiClient";
 import { HttpAuthApi } from "../api/auth/AuthApi";
 import { mapCurrentUserResponseToSnapshot } from "../api/auth/AuthDtos";
+import { MobileHotelOpAiClient } from "../api/hotelOpAiClient";
 import type { CurrentUserResponseDto, LoginRequestDto } from "../api/auth/AuthDtos";
 import type { AppSessionSnapshot } from "../session/sessionTypes";
 import type { SessionStore } from "../session/SessionStore";
@@ -17,7 +17,7 @@ export class SessionService {
 
   constructor(sessionStore: SessionStore) {
     this.sessionStore = sessionStore;
-    const apiClient = new FetchApiClient({
+    const apiClient = new MobileHotelOpAiClient({
       baseUrl: appApiBaseUrl,
       accessTokenProvider: () => this.currentSession?.accessToken ?? null
     });

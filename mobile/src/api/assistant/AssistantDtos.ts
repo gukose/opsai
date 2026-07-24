@@ -1,151 +1,26 @@
-export type AssistantInputTypeDto = "TEXT" | "VOICE_TRANSCRIPT" | "VOICE" | "IMAGE" | "MIXED";
-export type AssistantMessageRoleDto = "USER" | "ASSISTANT" | "SYSTEM";
-export type AssistantAttachmentTypeDto = "IMAGE" | "PDF" | "DOCUMENT";
-export type AssistantAttachmentStorageStatusDto = "LOCAL_METADATA_ONLY" | "REGISTERED";
-export type AssistantVoiceTranscriptSourceDto = "CLIENT_TRANSCRIPT";
-export type AssistantImageObservationSourceDto = "USER_PROVIDED";
+import type { components } from "@hotelopai/api-client";
 
-export type AssistantStartConversationRequestDto = {
-  hotelId: string;
-  userId: string;
-};
+export type AssistantInputTypeDto = components["schemas"]["SendAssistantMessageRequest"]["inputType"];
+export type AssistantMessageRoleDto = components["schemas"]["ConversationMessageDto"]["role"];
+export type AssistantAttachmentTypeDto = NonNullable<components["schemas"]["MessageAttachmentDto"]["type"]>;
+export type AssistantAttachmentStorageStatusDto = NonNullable<components["schemas"]["MessageAttachmentDto"]["storageStatus"]>;
+export type AssistantVoiceTranscriptSourceDto = NonNullable<components["schemas"]["VoiceTranscriptDto"]["source"]>;
+export type AssistantImageObservationSourceDto = NonNullable<components["schemas"]["ImageObservationDto"]["source"]>;
 
-export type AssistantSendMessageRequestDto = {
-  text: string;
-  inputType: AssistantInputTypeDto;
-  transcript?: string | null;
-  voiceTranscript?: AssistantVoiceTranscriptDto | null;
-  audioMetadata?: AssistantAudioMetadataDto | null;
-  attachments?: AssistantMessageAttachmentDto[] | null;
-  attachmentIds?: string[];
-  imageObservations?: AssistantImageObservationDto[] | null;
-};
-
-export type AssistantConfirmTaskRequestDto = {
-  idempotencyKey: string;
-};
-
-export type AssistantConversationResponseDto = {
-  conversationId: string;
-  state: string;
-  assistantMessage: string;
-  intent: string;
-  missingFields: AssistantMissingFieldDto[];
-  followUpQuestion: AssistantFollowUpQuestionDto | null;
-  taskPreview: AssistantTaskPreviewDto | null;
-  taskCreationRequest: AssistantTaskCreationRequestDto | null;
-  createdTaskId: string | null;
-  messages: AssistantConversationMessageDto[];
-};
-
-export type AssistantMissingFieldDto = {
-  key: string;
-  label: string;
-  required: boolean;
-};
-
-export type AssistantFollowUpQuestionDto = {
-  id: string;
-  fieldKey: string;
-  prompt: string;
-  options: AssistantFollowUpOptionDto[];
-};
-
-export type AssistantFollowUpOptionDto = {
-  id: string;
-  label: string;
-  value: string;
-};
-
-export type AssistantTaskPreviewDto = {
-  type: string;
-  title: string;
-  description: string;
-  roomNumber?: string | null;
-  publicAreaId?: string | null;
-  assetId?: string | null;
-  assignedTeam?: string | null;
-  priority?: string | null;
-  slaMinutes?: number | null;
-  requiresPmsUpdate: boolean;
-};
-
-export type AssistantTaskCreationRequestDto = {
-  conversationId: string;
-  draftId: string;
-  draftVersion: number;
-  idempotencyKey: string;
-  preview: AssistantTaskPreviewDto;
-};
-
-export type AssistantConversationMessageDto = {
-  id: string;
-  role: AssistantMessageRoleDto;
-  inputType: AssistantInputTypeDto;
-  text: string | null;
-  voiceTranscript: string | null;
-  voiceTranscriptMetadata?: AssistantVoiceTranscriptDto | null;
-  audioMetadata: AssistantAudioMetadataDto | null;
-  attachments: AssistantMessageAttachmentDto[];
-  imageObservations: AssistantImageObservationDto[];
-  attachmentIds: string[];
-  createdAt: string;
-};
-
-export type AssistantAudioMetadataDto = {
-  originalFileName?: string | null;
-  mimeType?: string | null;
-  durationMs?: number | null;
-  sizeBytes?: number | null;
-};
-
-export type AssistantVoiceTranscriptDto = {
-  transcript: string;
-  languageCode?: string | null;
-  durationMs?: number | null;
-  source: AssistantVoiceTranscriptSourceDto;
-};
-
-export type AssistantMessageAttachmentDto = {
-  id: string;
-  type?: AssistantAttachmentTypeDto | null;
-  originalFileName?: string | null;
-  mimeType?: string | null;
-  sizeBytes?: number | null;
-  widthPx?: number | null;
-  heightPx?: number | null;
-  localReference?: string | null;
-  storageStatus?: AssistantAttachmentStorageStatusDto | null;
-};
-
-export type RegisterAssistantAttachmentRequestDto = {
-  type: AssistantAttachmentTypeDto;
-  originalFileName: string;
-  mimeType: string;
-  sizeBytes: number;
-  widthPx?: number | null;
-  heightPx?: number | null;
-};
-
-export type RegisteredAssistantAttachmentResponseDto = {
-  attachmentId: string;
-  conversationId: string;
-  type: AssistantAttachmentTypeDto;
-  originalFileName: string;
-  mimeType: string;
-  sizeBytes: number;
-  widthPx?: number | null;
-  heightPx?: number | null;
-  storageStatus: "REGISTERED";
-  storageReference?: string | null;
-  createdAt: string;
-};
-
-export type AssistantImageObservationDto = {
-  id?: string | null;
-  attachmentId?: string | null;
-  text?: string | null;
-  source?: AssistantImageObservationSourceDto | null;
-  description?: string | null;
-  confidence?: number | null;
-};
+export type AssistantStartConversationRequestDto = components["schemas"]["StartConversationRequest"];
+export type AssistantSendMessageRequestDto = components["schemas"]["SendAssistantMessageRequest"];
+export type AssistantConfirmTaskRequestDto = components["schemas"]["ConfirmTaskRequest"];
+export type AssistantConversationResponseDto = components["schemas"]["AssistantConversationResponse"];
+export type AssistantMissingFieldDto = components["schemas"]["MissingFieldDto"];
+export type AssistantFollowUpQuestionDto = components["schemas"]["FollowUpQuestionDto"];
+export type AssistantFollowUpOptionDto = components["schemas"]["FollowUpOptionDto"];
+export type AssistantTaskPreviewDto = components["schemas"]["TaskPreviewDto"];
+export type AssistantTaskCreationRequestDto = components["schemas"]["TaskCreationRequestDto"];
+export type AssistantConversationMessageDto = components["schemas"]["ConversationMessageDto"];
+export type AssistantAudioMetadataDto = components["schemas"]["AudioMetadataDto"];
+export type AssistantVoiceTranscriptDto = components["schemas"]["VoiceTranscriptDto"];
+export type AssistantMessageAttachmentDto = components["schemas"]["MessageAttachmentDto"];
+export type RegisterAssistantAttachmentRequestDto = components["schemas"]["RegisterAssistantAttachmentRequest"];
+export type RegisteredAssistantAttachmentResponseDto =
+  components["schemas"]["RegisteredAssistantAttachmentResponse"] & { storageStatus: "REGISTERED" };
+export type AssistantImageObservationDto = components["schemas"]["ImageObservationDto"];

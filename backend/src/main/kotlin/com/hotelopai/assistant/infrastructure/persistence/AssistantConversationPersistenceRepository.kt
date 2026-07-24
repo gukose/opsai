@@ -20,6 +20,7 @@ import com.hotelopai.assistant.domain.MessageRole
 import com.hotelopai.assistant.domain.MissingField
 import com.hotelopai.assistant.domain.TaskPreview
 import com.hotelopai.assistant.domain.VoiceTranscriptMetadata
+import com.hotelopai.shared.kernel.PersistenceInstant
 import com.hotelopai.shared.kernel.UuidV7Generator
 import org.springframework.dao.EmptyResultDataAccessException
 import org.springframework.dao.DuplicateKeyException
@@ -39,6 +40,7 @@ class AssistantConversationPersistenceRepository(
     private val objectMapper = objectMapper.persistenceCopy()
 
     override fun save(conversation: Conversation): Conversation {
+        val normalized = conversation.normalizedForPersistence()
         val updated = jdbcTemplate.update(
             """
             update assistant_conversation set
@@ -62,14 +64,14 @@ class AssistantConversationPersistenceRepository(
             where id = :id
               and row_version = :rowVersion
             """.trimIndent(),
-            conversation.toSqlParameters(objectMapper)
+            normalized.toSqlParameters(objectMapper)
         )
 
         if (updated == 1) {
-            return conversation.copy(rowVersion = conversation.rowVersion + 1)
+            return normalized.copy(rowVersion = normalized.rowVersion + 1)
         }
 
-        val existing = findById(conversation.id)
+        val existing = findById(normalized.id)
         if (existing != null) {
             throw ConversationConcurrencyException("Conversation was modified by another request")
         }
@@ -117,13 +119,13 @@ class AssistantConversationPersistenceRepository(
                     :updatedAt
                 )
                 """.trimIndent(),
-                conversation.copy(rowVersion = 0).toSqlParameters(objectMapper)
+                normalized.copy(rowVersion = 0).toSqlParameters(objectMapper)
             )
         } catch (_: DuplicateKeyException) {
             throw ConversationConcurrencyException("Conversation was modified by another request")
         }
 
-        return conversation.copy(rowVersion = 0)
+        return normalized.copy(rowVersion = 0)
     }
 
     private fun findByIdWithClause(id: String, lockForUpdate: Boolean): Conversation? =
@@ -279,6 +281,7 @@ class AssistantTaskConfirmationPersistenceRepository(
         }
 
     override fun save(record: TaskConfirmationRecord): TaskConfirmationRecord {
+        val normalized = record.normalizedForPersistence()
         jdbcTemplate.update(
             """
             insert into assistant_task_confirmation (
@@ -302,17 +305,17 @@ class AssistantTaskConfirmationPersistenceRepository(
             )
             """.trimIndent(),
             MapSqlParameterSource()
-                .addValue("id", UuidV7Generator.generate(record.createdAt))
-                .addValue("conversationId", record.conversationId)
-                .addValue("idempotencyKey", record.idempotencyKey)
-                .addValue("createdTaskId", record.createdTaskId)
-                .addValue("draftId", record.draftId)
-                .addValue("draftVersion", record.draftVersion)
-                .addValue("previewJson", objectMapper.writeValueAsString(record.preview))
-                .addValue("createdAt", Timestamp.from(record.createdAt))
+                .addValue("id", UuidV7Generator.generate(normalized.createdAt))
+                .addValue("conversationId", normalized.conversationId)
+                .addValue("idempotencyKey", normalized.idempotencyKey)
+                .addValue("createdTaskId", normalized.createdTaskId)
+                .addValue("draftId", normalized.draftId)
+                .addValue("draftVersion", normalized.draftVersion)
+                .addValue("previewJson", objectMapper.writeValueAsString(normalized.preview))
+                .addValue("createdAt", Timestamp.from(normalized.createdAt))
         )
 
-        return record
+        return normalized
     }
 }
 
@@ -344,6 +347,15 @@ private fun Conversation.toSqlParameters(objectMapper: ObjectMapper): MapSqlPara
         .addValue("rowVersion", rowVersion)
         .addValue("createdAt", Timestamp.from(createdAt))
         .addValue("updatedAt", Timestamp.from(updatedAt))
+
+private fun Conversation.normalizedForPersistence(): Conversation =
+    copy(
+        createdAt = PersistenceInstant.toPersistencePrecision(createdAt),
+        updatedAt = PersistenceInstant.toPersistencePrecision(updatedAt)
+    )
+
+private fun TaskConfirmationRecord.normalizedForPersistence(): TaskConfirmationRecord =
+    copy(createdAt = PersistenceInstant.toPersistencePrecision(createdAt))
 
 private fun ResultSet.toConversation(objectMapper: ObjectMapper): Conversation =
     Conversation(

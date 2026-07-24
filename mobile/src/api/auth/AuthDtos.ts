@@ -1,58 +1,13 @@
+import type { components } from "@hotelopai/api-client";
 import type { CurrentUserSnapshot } from "../../session/sessionTypes";
 
-export type LoginRequestDto = {
-  hotelCode: string;
-  email: string;
-  password: string;
-  deviceId?: string | null;
-  deviceName?: string | null;
-  ipAddress?: string | null;
-  userAgent?: string | null;
-};
-
-export type RefreshRequestDto = {
-  refreshToken: string;
-  deviceId?: string | null;
-  deviceName?: string | null;
-  ipAddress?: string | null;
-  userAgent?: string | null;
-};
-
-export type RoleResponseDto = {
-  roleId: string;
-  code: string;
-  name: string;
-};
-
-export type PermissionResponseDto = {
-  permissionId: string;
-  code: string;
-  name: string;
-};
-
-export type CurrentUserResponseDto = {
-  userId: string;
-  hotelId: string;
-  employeeId?: string | null;
-  email: string;
-  displayName: string;
-  hotelName: string;
-  roles: RoleResponseDto[];
-  permissions: PermissionResponseDto[];
-};
-
-export type AuthSessionResponseDto = {
-  tokenType: string;
-  accessToken: string;
-  accessTokenExpiresAt: string;
-  refreshToken: string;
-  refreshTokenExpiresAt: string;
-  user: CurrentUserResponseDto;
-};
-
-export type LogoutResponseDto = {
-  message?: string;
-};
+export type LoginRequestDto = components["schemas"]["LoginRequest"];
+export type RefreshRequestDto = components["schemas"]["RefreshRequest"];
+export type RoleResponseDto = components["schemas"]["RoleResponse"];
+export type PermissionResponseDto = components["schemas"]["PermissionResponse"];
+export type CurrentUserResponseDto = components["schemas"]["CurrentUserResponse"];
+export type AuthSessionResponseDto = components["schemas"]["AuthSessionResponse"];
+export type LogoutResponseDto = Record<string, string>;
 
 export function mapCurrentUserResponseToSnapshot(
   user: CurrentUserResponseDto

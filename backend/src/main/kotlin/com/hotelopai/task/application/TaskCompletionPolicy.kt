@@ -1,9 +1,11 @@
 package com.hotelopai.task.application
 
-import com.hotelopai.shared.pms.MaintenanceCompletionPort
-import com.hotelopai.shared.pms.MaintenanceCompletionRequest
-import com.hotelopai.shared.pms.PmsCompletionException
-import com.hotelopai.shared.pms.MaintenanceCompletionResult
+import com.hotelopai.pms.application.PmsProviderRegistry
+import com.hotelopai.pms.application.PmsCapability
+import com.hotelopai.pms.application.UnsupportedPmsCapabilityException
+import com.hotelopai.pms.domain.MaintenanceUpdate
+import com.hotelopai.pms.domain.PmsProviderException
+import com.hotelopai.pms.domain.PmsUpdateResult
 import com.hotelopai.task.domain.Task
 import com.hotelopai.task.domain.TaskIntentType
 import org.springframework.context.annotation.Profile
@@ -13,7 +15,7 @@ import java.time.Instant
 @Service
 @Profile("!test")
 class TaskCompletionPolicy(
-    private val maintenanceCompletionPort: MaintenanceCompletionPort
+    private val pmsProviderRegistry: PmsProviderRegistry
 ) : CompletionPolicy {
     override fun evaluate(task: Task, now: Instant): CompletionDecision =
         when (task.intentType) {
@@ -24,15 +26,17 @@ class TaskCompletionPolicy(
                     )
 
                 val result = try {
-                    maintenanceCompletionPort.updateMaintenance(
-                        MaintenanceCompletionRequest(
+                    pmsProviderRegistry.activeProviderRequiring(PmsCapability.MAINTENANCE_UPDATE).updateMaintenance(
+                        MaintenanceUpdate(
                             roomNumber = roomNumber,
                             issueTypeCode = MAINTENANCE_ISSUE_TYPE_CODE,
                             description = task.description,
                             status = "RESOLVED"
                         )
                     )
-                } catch (exception: PmsCompletionException) {
+                } catch (exception: UnsupportedPmsCapabilityException) {
+                    throw TaskCompletionPolicyException("Active PMS provider does not support maintenance updates", exception)
+                } catch (exception: PmsProviderException) {
                     throw TaskCompletionPolicyException("UniMock failed during task completion", exception)
                 }
 
@@ -42,7 +46,7 @@ class TaskCompletionPolicy(
             else -> CompletionDecision(requiresPmsUpdate = false)
         }
 
-    private fun validateVerification(result: MaintenanceCompletionResult): CompletionDecision {
+    private fun validateVerification(result: PmsUpdateResult): CompletionDecision {
         require(result.verificationLogId != java.util.UUID(0L, 0L)) {
             "PMS verification log id must not be empty"
         }

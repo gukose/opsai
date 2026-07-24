@@ -7,6 +7,7 @@ import com.hotelopai.assistant.domain.AttachmentType
 import com.hotelopai.assistant.domain.Conversation
 import com.hotelopai.shared.kernel.UuidV7Generator
 import com.hotelopai.support.PostgresIntegrationTestSupport
+import com.hotelopai.vision.application.VisionAnalysisImportRepository
 import com.hotelopai.vision.application.VisionAnalysisRepository
 import com.hotelopai.vision.domain.VisionAnalysis
 import com.hotelopai.vision.domain.VisionAnalysisStatus
@@ -41,6 +42,9 @@ class VisionAnalysisImportControllerTest : PostgresIntegrationTestSupport() {
 
     @Autowired
     private lateinit var visionAnalysisRepository: VisionAnalysisRepository
+
+    @Autowired
+    private lateinit var visionAnalysisImportRepository: VisionAnalysisImportRepository
 
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
@@ -247,10 +251,21 @@ class VisionAnalysisImportControllerTest : PostgresIntegrationTestSupport() {
         val beforeTasks = taskCount()
 
         val first = importFixture(login, fixture)
+        val afterFirst = visionAnalysisImportRepository.findByConversationIdAndAnalysisId(
+            conversationId = fixture.conversationId,
+            analysisId = fixture.analysisId
+        ) ?: error("import missing after first request")
         val second = importFixture(login, fixture)
+        val afterSecond = visionAnalysisImportRepository.findByConversationIdAndAnalysisId(
+            conversationId = fixture.conversationId,
+            analysisId = fixture.analysisId
+        ) ?: error("import missing after second request")
 
         assertEquals(200, first.statusCode(), first.body())
         assertEquals(200, second.statusCode(), second.body())
+        assertThat(afterSecond).isEqualTo(afterFirst)
+        assertThat(afterFirst.createdAt.nano % 1_000).isEqualTo(0)
+        assertThat(afterFirst.updatedAt.nano % 1_000).isEqualTo(0)
         assertThat(importCount(fixture.analysisId)).isEqualTo(1)
         assertThat(messageCount(fixture.conversationId)).isEqualTo(1)
         assertThat(taskCount()).isEqualTo(beforeTasks)
