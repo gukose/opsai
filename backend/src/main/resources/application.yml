@@ -84,6 +84,127 @@ ops:
         lock-timeout: PT10M
       overdue-check-interval-ms: 300000
     reservation:
+      task-automation:
+        enabled: false
+        batch-size: 10
+        max-attempts: 3
+        retry-delay: PT5M
+        enabled-rule-ids: []
+        default-due-time: "12:00"
+        same-day-due-time: "16:00"
+        follow-up-delay: PT2H
+        timezone: UTC
+        minimum-lead-time: PT1H
+        allowed-profiles: []
+        processor-id: reservation-task-automation
+        schedule:
+          enabled: false
+          execution-interval: PT1M
+          startup-delay: PT2M
+          batch-size: 10
+          max-records-per-execution: 10
+          lock-timeout: PT5M
+          abandoned-lease-threshold: PT10M
+          allowed-profiles: []
+      task-recommendations:
+        enabled: false
+        batch-size: 10
+        max-recommendations-per-reservation: 5
+        max-reservations-per-batch: 10
+        max-attempts: 3
+        retry-delay: PT5M
+        request-timeout: PT5S
+        due-time: "17:00"
+        timezone: UTC
+        expiration: P7D
+        maximum-reservation-age: P30D
+        maximum-review-age: P7D
+        provider-name: internal-demo
+        active-provider: internal-demo
+        prompt-version: reservation-task-recommendation-demo-v1
+        allowed-profiles: []
+        external-providers:
+          allowed-profiles:
+            - local
+            - test
+          production-prohibited: true
+          require-https-outside-local: true
+          local-endpoint-allowlist:
+            - http://localhost
+            - http://127.0.0.1
+          diagnostics-retention: P30D
+          diagnostics-cleanup-batch-size: 100
+        providers:
+          internal-demo:
+            enabled: true
+            display-name: Internal Demo Recommendations
+            deterministic: true
+          openai:
+            enabled: false
+            display-name: OpenAI Recommendations
+            endpoint: https://api.openai.com/v1/chat/completions
+            timeout: PT10S
+            maximum-tokens: 512
+            temperature: 0.0
+            top-p: 1.0
+            allowed-profiles: []
+            activation-mode: SMOKE_TEST_ONLY
+            allow-fallback-to-internal-demo: false
+            prompt-template-id: reservation-task-recommendation-v1
+            prompt-version: reservation-task-recommendation-openai-v1
+            smoke:
+              enabled: false
+              fixture-mode-enabled: false
+            retry-policy:
+              max-attempts: 2
+              initial-backoff: PT0.25S
+              max-backoff: PT2S
+        pilot:
+          enabled: false
+          allowed-profiles:
+            - local
+            - test
+          allowed-provider-ids:
+            - openai
+          allowed-property-scopes: []
+          max-reservations-per-run: 5
+          max-recommendations-per-run: 10
+          daily-request-budget: 25
+          daily-token-budget:
+          required-successful-smoke-age: PT24H
+          mandatory-operator-approval-mode: true
+          maximum-candidate-age: P30D
+        pilot-schedule:
+          enabled: false
+          execution-interval: PT6H
+          startup-delay: PT2M
+          batch-size: 5
+          max-runs-per-day: 2
+          allowed-profiles:
+            - local
+            - test
+          lock-timeout: PT10M
+          minimum-interval-between-runs: PT1H
+          retention-cleanup-enabled: false
+          cleanup-execution-interval: PT24H
+          cleanup-batch-size: 100
+        schedule:
+          enabled: false
+          execution-interval: PT5M
+          startup-delay: PT2M
+          batch-size: 10
+          max-reservations-per-execution: 10
+          lock-timeout: PT5M
+          abandoned-lease-threshold: PT10M
+          allowed-profiles: []
+          retention-cleanup-enabled: false
+          cleanup-execution-interval: PT12H
+          cleanup-batch-size: 100
+        retention:
+          completed-run-retention: P30D
+          rejected-recommendation-retention: P30D
+          failed-run-retention: P14D
+          applied-recommendation-retention: P180D
       webhooks:
         enabled: false
         processing-enabled: false

@@ -116,8 +116,15 @@ vision import, dashboard, report, cancel, mark-overdue, or Dev PMS permissions.
 - all `/api/v1/dev/pms/**` endpoints: `DEV_PMS_ACCESS`
 - all `/api/v1/internal/pms/**` endpoints: `PMS_OPERATIONS_ACCESS`
 - all `/api/v1/internal/reservations/**` sync, scheduled sync, webhook inbox,
-  webhook processing scheduler, dead-letter retry, and cleanup endpoints:
-  `RESERVATION_SYNC_OPERATIONS`
+  webhook processing scheduler, dead-letter retry, cleanup, and reservation task
+  automation and task recommendation endpoints, including recommendation
+  provider status, scheduler controls, generation-run history, expiration, and
+  retention cleanup. Sprint 13F also uses this permission for external
+  recommendation-provider readiness, local/stub smoke tests, diagnostic history,
+  diagnostic cleanup, and Sprint 14A non-production pilot readiness, pilot run,
+  budget, disable, rollback, and pilot recommendation expiration operations.
+  Sprint 14B also uses it for pilot schedule status, run-now, pause/resume,
+  cleanup, and aggregate pilot review analytics: `RESERVATION_SYNC_OPERATIONS`
 
 Login, refresh, CORS preflight, actuator health, and actuator info keep their
 existing public behavior.

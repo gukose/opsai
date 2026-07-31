@@ -145,3 +145,21 @@ Track:
 
 Do not log raw sensitive guest data unless explicitly required and protected by retention policy.
 Do not log raw media, base64, local/device/file URIs, authorization tokens, storage/provider secrets, raw provider payloads, or sensitive observation text unless an explicit sanitized logging policy exists.
+
+## Reservation Recommendation Boundary
+
+Sprint 13C adds `TaskRecommendationProvider` for advisory reservation-driven
+task recommendations. This boundary is separate from the assistant conversation
+engine. Business services do not call OpenAI or external LLMs directly; they
+pass a sanitized reservation recommendation context to the provider interface.
+
+The context may contain safe operational signals such as reservation lifecycle
+status, stay timing, occupancy counts, room-assignment availability,
+deterministic automation outcomes, and safe backlog summaries. It must not
+contain guest names, contact details, notes, raw PMS payloads, external
+reservation references, raw property ids, webhook payloads, payment data,
+credentials, or prompts containing personal data.
+
+Recommendations are advisory. The provider never persists data and never
+creates tasks. Internal operators must approve and apply a recommendation before
+the backend creates a task through the existing task lifecycle boundary.

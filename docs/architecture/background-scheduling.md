@@ -55,6 +55,20 @@ Current scheduled jobs:
   - Default: disabled through
     `ops.ai.reservation.webhooks.schedule.retention-cleanup-enabled=false`.
 
+- `reservation_task_automation_scheduler`
+  - Trigger: `ops.ai.reservation.task-automation.schedule.execution-interval`,
+    default `PT1M`.
+  - Purpose: process a bounded batch of eligible canonical reservation outbox
+    events through `ReservationTaskAutomationService` when explicitly enabled.
+  - Dependencies: reservation task automation execution history, operational
+    outbox, task lifecycle boundary, and durable automation schedule state.
+  - Idempotency: the scheduler lease prevents multiple instances initiating
+    the same automation batch. Reservation outbox claiming and
+    `reservation_task_automation_execution.deduplication_key` remain the final
+    duplicate protections.
+  - Default: disabled through
+    `ops.ai.reservation.task-automation.schedule.enabled=false`.
+
 These jobs mutate shared operational state, so they run as singleton jobs
 across a backend cluster when enabled.
 
@@ -173,6 +187,86 @@ Webhook processing activation also requires
 must declare webhook capability, have a registered webhook adapter, and have
 resolvable provider webhook authentication configuration. Temporary external PMS
 unavailability is not a startup failure.
+
+Reservation task automation scheduler properties:
+
+- `ops.ai.reservation.task-automation.schedule.enabled`, default `false`
+- `ops.ai.reservation.task-automation.schedule.execution-interval`, default
+  `PT1M`
+- `ops.ai.reservation.task-automation.schedule.startup-delay`, default `PT2M`
+- `ops.ai.reservation.task-automation.schedule.batch-size`, default `10`
+- `ops.ai.reservation.task-automation.schedule.max-records-per-execution`,
+  default `10`
+- `ops.ai.reservation.task-automation.schedule.lock-timeout`, default `PT5M`
+- `ops.ai.reservation.task-automation.schedule.abandoned-lease-threshold`,
+  default `PT10M`
+- `ops.ai.reservation.task-automation.schedule.allowed-profiles`, default empty
+
+Automation scheduling also requires
+`ops.ai.reservation.task-automation.enabled=true`, a valid internal hotel id,
+and at least one enabled registered rule. Pause and resume are durable runtime
+state in `reservation_task_automation_schedule_state`; configuration remains
+the upper-level enable switch.
+
+Reservation task recommendation scheduler properties:
+
+- `ops.ai.reservation.task-recommendations.schedule.enabled`, default `false`
+- `ops.ai.reservation.task-recommendations.schedule.execution-interval`,
+  default `PT5M`
+- `ops.ai.reservation.task-recommendations.schedule.startup-delay`, default
+  `PT2M`
+- `ops.ai.reservation.task-recommendations.schedule.batch-size`, default `10`
+- `ops.ai.reservation.task-recommendations.schedule.max-reservations-per-execution`,
+  default `10`
+- `ops.ai.reservation.task-recommendations.schedule.lock-timeout`, default
+  `PT5M`
+- `ops.ai.reservation.task-recommendations.schedule.allowed-profiles`, default
+  empty
+- `ops.ai.reservation.task-recommendations.schedule.retention-cleanup-enabled`,
+  default `false`
+
+Recommendation scheduling also requires
+`ops.ai.reservation.task-recommendations.enabled=true`, a valid internal hotel
+id, an enabled active recommendation provider, and required provider
+capabilities. The scheduler uses job name
+`reservation_task_recommendation_scheduler`. Durable pause/resume state lives in
+`reservation_task_recommendation_schedule_state`. Operator run-now executions
+are recorded separately from scheduled executions and recommendations remain
+review-only.
+
+External recommendation-provider smoke tests added in Sprint 13F are not
+scheduled. They are explicit operator actions under the internal recommendation
+operations surface. Diagnostic retention cleanup is also explicit in this
+sprint; no background cleanup job is enabled by default.
+
+External recommendation pilot scheduler properties:
+
+- `ops.ai.reservation.task-recommendations.pilot-schedule.enabled`, default
+  `false`
+- `ops.ai.reservation.task-recommendations.pilot-schedule.execution-interval`,
+  default `PT6H`
+- `ops.ai.reservation.task-recommendations.pilot-schedule.startup-delay`,
+  default `PT2M`
+- `ops.ai.reservation.task-recommendations.pilot-schedule.batch-size`, default
+  `5`
+- `ops.ai.reservation.task-recommendations.pilot-schedule.max-runs-per-day`,
+  default `2`
+- `ops.ai.reservation.task-recommendations.pilot-schedule.allowed-profiles`,
+  default `local,test`
+- `ops.ai.reservation.task-recommendations.pilot-schedule.lock-timeout`,
+  default `PT10M`
+- `ops.ai.reservation.task-recommendations.pilot-schedule.minimum-interval-between-runs`,
+  default `PT1H`
+- `ops.ai.reservation.task-recommendations.pilot-schedule.retention-cleanup-enabled`,
+  default `false`
+
+Pilot scheduling also requires
+`ops.ai.reservation.task-recommendations.pilot.enabled=true`, fresh external
+provider smoke readiness, non-production profile policy, property scope
+allowlists, and available daily budgets. The scheduler uses job name
+`reservation-task-recommendation-pilot`; retention cleanup uses
+`reservation-task-recommendation-pilot-cleanup`. Durable pause/resume and last
+run metadata live in `recommendation_pilot_state`.
 
 Outbox scheduling remains controlled by `ops.ai.outbox.enabled`,
 `ops.ai.outbox.poll-interval`, and `ops.ai.outbox.lock-timeout`.

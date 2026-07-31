@@ -145,6 +145,61 @@ Hotel OpAI must store:
 - failure reason
 - retry status
 
+## Reservation Automation Tasks
+
+Sprint 13A allows canonical reservation events to propose operational tasks.
+Sprint 13B adds disabled-by-default scheduled processing and configurable rule
+due-time policy.
+The automation engine creates tasks only through the existing task lifecycle
+service. It does not bypass task validation, history, logs, notifications, or
+SLA checks.
+
+Generated reservation tasks use existing public `TaskSource.IMPORT` to avoid a
+public API enum change. Their automation origin, rule id, rule version,
+deduplication key, and execution outcome are stored in private reservation task
+automation execution history.
+
+Repeated rule evaluation must preserve manually managed task fields. If a
+generated task is edited, assigned, completed, cancelled, or otherwise managed
+by staff, the automation engine does not overwrite title, description,
+assignment, priority, due date, or lifecycle status. A replacement task is
+created only when a new logical trigger or rule version produces a new durable
+deduplication key.
+
+Automation task titles and descriptions are generic operational instructions.
+They must not include guest names, contact information, external reservation
+references, raw PMS property identifiers, reservation notes, credentials, or raw
+provider payloads.
+
+Rule due-date policy is configured under
+`ops.ai.reservation.task-automation.rules.<rule-id>`. Rules own applicability;
+policy can only adjust enablement, priority, local due time, due-date offset,
+minimum lead time, timezone, maximum trigger age, and past-due clamping.
+
+## Reservation Task Recommendations
+
+Sprint 13C adds advisory AI-assisted reservation task recommendations.
+Recommendations do not create, modify, reopen, complete, or delete tasks.
+Only the internal review workflow can apply an approved recommendation, and
+application creates a task through the same `TaskLifecycleService` boundary as
+manual and deterministic automation task creation.
+
+Recommendation responses expose structured situation, rationale, supporting
+signals, category, confidence, safe task title, priority, and due date. They do
+not expose raw reservation references, property identifiers, guest data,
+provider payloads, deduplication keys, or generated prompts.
+
+Sprint 13D adds provider governance and scheduled recommendation generation.
+Providers are resolved through `TaskRecommendationProviderRegistry` by stable
+provider id and must declare capabilities before generation is allowed. The
+current `internal-demo` provider remains local and deterministic.
+
+Scheduled generation is disabled by default and can only create
+`REVIEW_REQUIRED` recommendation records. It never approves, applies, modifies,
+reopens, completes, or deletes tasks. Applying a recommendation remains an
+explicit internal review action and still uses the normal task lifecycle
+boundary.
+
 ## Idempotency
 
 Production task operations should use idempotency keys for:

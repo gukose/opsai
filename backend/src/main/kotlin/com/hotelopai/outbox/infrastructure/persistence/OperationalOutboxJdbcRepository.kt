@@ -73,6 +73,7 @@ class OperationalOutboxJdbcRepository(
                     created_at
                 from operational_outbox
                 where status = 'PENDING'
+                  and event_type = 'TASK_CREATED'
                   and next_attempt_at <= :now
                 order by created_at asc, id asc
                 limit :batchSize

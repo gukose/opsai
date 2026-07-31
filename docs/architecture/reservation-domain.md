@@ -498,6 +498,149 @@ The current outbox uniqueness rule allows one event of each type per
 reservation. This is sufficient for the snapshot foundation and remains a known
 limitation before broader reservation event consumers are introduced.
 
+## Reservation Task Automation
+
+Sprint 13A adds a deterministic reservation-to-task automation foundation. It
+consumes canonical reservation outbox events, never PMS DTOs and never webhook
+payloads. The flow is:
+
+1. Reservation sync persists or updates a canonical reservation snapshot.
+2. `ReservationOutboxPublisher` writes a safe reservation event.
+3. `ReservationTaskAutomationService` claims eligible reservation outbox events
+   in bounded batches.
+4. Registered `ReservationTaskAutomationRule` implementations evaluate the
+   canonical reservation snapshot and safe event context.
+5. Rules return task proposals only; the service creates tasks through the
+   existing task lifecycle boundary.
+6. Execution history records the outcome and idempotency metadata.
+
+Automation and automation scheduling are disabled by default through
+`ops.ai.reservation.task-automation.enabled=false` and
+`ops.ai.reservation.task-automation.schedule.enabled=false`. Sprint 13B adds a
+controlled scheduler that invokes `ReservationTaskAutomationService` only
+through the same bounded batch boundary used by operator-triggered processing.
+It never calls repositories, task services, PMS providers, or external systems
+directly.
+
+Initial rule catalogue:
+
+- `upcoming-arrival-preparation`
+- `same-day-departure-follow-up`
+- `room-assignment-change-review`
+- `reservation-cancellation-cleanup`
+- `no-show-operational-review`
+- `guest-check-in-follow-up`
+- `guest-checkout-follow-up`
+
+Rules are deterministic and side-effect free. They do not call PMS providers,
+repositories, AI services, or external systems. Future AI-assisted evaluation
+must operate behind the task-proposal boundary and must not persist tasks
+directly.
+
+Rule policy configuration is provider-neutral. Each rule can be disabled or can
+override priority, due local time, due-date offset, minimum lead time, timezone,
+maximum trigger age, and past-due clamping. Due dates are calculated from local
+dates in the configured timezone, so daylight-saving transitions do not rely on
+fixed-hour arithmetic. Invalid enabled rule ids or invalid enabled schedule
+configuration fail startup with sanitized messages.
+
+Task creation and idempotency:
+
+- generated tasks use the existing Task Engine path
+- generated tasks use existing public task source `IMPORT`
+- automation origin is recorded in internal execution history, not public task
+  DTOs
+- the durable deduplication key uses rule id, rule version, internal
+  reservation id, trigger event type, event occurrence timestamp, and safe
+  canonical state markers
+- guest names, external reservation references, raw PMS property ids, notes, and
+  contact details are not part of the key
+- repeated syncs, webhook retries, restarts, and operator retries cannot create
+  duplicate tasks for the same logical proposal
+- repeated evaluation never overwrites manually edited task title, description,
+  assignment, priority, or due date, and it does not reopen completed or
+  cancelled tasks; the existing durable execution row is treated as the
+  authoritative record for that logical trigger
+
+Internal operations:
+
+- `GET /api/v1/internal/reservations/task-automation/rules`
+- `POST /api/v1/internal/reservations/task-automation/process-batch`
+- `GET /api/v1/internal/reservations/task-automation/schedule`
+- `POST /api/v1/internal/reservations/task-automation/schedule/run-now`
+- `POST /api/v1/internal/reservations/task-automation/schedule/pause`
+- `POST /api/v1/internal/reservations/task-automation/schedule/resume`
+- `GET /api/v1/internal/reservations/task-automation/executions`
+- `GET /api/v1/internal/reservations/task-automation/executions/{executionId}`
+- `POST /api/v1/internal/reservations/task-automation/executions/{executionId}/retry`
+
+They require `RESERVATION_SYNC_OPERATIONS`, are excluded from the public
+OpenAPI/SDK, and return sanitized execution data only.
+
+Scheduled execution uses the shared `scheduler_lock` table with job name
+`reservation_task_automation_scheduler`. The durable schedule state in
+`reservation_task_automation_schedule_state` tracks pause/resume state,
+last-attempt and last-success timestamps, last processed count, last created
+task count, and a safe failure category. The scheduler lease prevents multiple
+instances initiating the same scheduled batch; outbox claiming and task
+automation deduplication remain the final duplicate protections.
+
+Eligible event ordering is deterministic: due reservation outbox events are
+claimed by next-attempt eligibility, outbox creation time, and outbox id.
+Unsupported events are skipped once and completed so they do not repeatedly
+re-enter processing. Retryable failures receive bounded attempts and a
+next-attempt timestamp. Exhausted task-creation failures are marked
+`DEAD_LETTER`; they are not automatically retried and require an internal manual
+retry operation.
+
+## AI-Assisted Task Recommendations
+
+Sprint 13C adds advisory reservation task recommendations beside deterministic
+automation. Deterministic automation remains the authoritative automatic task
+creation path. Recommendations are never applied automatically; an internal
+operator must approve and apply them through internal operations.
+
+The recommendation flow is:
+
+1. A canonical reservation snapshot and safe deterministic automation execution
+   context are selected.
+2. `ReservationTaskRecommendationService` builds a sanitized recommendation
+   context.
+3. `TaskRecommendationProvider` returns zero or more structured
+   recommendations.
+4. Recommendations are persisted in `reservation_task_recommendation` with a
+   durable deduplication key.
+5. Internal review operations approve, reject, expire, retry, or apply.
+6. Apply creates one task through the existing task lifecycle boundary and marks
+   the recommendation `APPLIED`.
+
+The AI/provider boundary is deliberately narrow. Context may include
+reservation lifecycle status, stay timing, occupancy counts, room assignment
+availability, deterministic automation outcomes, and safe backlog summaries. It
+must not include guest names, contact information, reservation notes, external
+reservation references, raw PMS property identifiers, raw PMS/webhook payloads,
+provider DTOs, payment data, credentials, prompts containing personal data, or
+free-form operational logs.
+
+`InternalDemoRecommendationProvider` is deterministic and local. It proves the
+contract without calling OpenAI or another external LLM. Future external LLM
+adapters must live behind `TaskRecommendationProvider` and must only receive
+the sanitized context.
+
+Sprint 13D adds `TaskRecommendationProviderRegistry`, provider capability
+validation, context schema versioning, durable generation-run history, and a
+disabled-by-default scheduler. The scheduler selects candidates from safe
+deterministic automation execution state, records aggregate counters, and uses
+the shared `scheduler_lock` table with job name
+`reservation_task_recommendation_scheduler`. It never approves or applies
+recommendations.
+
+Internal recommendation operations now include provider status, scheduler
+status, run-now, pause, resume, generation-run history, bounded expiration, and
+retention cleanup. Responses intentionally omit reservation ids, task ids,
+outbox ids, deduplication keys, prompts, guest data, raw property identifiers,
+and provider payloads.
+
 ## Privacy Boundary
 
 Guest names, contact details, special requests, operational notes, and

@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.Tags
 import io.micrometer.core.instrument.Timer
 import org.springframework.stereotype.Component
 import java.math.BigDecimal
+import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
@@ -33,6 +34,13 @@ class OperationalObservability(
         if (sample == null) return
         runCatching {
             sample.stop(Timer.builder(name).tags(safeTags(tags)).register(registry))
+        }
+    }
+
+    fun recordTimer(name: String, duration: Duration, vararg tags: Pair<String, String>) {
+        val registry = meterRegistry ?: return
+        runCatching {
+            Timer.builder(name).tags(safeTags(tags)).register(registry).record(duration)
         }
     }
 
@@ -123,15 +131,22 @@ class OperationalObservability(
             "operation",
             "outcome",
             "provider",
+            "category",
             "confidence_bucket",
+            "context_schema_version",
             "status",
             "source_type",
             "endpoint_group",
             "event_type",
+            "environment_class",
             "failure_category",
+            "fixture_mode",
             "job",
+            "model",
             "reason_code",
+            "readiness",
             "range",
+            "rule_id",
             "transition",
             "trigger"
         )

@@ -28,6 +28,8 @@ cd mobile && npx tsc --noEmit
 cd mobile && npm test
 ```
 
+Mobile validation requires Node 22 or newer.
+
 Docker image builds:
 
 ```bash
@@ -63,6 +65,43 @@ internal-only under `/api/v1/internal/reservations` and require
 is disabled by default. PMS reservation webhook ingestion also exists but is
 disabled by default; webhook inbox processing, pause/resume, run-now,
 dead-letter, and cleanup operations are internal-only and sanitized.
+Reservation-driven task automation is also internal-only and disabled by
+default; it consumes canonical reservation events and creates tasks only through
+the existing Task Engine when explicitly enabled. Its background scheduler is a
+separate disabled-by-default switch under
+`ops.ai.reservation.task-automation.schedule.*`, and rule due-time behavior can
+be configured per rule without exposing reservation or guest data.
+AI-assisted reservation task recommendations are internal-only, advisory, and
+disabled by default through `ops.ai.reservation.task-recommendations.enabled`.
+They require operator review before any task is created.
+Sprint 13D adds provider governance and disabled-by-default scheduled
+recommendation generation under
+`ops.ai.reservation.task-recommendations.schedule.*`. The current provider is
+the deterministic `internal-demo` provider, registered through the same
+provider registry future external LLM adapters must use. Scheduled generation
+creates only `REVIEW_REQUIRED` recommendations and never approves, applies, or
+modifies tasks.
+Sprint 13E adds a disabled-by-default OpenAI recommendation provider foundation
+behind the same provider registry. External providers receive only the
+privacy-gateway outbound context, not guest data, notes, payment data,
+reservation references, raw PMS identifiers, webhook payloads, provider DTOs,
+prompts with personal data, or credentials.
+Sprint 13F adds non-production readiness controls, deterministic local/stub
+OpenAI smoke testing, safe durable provider diagnostics, and an operator
+runbook. OpenAI remains disabled by default, production activation is blocked,
+and no live external LLM traffic occurs unless explicitly configured outside
+the default verification flow.
+Sprint 14A adds a disabled-by-default non-production external recommendation
+pilot. Pilot runs require fresh smoke readiness, property scope allowlists,
+daily budgets, and mandatory operator review. Generated pilot recommendations
+remain `REVIEW_REQUIRED`; tasks are created only through the existing explicit
+approve/apply workflow. Production pilot activation remains blocked.
+Sprint 14B adds disabled-by-default scheduled pilot runs under
+`ops.ai.reservation.task-recommendations.pilot-schedule.*` and aggregate
+operator review analytics. Scheduled pilot runs use the distributed scheduler
+lease, respect the same readiness and budget guardrails, and never approve,
+apply, or create tasks autonomously. Analytics return only aggregate counts,
+rates, and bands.
 No public reservation endpoint, SDK surface, or mobile behavior is added.
 Focused reservation verification:
 

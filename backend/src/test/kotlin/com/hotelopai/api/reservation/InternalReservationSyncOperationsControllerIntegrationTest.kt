@@ -64,11 +64,43 @@ class InternalReservationSyncOperationsControllerIntegrationTest : PostgresInteg
         assertThat(get("/api/v1/internal/reservations/sync-schedule", operator).statusCode()).isEqualTo(200)
         assertThat(get("/api/v1/internal/reservations/webhooks", operator).statusCode()).isEqualTo(200)
         assertThat(get("/api/v1/internal/reservations/webhooks/schedule", operator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/reservations/task-automation/rules", operator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/reservations/task-automation/schedule", operator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/reservations/task-recommendations", operator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/reservations/task-recommendations/providers", operator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/reservations/task-recommendations/providers/readiness", operator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/reservations/task-recommendations/providers/diagnostics", operator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/reservations/task-recommendations/pilot/readiness", operator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/reservations/task-recommendations/pilot/runs", operator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/reservations/task-recommendations/pilot/budget", operator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/reservations/task-recommendations/pilot/schedule", operator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/reservations/task-recommendations/pilot/analytics", operator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/reservations/task-recommendations/pilot/analytics/review-outcomes", operator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/reservations/task-recommendations/pilot/analytics/confidence-category", operator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/reservations/task-recommendations/schedule", operator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/reservations/task-recommendations/generation-runs", operator).statusCode()).isEqualTo(200)
         assertThat(post("/api/v1/internal/reservations/sync-schedule/pause", "{}", noPermission).statusCode()).isEqualTo(403)
         assertThat(post("/api/v1/internal/reservations/webhooks/process-batch", "{}", noPermission).statusCode()).isEqualTo(403)
         assertThat(post("/api/v1/internal/reservations/webhooks/schedule/run-now", "{}", noPermission).statusCode()).isEqualTo(403)
         assertThat(post("/api/v1/internal/reservations/webhooks/schedule/pause", "{}", noPermission).statusCode()).isEqualTo(403)
         assertThat(post("/api/v1/internal/reservations/webhooks/schedule/resume", "{}", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/reservations/task-automation/process-batch", "{}", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/reservations/task-automation/schedule/run-now", "{}", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/reservations/task-automation/schedule/pause", "{}", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/reservations/task-automation/schedule/resume", "{}", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/reservations/task-recommendations/generate-batch", "{}", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/reservations/task-recommendations/schedule/run-now", "{}", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/reservations/task-recommendations/schedule/pause", "{}", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/reservations/task-recommendations/schedule/resume", "{}", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/reservations/task-recommendations/providers/smoke-test", """{"providerId":"openai"}""", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/reservations/task-recommendations/providers/diagnostics/cleanup", "{}", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/reservations/task-recommendations/pilot/run", """{"providerId":"openai"}""", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/reservations/task-recommendations/pilot/schedule/run-now", "{}", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/reservations/task-recommendations/pilot/schedule/pause", "{}", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/reservations/task-recommendations/pilot/schedule/resume", "{}", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/reservations/task-recommendations/pilot/disable", "{}", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/reservations/task-recommendations/pilot/rollback-to-internal-demo", "{}", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/reservations/task-recommendations/pilot/cleanup", "{}", noPermission).statusCode()).isEqualTo(403)
     }
 
     @Test
@@ -150,6 +182,64 @@ class InternalReservationSyncOperationsControllerIntegrationTest : PostgresInteg
             "MUC",
             "externalEntityHash"
         )
+    }
+
+    @Test
+    fun `reservation task automation operations are disabled by default and sanitized`() {
+        val operator = login(createUser("RES_TASK_AUTOMATION", setOf(PermissionCodes.RESERVATION_SYNC_OPERATIONS)))
+
+        val rules = get("/api/v1/internal/reservations/task-automation/rules", operator)
+        val batch = post("/api/v1/internal/reservations/task-automation/process-batch", "{}", operator)
+        val history = get("/api/v1/internal/reservations/task-automation/executions?page=0&size=5", operator)
+        val paused = post("/api/v1/internal/reservations/task-automation/schedule/pause", "{}", operator)
+        val status = get("/api/v1/internal/reservations/task-automation/schedule", operator)
+        val resumed = post("/api/v1/internal/reservations/task-automation/schedule/resume", "{}", operator)
+
+        assertThat(rules.statusCode()).isEqualTo(200)
+        assertThat(batch.statusCode()).isEqualTo(200)
+        assertThat(history.statusCode()).isEqualTo(200)
+        assertThat(paused.statusCode()).isEqualTo(200)
+        assertThat(status.statusCode()).isEqualTo(200)
+        assertThat(resumed.statusCode()).isEqualTo(200)
+        assertThat(json(batch.body()).path("processedEvents").asInt()).isZero()
+        assertThat(json(paused.body()).path("paused").asBoolean()).isTrue()
+        assertThat(json(resumed.body()).path("paused").asBoolean()).isFalse()
+        assertThat(rules.body()).contains("upcoming-arrival-preparation")
+        assertThat(status.body()).contains("reservation_task_automation_default", "eligibleBacklogCount", "deadLetterExecutionCount")
+        assertThat(history.body()).doesNotContain("RES-", "MUC", "Ada", "externalReference", "payloadJson")
+        assertThat(status.body()).doesNotContain("reservationId", "taskId", "outboxEventId", "deduplicationKey", "payloadJson", "MUC")
+    }
+
+    @Test
+    fun `reservation task recommendation operations are disabled by default and sanitized`() {
+        val operator = login(createUser("RES_TASK_RECOMMENDATION", setOf(PermissionCodes.RESERVATION_SYNC_OPERATIONS)))
+
+        val generated = post("/api/v1/internal/reservations/task-recommendations/generate-batch", "{}", operator)
+        val history = get("/api/v1/internal/reservations/task-recommendations?page=0&size=5", operator)
+        val providers = get("/api/v1/internal/reservations/task-recommendations/providers", operator)
+        val paused = post("/api/v1/internal/reservations/task-recommendations/schedule/pause", "{}", operator)
+        val status = get("/api/v1/internal/reservations/task-recommendations/schedule", operator)
+        val runNow = post("/api/v1/internal/reservations/task-recommendations/schedule/run-now", "{}", operator)
+        val runs = get("/api/v1/internal/reservations/task-recommendations/generation-runs?page=0&size=5", operator)
+        val resumed = post("/api/v1/internal/reservations/task-recommendations/schedule/resume", "{}", operator)
+
+        assertThat(generated.statusCode()).isEqualTo(200)
+        assertThat(history.statusCode()).isEqualTo(200)
+        assertThat(providers.statusCode()).isEqualTo(200)
+        assertThat(paused.statusCode()).isEqualTo(200)
+        assertThat(status.statusCode()).isEqualTo(200)
+        assertThat(runNow.statusCode()).isEqualTo(200)
+        assertThat(runs.statusCode()).isEqualTo(200)
+        assertThat(resumed.statusCode()).isEqualTo(200)
+        assertThat(json(generated.body()).path("processedReservations").asInt()).isZero()
+        assertThat(json(paused.body()).path("paused").asBoolean()).isTrue()
+        assertThat(json(resumed.body()).path("paused").asBoolean()).isFalse()
+        assertThat(json(runNow.body()).path("status").asText()).isEqualTo("REJECTED")
+        assertThat(providers.body()).contains("internal-demo", "DETERMINISTIC_OUTPUT")
+        assertThat(status.body()).contains("reservation_task_recommendation_default", "eligibleCandidateBacklogCount")
+        assertThat(history.body()).doesNotContain("RES-", "MUC", "Ada", "externalReference", "payloadJson", "deduplicationKey")
+        assertThat(status.body()).doesNotContain("reservationId", "taskId", "outboxEventId", "deduplicationKey", "payloadJson", "MUC")
+        assertThat(runs.body()).doesNotContain("reservationId", "taskId", "prompt", "payloadJson", "MUC", "Ada", "RES-")
     }
 
     private fun createUser(roleCode: String, permissions: Set<String>): TestUser {

@@ -1,11 +1,14 @@
 # Event Reliability
 
 Sprint 8E introduces a PostgreSQL-backed transactional outbox for the first
-critical domain event: `TASK_CREATED`.
+critical domain event: `TASK_CREATED`. Reservation sprints later reuse the same
+outbox table for safe internal reservation events.
 
 ## Scope
 
-- Implemented event: `TASK_CREATED`.
+- Implemented task-notification event: `TASK_CREATED`.
+- Reservation events are internal reservation consumers; they are not externally
+  published.
 - No external broker is used.
 - No public outbox API is exposed.
 - Notification Engine, SLA alerts, push notifications, email, SMS, WebSocket,
@@ -66,7 +69,7 @@ state for notification routing.
 
 ## Processor
 
-The internal processor:
+The task-created notification processor:
 
 - selects due `PENDING` events with `next_attempt_at <= now`
 - claims a bounded batch using PostgreSQL row locking and `FOR UPDATE SKIP LOCKED`
@@ -93,6 +96,14 @@ The processor is controlled by `ops.ai.outbox`:
 
 Tests disable scheduling and invoke processing directly.
 
+Sprint 13A scopes this processor to `TASK_CREATED` rows. Reservation outbox
+events are claimed by `ReservationTaskAutomationService` only when reservation
+task automation is explicitly enabled. Sprint 13B adds an optional
+`reservation_task_automation_scheduler`, disabled by default, that invokes the
+same bounded automation service boundary under a distributed scheduler lease.
+Eligible reservation events are ordered by next-attempt eligibility, outbox
+creation time, and outbox id so older eligible records do not starve.
+
 ## Retry And Stale Locks
 
 Failures use bounded exponential backoff. Failure records store stable reason
@@ -111,6 +122,34 @@ and `FAILED` rows are never recovered for automatic retry.
 `FAILED` means automatic attempts are exhausted. Operational recovery should be a
 future admin/tooling workflow; direct manual database mutation is not the normal
 recovery path.
+
+Reservation task automation stores rule-level terminal failures as
+`DEAD_LETTER` in private automation execution history. Dead-letter executions
+are not automatically retried; the internal automation operation can requeue an
+eligible terminal execution without exposing payloads, reservation references,
+task descriptions, or property identifiers.
+
+Reservation task recommendations are advisory records, not outbox publications.
+Sprint 13C generation is operator-triggered only and scans safe deterministic
+automation execution context in bounded batches. Provider failures are isolated
+per reservation and stored as safe categories; no raw prompt, provider response,
+guest data, reservation reference, or property identifier is persisted or
+logged.
+
+Sprint 13D adds durable recommendation generation-run history and optional
+scheduled generation. Scheduling is disabled by default, uses the shared
+database-backed scheduler lease, and invokes only the recommendation application
+boundary. Run history stores safe aggregate counters and failure categories, not
+reservation ids, recommendation content, task ids, prompts, or provider
+payloads. Candidate selection is deterministic by eligible automation execution
+creation time and outbox event id; active recommendations prevent repeated
+generation for the same logical reservation state.
+
+Recommendation generation uses provider-neutral failure categories such as
+`PROVIDER_UNAVAILABLE`, `PROVIDER_TIMEOUT`, `INVALID_PROVIDER_RESPONSE`,
+`CAPABILITY_UNSUPPORTED`, `CONFIGURATION_ERROR`, `RATE_LIMITED`, and
+`PERMANENT_VALIDATION_FAILURE`. Only transient provider categories should be
+considered retryable by future external adapters.
 
 ## Retention
 
