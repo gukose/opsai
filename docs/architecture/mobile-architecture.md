@@ -198,3 +198,6 @@ Before modifying mobile UI:
 3. identify reusable components
 4. update components, not screen-specific copies
 5. explain unavoidable deviations before implementation
+# Offline operational mutations
+
+Core task start/pause/resume/complete operations use a durable hotel/user-scoped local queue when transport is unavailable. Reconnect submits explicit client operation IDs to the idempotent internal backend endpoint. Accepted items are removed; network failures remain pending; deterministic 4xx responses become visible conflicts. Logout clears the current scope. Media remains draft-only until attachment registration rules permit upload.

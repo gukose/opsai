@@ -37,6 +37,7 @@ internal object TaskPersistenceMapper {
             } else {
                 null
             },
+            unassignedReasonCode = entity.unassignedReasonCode,
             createdAt = requireNotNull(entity.createdAt) { "task.createdAt must not be null" },
             updatedAt = requireNotNull(entity.updatedAt) { "task.updatedAt must not be null" },
             startedAt = entity.startedAt,
@@ -69,6 +70,7 @@ internal object TaskPersistenceMapper {
         assigneeId = normalized.assignment?.assigneeId
         assigneeDisplayName = normalized.assignment?.displayName
         assignedAt = normalized.assignment?.assignedAt
+        unassignedReasonCode = normalized.unassignedReasonCode
         startedAt = normalized.startedAt
         completedAt = normalized.completedAt
         cancelledAt = normalized.cancelledAt

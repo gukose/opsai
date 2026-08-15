@@ -1,0 +1,24 @@
+package com.hotelopai.damage.application
+import com.hotelopai.finance.application.*
+import com.hotelopai.shared.kernel.UuidV7Generator
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
+import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+import java.math.BigDecimal
+import java.time.Clock
+import java.time.Instant
+import java.util.UUID
+
+enum class DamageStatus { REPORTED, REVIEW_REQUIRED, APPROVED, REJECTED, CHARGE_PROPOSED, CLOSED }
+data class DamageReport(val id:UUID,val hotelId:UUID,val roomNumber:String?,val location:String,val category:String,val description:String,val status:DamageStatus,val suggestedAmount:BigDecimal?,val approvedAmount:BigDecimal?,val currency:String?,val aiProvider:String?,val aiConfidence:BigDecimal?,val createdAt:Instant)
+data class CreateDamageReport(val hotelId:UUID,val roomNumber:String?,val location:String,val category:String,val description:String,val suggestedAmount:BigDecimal?,val currency:String?,val visionAnalysisId:UUID?,val aiProvider:String?,val aiConfidence:BigDecimal?,val attachmentIds:List<UUID>,val actor:UUID,val idempotencyKey:String)
+@Service class DamageService(private val jdbc:NamedParameterJdbcTemplate,private val charges:FinancialChargeService,private val clock:Clock=Clock.systemUTC()){
+ @Transactional fun create(c:CreateDamageReport):DamageReport { require(c.location.isNotBlank()&&c.category.isNotBlank()&&c.description.isNotBlank()&&c.idempotencyKey.isNotBlank());findByKey(c.hotelId,c.idempotencyKey)?.let{return it};val now=clock.instant();val id=UuidV7Generator.generate(now);jdbc.update("""insert into damage_report(id,hotel_id,room_number,location,category,description,status,suggested_amount,currency,vision_analysis_id,ai_provider,ai_confidence,created_by,created_at,idempotency_key)
+ values(:id,:hotel,:room,:location,:category,:description,'REVIEW_REQUIRED',:suggested,:currency,:vision,:provider,:confidence,:actor,:now,:key)""",mapOf("id" to id,"hotel" to c.hotelId,"room" to c.roomNumber,"location" to c.location,"category" to c.category,"description" to c.description,"suggested" to c.suggestedAmount,"currency" to c.currency,"vision" to c.visionAnalysisId,"provider" to c.aiProvider,"confidence" to c.aiConfidence,"actor" to c.actor,"now" to now,"key" to c.idempotencyKey));c.attachmentIds.distinct().forEach{jdbc.update("insert into damage_attachment(damage_report_id,attachment_id,provenance) values(:damage,:attachment,'STAFF_UPLOAD')",mapOf("damage" to id,"attachment" to it))};return find(id,c.hotelId) }
+ @Transactional fun approve(id:UUID,hotelId:UUID,reviewer:UUID,amount:BigDecimal,currency:String,postToPms:Boolean):Pair<DamageReport,ChargeProposal?> { require(amount>=BigDecimal.ZERO);val report=find(id,hotelId);require(report.status==DamageStatus.REVIEW_REQUIRED);jdbc.update("update damage_report set status='APPROVED',approved_amount=:amount,currency=:currency,reviewed_by=:reviewer,reviewed_at=:now where id=:id and hotel_id=:hotel",mapOf("amount" to amount,"currency" to currency,"reviewer" to reviewer,"now" to clock.instant(),"id" to id,"hotel" to hotelId));val proposal=if(postToPms&&amount>BigDecimal.ZERO){requireNotNull(report.roomNumber){"Room is required for PMS charge"};charges.propose(CreateChargeProposal(hotelId,ChargeType.DAMAGE,id,report.roomNumber,amount,currency,"damage-charge:$id"))}else null;if(proposal!=null)jdbc.update("update damage_report set status='CHARGE_PROPOSED' where id=:id",mapOf("id" to id));return find(id,hotelId) to proposal }
+ @Transactional fun reject(id:UUID,hotelId:UUID,reviewer:UUID):DamageReport { val r=find(id,hotelId);require(r.status==DamageStatus.REVIEW_REQUIRED);jdbc.update("update damage_report set status='REJECTED',reviewed_by=:reviewer,reviewed_at=:now,closed_at=:now where id=:id and hotel_id=:hotel",mapOf("reviewer" to reviewer,"now" to clock.instant(),"id" to id,"hotel" to hotelId));return find(id,hotelId) }
+ fun find(id:UUID,hotelId:UUID)=query("id=:id and hotel_id=:hotel",mapOf("id" to id,"hotel" to hotelId)).firstOrNull()?:throw NoSuchElementException("Damage report not found")
+ fun list(hotelId:UUID)=query("hotel_id=:hotel",mapOf("hotel" to hotelId))
+ private fun findByKey(hotelId:UUID,key:String)=query("hotel_id=:hotel and idempotency_key=:key",mapOf("hotel" to hotelId,"key" to key)).firstOrNull()
+ private fun query(where:String,p:Map<String,Any>)=jdbc.query("select * from damage_report where $where order by created_at desc",p){rs,_->DamageReport(rs.getObject("id",UUID::class.java),rs.getObject("hotel_id",UUID::class.java),rs.getString("room_number"),rs.getString("location"),rs.getString("category"),rs.getString("description"),DamageStatus.valueOf(rs.getString("status")),rs.getBigDecimal("suggested_amount"),rs.getBigDecimal("approved_amount"),rs.getString("currency"),rs.getString("ai_provider"),rs.getBigDecimal("ai_confidence"),rs.getTimestamp("created_at").toInstant())}
+}

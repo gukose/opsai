@@ -62,7 +62,7 @@ class MaintenanceIntentDefinition : ConversationFlowDefinition {
             fields[answerField] = userText.trim()
         }
 
-        roomPattern.find(userText)?.groupValues?.getOrNull(1)?.let { roomNumber ->
+        RoomNumberExtractor.extract(userText)?.let { roomNumber ->
             fields[FieldKeys.ROOM_NUMBER] = roomNumber
         }
 
@@ -108,8 +108,6 @@ class MaintenanceIntentDefinition : ConversationFlowDefinition {
         )
 
     private companion object {
-        val roomPattern = Regex("""\b(?:room\s*)?(\d{2,5})\b""", RegexOption.IGNORE_CASE)
-
         val maintenanceKeywords = setOf(
             "ac",
             "air condition",
@@ -119,7 +117,11 @@ class MaintenanceIntentDefinition : ConversationFlowDefinition {
             "not working",
             "repair",
             "sink",
-            "toilet"
+            "toilet",
+            "klima",
+            "çalışmıyor",
+            "bozuk",
+            "sızıntı"
         )
     }
 }

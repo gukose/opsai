@@ -25,6 +25,10 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
+import java.sql.Timestamp
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 
 @Configuration
@@ -51,7 +55,8 @@ class AuthSeedDataService(
     private val employeeRepository: EmployeeRepository,
     private val departmentRepository: DepartmentRepository,
     private val skillRepository: SkillRepository,
-    private val passwordHasher: PasswordHasher
+    private val passwordHasher: PasswordHasher,
+    private val jdbc: NamedParameterJdbcTemplate
 ) {
     fun seed() {
         val hotel = ensureHotel()
@@ -60,6 +65,61 @@ class AuthSeedDataService(
         val department = ensureDepartment(hotel.id)
         val skill = ensureSkill(hotel.id)
         ensureAdminUser(hotel.id, role.id, department.id, skill.id)
+        ensureOperationalDemoWorkforce(hotel.id, role.id)
+    }
+
+    private fun ensureOperationalDemoWorkforce(hotelId: UUID, roleId: UUID) {
+        val technicalDepartment = ensureOperationalDepartment(hotelId, "MAINTENANCE", "Technical")
+        val housekeepingDepartment = ensureOperationalDepartment(hotelId, "HOUSEKEEPING", "Housekeeping")
+        val hvacSkill = ensureOperationalSkill(hotelId, "HVAC_REPAIR", "HVAC Repair")
+        val cleaningSkill = ensureOperationalSkill(hotelId, "ROOM_CLEANING", "Room Cleaning")
+        val minibarSkill = ensureOperationalSkill(hotelId, "MINIBAR", "Minibar Operations")
+        val technician = ensureOperationalEmployee(hotelId, roleId, technicalDepartment.id, setOf(hvacSkill.id),
+            "EMP-TECH-001", "Demo HVAC Technician", "technician@hotelopai.local")
+        val housekeeper = ensureOperationalEmployee(hotelId, roleId, housekeepingDepartment.id, setOf(cleaningSkill.id, minibarSkill.id),
+            "EMP-HK-001", "Demo Housekeeper", "housekeeper@hotelopai.local")
+        ensureActiveShift(hotelId, technician.id)
+        ensureActiveShift(hotelId, housekeeper.id)
+    }
+
+    private fun ensureOperationalDepartment(hotelId: UUID, code: String, name: String): Department =
+        departmentRepository.findByHotelIdAndCode(hotelId, code)
+            ?: departmentRepository.save(Department(hotelId = hotelId, code = code, name = name))
+
+    private fun ensureOperationalSkill(hotelId: UUID, code: String, name: String): Skill =
+        skillRepository.findByHotelIdAndCode(hotelId, code)
+            ?: skillRepository.save(Skill(hotelId = hotelId, code = code, name = name))
+
+    private fun ensureOperationalEmployee(
+        hotelId: UUID, roleId: UUID, departmentId: UUID, skillIds: Set<UUID>,
+        employeeNumber: String, displayName: String, email: String
+    ): Employee {
+        employeeRepository.findByHotelIdAndEmployeeNumber(hotelId, employeeNumber)?.let { existing ->
+            return if (existing.operationalStatus == com.hotelopai.employee.domain.EmployeeOperationalStatus.AVAILABLE) existing
+            else employeeRepository.save(existing.updateOperationalStatus(com.hotelopai.employee.domain.EmployeeOperationalStatus.AVAILABLE))
+        }
+        val userId = UuidV7Generator.generate()
+        val employeeId = UuidV7Generator.generate()
+        val user = userRepository.save(User(id = userId, hotelId = hotelId, employeeId = employeeId,
+            email = EmailAddress.of(email), displayName = displayName, passwordHash = passwordHasher.hash(ADMIN_PASSWORD),
+            roleIds = setOf(roleId), status = UserStatus.ACTIVE))
+        return employeeRepository.save(Employee(id = employeeId, hotelId = hotelId, userId = user.id,
+            employeeNumber = employeeNumber, displayName = displayName, departmentId = departmentId,
+            roleIds = setOf(roleId), skillIds = skillIds,
+            operationalStatus = com.hotelopai.employee.domain.EmployeeOperationalStatus.AVAILABLE))
+    }
+
+    private fun ensureActiveShift(hotelId: UUID, employeeId: UUID) {
+        val now = Instant.now()
+        jdbc.update(
+            """insert into workforce_shift(id,hotel_id,employee_id,planned_start,planned_end,actual_start,status,created_at,updated_at)
+               select :id,:hotel,:employee,:start,:end,:start,'WORKING',:now,:now
+               where not exists(select 1 from workforce_shift where hotel_id=:hotel and employee_id=:employee
+                 and status in ('STARTED','WORKING') and coalesce(actual_end,planned_end)>:now)""",
+            mapOf("id" to UuidV7Generator.generate(now), "hotel" to hotelId, "employee" to employeeId,
+                "start" to Timestamp.from(now.minus(1, ChronoUnit.HOURS)), "end" to Timestamp.from(now.plus(12, ChronoUnit.HOURS)),
+                "now" to Timestamp.from(now))
+        )
     }
 
     private fun ensureHotel(): Hotel =
@@ -93,8 +153,7 @@ class AuthSeedDataService(
         } else if (existing.permissionIds != permissionIds) {
             roleRepository.save(
                 existing.copy(
-                    permissionIds = permissionIds,
-                    version = existing.version + 1
+                    permissionIds = permissionIds
                 )
             )
         } else {

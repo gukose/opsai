@@ -16,6 +16,8 @@ data class PmsCapabilities(
     val eventCreation: Boolean = false,
     val webhooks: Boolean = false,
     val incrementalSync: Boolean = false
+    ,val roomReadyUpdate: Boolean = false
+    ,val folioCharge: Boolean = false
 ) {
     fun supports(capability: PmsCapability): Boolean =
         when (capability) {
@@ -34,6 +36,8 @@ data class PmsCapabilities(
             PmsCapability.EVENT_CREATION -> eventCreation
             PmsCapability.WEBHOOKS -> webhooks
             PmsCapability.INCREMENTAL_SYNC -> incrementalSync
+            PmsCapability.ROOM_READY_UPDATE -> roomReadyUpdate
+            PmsCapability.FOLIO_CHARGE -> folioCharge
         }
 
     fun validateConsistency(providerId: String): List<String> = buildList {
@@ -68,6 +72,8 @@ enum class PmsCapability {
     EVENT_CREATION,
     WEBHOOKS,
     INCREMENTAL_SYNC
+    ,ROOM_READY_UPDATE
+    ,FOLIO_CHARGE
 }
 
 data class PmsProviderMetadata(

@@ -12,6 +12,7 @@ export function createLocalVoiceTranscriptMetadata(input: {
   transcript: string;
   languageCode?: string;
   durationMs?: number;
+  source?: "CLIENT_TRANSCRIPT" | "SERVER_STT";
 }): LocalVoiceTranscriptMetadata {
   const transcript = input.transcript.trim();
   if (!transcript) {
@@ -33,7 +34,7 @@ export function createLocalVoiceTranscriptMetadata(input: {
     transcript,
     languageCode: languageCode || undefined,
     durationMs: input.durationMs,
-    source: "CLIENT_TRANSCRIPT",
+    source: input.source ?? "CLIENT_TRANSCRIPT",
     state: "selected"
   };
 }

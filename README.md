@@ -2,6 +2,12 @@
 
 Hotel operations AI workspace.
 
+## MVP operations
+
+The local/InternalDemo stack now includes first-class housekeeping and inspection, deterministic workforce assignment, smart task interruption, inventory/minibar and damage approval boundaries, guest-session simulation, rule-based guest risk/service recovery, safe manager reporting, occupied-room billing counters, gamification, and idempotent offline task mutations. External PMS, STT, and guest-messaging providers remain disabled unless explicitly configured; unsupported Apaleo room-ready/folio operations are not advertised.
+
+See `docs/architecture/mvp-gap-closure.md` and the domain runbooks linked there. Staff/admin additions are internal under `/api/v1/internal/**`, preserving the existing public v1/SDK contract.
+
 ## Validation
 
 Backend and UniMock tests:

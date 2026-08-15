@@ -147,3 +147,6 @@ Structured logs should use stable fields such as `event`, `operation`,
 - Async MDC propagation is not implemented.
 - Metrics are not aggregated across backend instances until future monitoring
   infrastructure is added.
+# MVP domain metrics
+
+New counters use low-cardinality operation/outcome/type/provider tags for housekeeping lifecycle, inventory movements, financial charge posting, guest messaging, PMS outbound writes, and task interruptions. Hotel/user/room/reservation/task/message identifiers and exception text are prohibited as metric tags.

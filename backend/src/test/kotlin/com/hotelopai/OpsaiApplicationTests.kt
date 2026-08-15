@@ -39,7 +39,7 @@ class OpsaiApplicationTests : PostgresIntegrationTestSupport() {
         )
 
         assertEquals(1, publicSchemaCount)
-        assertEquals(36L, publicFlywayHistoryCount)
+        assertEquals(43L, publicFlywayHistoryCount)
         assertEquals("internal-demo", pmsProviderRegistry.activeProvider().id.value)
     }
 }

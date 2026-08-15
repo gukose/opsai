@@ -21,6 +21,17 @@ spring:
 
 ops:
   ai:
+    voice:
+      active-provider: internal-demo
+      maximum-audio-bytes: 10000000
+      external:
+        enabled: false
+        endpoint: https://api.openai.com/v1/audio/transcriptions
+        model: gpt-4o-mini-transcribe
+        credential-reference: env:OPENAI_API_KEY
+        allowed-profiles:
+          - demo
+        timeout: PT45S
     auth:
       jwt:
         issuer: hotel-opai

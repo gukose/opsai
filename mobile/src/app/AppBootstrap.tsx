@@ -11,6 +11,7 @@ import { SessionService, LoginCredentials } from "../auth/SessionService";
 import { createSessionStore } from "../session/createSessionStore";
 import { AppSessionSnapshot, CurrentUserSnapshot } from "../session/sessionTypes";
 import { defaultOfflineCache } from "../offline/offlineCache";
+import { defaultOfflineMutationQueue } from "../offline/offlineMutationQueue";
 import { AppLaunchState, AppStateSnapshot } from "./appState";
 
 type AppBootstrapContextValue = AppStateSnapshot & {
@@ -133,6 +134,7 @@ export function AppBootstrapProvider({ children }: { children: ReactNode }) {
         } finally {
           if (scope) {
             await defaultOfflineCache.clearScope(scope);
+            await defaultOfflineMutationQueue.clear(scope);
           }
           setSession(null);
           setStatus("unauthenticated");

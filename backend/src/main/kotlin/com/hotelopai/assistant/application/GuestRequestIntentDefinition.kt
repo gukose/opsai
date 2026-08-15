@@ -49,7 +49,7 @@ class GuestRequestIntentDefinition : ConversationFlowDefinition {
             fields[answerField] = userText.trim()
         }
 
-        roomPattern.find(userText)?.groupValues?.getOrNull(1)?.let { roomNumber ->
+        RoomNumberExtractor.extract(userText)?.let { roomNumber ->
             fields[FieldKeys.ROOM_NUMBER] = roomNumber
         }
 
@@ -95,8 +95,6 @@ class GuestRequestIntentDefinition : ConversationFlowDefinition {
         )
 
     private companion object {
-        val roomPattern = Regex("""\b(?:room\s*)?(\d{2,5})\b""", RegexOption.IGNORE_CASE)
-
         val guestRequestKeywords = setOf(
             "guest",
             "request",

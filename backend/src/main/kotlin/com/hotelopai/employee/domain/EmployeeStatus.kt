@@ -5,3 +5,16 @@ enum class EmployeeStatus {
     ON_LEAVE,
     INACTIVE
 }
+
+enum class EmployeeOperationalStatus {
+    AVAILABLE,
+    WORKING,
+    BREAK,
+    LUNCH,
+    MEETING,
+    TRAINING,
+    OFFLINE,
+    ON_LEAVE;
+
+    fun acceptsNormalWork(): Boolean = this == AVAILABLE || this == WORKING
+}

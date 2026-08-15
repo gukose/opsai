@@ -16,6 +16,7 @@ data class Task(
     val slaDeadline: Instant,
     val status: TaskStatus = TaskStatus.CREATED,
     val assignment: TaskAssignment? = null,
+    val unassignedReasonCode: String? = null,
     val createdAt: Instant = Instant.now(),
     val updatedAt: Instant = createdAt,
     val startedAt: Instant? = null,
@@ -35,8 +36,15 @@ data class Task(
         return copy(
             status = TaskStatus.ASSIGNED,
             assignment = assignment.copy(assignedAt = now),
+            unassignedReasonCode = null,
             updatedAt = now
         )
+    }
+
+    fun remainUnassigned(reasonCode: String, now: Instant = Instant.now()): Task {
+        require(status == TaskStatus.CREATED) { "Only created tasks can remain unassigned" }
+        require(reasonCode.isNotBlank()) { "reasonCode must not be blank" }
+        return copy(unassignedReasonCode = reasonCode, updatedAt = now)
     }
 
     fun start(now: Instant = Instant.now()): Task {

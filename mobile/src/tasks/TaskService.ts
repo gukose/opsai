@@ -12,8 +12,10 @@ import {
 
 export class TaskService {
   private readonly taskApi: HttpTaskApi;
+  private readonly accessTokenProvider: () => string | null;
 
   constructor(accessTokenProvider: () => string | null, refreshAccessToken?: () => Promise<string | null>) {
+    this.accessTokenProvider = accessTokenProvider;
     this.taskApi = new HttpTaskApi(
       new MobileHotelOpAiClient({
         baseUrl: appApiBaseUrl,
@@ -21,6 +23,12 @@ export class TaskService {
         refreshAccessToken
       })
     );
+  }
+
+  async submitOfflineOperation(operation:{clientOperationId:string;type:string;resourceId:string}):Promise<void>{
+    const token=this.accessTokenProvider();if(!token)throw new Error("Authentication required");
+    const response=await fetch(`${appApiBaseUrl}/api/v1/internal/offline-operations`,{method:"POST",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify(operation)});
+    if(!response.ok){const error=new Error(`Offline sync failed with ${response.status}`) as Error & {status?:number};error.status=response.status;throw error}
   }
 
   async listTasks(filters?: TaskFilterState): Promise<TaskSummary[]> {

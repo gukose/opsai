@@ -23,6 +23,9 @@ import com.hotelopai.pms.domain.RoomStatusUpdate
 import com.hotelopai.integration.unimock.InternalDemoPmsMapper.toDomain
 import com.hotelopai.integration.unimock.InternalDemoPmsMapper.toInternalDemoRequest
 import org.springframework.stereotype.Component
+import java.time.Instant
+import com.hotelopai.pms.domain.FolioChargeRequest
+import com.hotelopai.pms.domain.FolioChargeResult
 
 @Component
 class InternalDemoPmsProvider(
@@ -95,6 +98,12 @@ class InternalDemoPmsProvider(
         uniMockClient.updateRoomStatus(roomNumber, request.toInternalDemoRequest()).toDomain()
     }
 
+    override fun markRoomReady(roomNumber: String, idempotencyKey: String): PmsUpdateResult =
+        updateRoomStatus(roomNumber, RoomStatusUpdate("CLEAN"))
+
+    override fun postFolioCharge(request: FolioChargeRequest): FolioChargeResult =
+        FolioChargeResult(true, "internal-demo-${request.idempotencyKey.take(24)}", false, Instant.now())
+
     override fun updateMaintenance(request: MaintenanceUpdate): PmsUpdateResult = withProviderHandling {
         requireRoom(request.roomNumber)
         requireIssueType(request.issueTypeCode)
@@ -149,6 +158,8 @@ class InternalDemoPmsProvider(
             eventCreation = true,
             webhooks = false,
             incrementalSync = false
+            ,roomReadyUpdate = true
+            ,folioCharge = true
         )
     }
 }

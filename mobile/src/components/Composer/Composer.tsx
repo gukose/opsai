@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { ReactNode, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { Camera, FileText, Grid2X2, MessageSquareText, Paperclip, SendHorizontal, X } from "lucide-react-native";
+import { Camera, FileText, Grid2X2, MessageSquareText, Mic, Paperclip, SendHorizontal, X } from "lucide-react-native";
 
 import {
   LocalAttachmentMetadata,
@@ -33,6 +33,8 @@ type ComposerProps = {
   onRemoveVoiceTranscript?: () => void;
   onAddImageObservation?: () => void;
   onRemoveImageObservation?: (observationId: string) => void;
+  voiceRecorder?: ReactNode;
+  voiceRecorderActive?: boolean;
   disabled?: boolean;
 };
 
@@ -53,6 +55,8 @@ export function Composer({
   onRemoveVoiceTranscript,
   onAddImageObservation,
   onRemoveImageObservation,
+  voiceRecorder,
+  voiceRecorderActive = false,
   disabled
 }: ComposerProps) {
   const [localText, setLocalText] = useState("");
@@ -80,7 +84,7 @@ export function Composer({
     <View style={styles.container}>
       <TextInput
         accessibilityLabel="Assistant message"
-        placeholder="Type a message or hold to speak..."
+        placeholder="Type a message or tap Record voice..."
         placeholderTextColor={colors.textSubtle}
         onChangeText={setText}
         onSubmitEditing={handleSend}
@@ -90,6 +94,7 @@ export function Composer({
         editable={!disabled}
         style={styles.input}
       />
+      {voiceRecorder}
       {attachments.length > 0 || voiceTranscript || imageObservations.length > 0 || attachmentError ? (
         <View style={styles.attachmentTray}>
           {voiceTranscript ? (
@@ -97,10 +102,10 @@ export function Composer({
               <MessageSquareText color={colors.nav} size={11} strokeWidth={2.3} />
               <View style={styles.attachmentMeta}>
                 <Text style={styles.attachmentName} numberOfLines={1}>
-                  Client transcript
+                  {voiceTranscript.source === "SERVER_STT" ? "Voice transcript" : "Client transcript"}
                 </Text>
                 <Text style={styles.attachmentState} numberOfLines={1}>
-                  Client-provided · not server transcribed · {voiceTranscript.state}
+                  {voiceTranscript.source === "SERVER_STT" ? "Server transcribed" : "Client-provided · not server transcribed"} · {voiceTranscript.state}
                 </Text>
               </View>
               <Pressable
@@ -184,10 +189,12 @@ export function Composer({
           <IconButton icon={Grid2X2} label="Open templates" style={styles.flatIcon} size={14} />
           <IconButton icon={Paperclip} label="Attach local reference" style={styles.flatIcon} size={14} onPress={onAddAttachment} disabled={disabled} />
         </View>
-        <Pressable accessibilityRole="button" style={styles.voiceButton} onPress={onAddVoiceTranscript} disabled={disabled}>
-          <MessageSquareText color={colors.red} size={12} strokeWidth={2.4} />
-          <Text style={styles.voiceText}>Client transcript</Text>
-        </Pressable>
+        {!voiceRecorderActive ? (
+          <Pressable accessibilityRole="button" style={styles.voiceButton} onPress={onAddVoiceTranscript} disabled={disabled}>
+            <Mic color={colors.red} size={12} strokeWidth={2.4} />
+            <Text style={styles.voiceText}>Record voice</Text>
+          </Pressable>
+        ) : null}
         <IconButton
           icon={MessageSquareText}
           label="Add image note"
@@ -306,7 +313,7 @@ const styles = StyleSheet.create({
     padding: 0
   },
   controls: {
-    height: 26,
+    minHeight: 34,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -317,13 +324,13 @@ const styles = StyleSheet.create({
     gap: spacing.xs
   },
   flatIcon: {
-    width: 20,
-    height: 20,
+    width: 28,
+    height: 28,
     backgroundColor: colors.surface
   },
   voiceButton: {
-    minWidth: 126,
-    height: 24,
+    minWidth: 132,
+    height: 32,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -335,12 +342,12 @@ const styles = StyleSheet.create({
   },
   voiceText: {
     color: colors.red,
-    fontSize: typography.tiny,
+    fontSize: 11,
     fontWeight: "900"
   },
   sendButton: {
-    width: 25,
-    height: 25,
+    width: 32,
+    height: 32,
     backgroundColor: "#f2f5fa"
   }
 });

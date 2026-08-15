@@ -37,11 +37,11 @@ export const radius = {
 } as const;
 
 export const typography = {
-  title: 15,
-  subtitle: 10,
-  body: 10,
-  caption: 8,
-  tiny: 7
+  title: 18,
+  subtitle: 13,
+  body: 12,
+  caption: 10,
+  tiny: 9
 } as const;
 
 export const shadow = {

@@ -2,6 +2,7 @@ package com.hotelopai.employee.infrastructure.persistence
 
 import com.hotelopai.infrastructure.persistence.AuditedJpaEntity
 import com.hotelopai.employee.domain.EmployeeStatus
+import com.hotelopai.employee.domain.EmployeeOperationalStatus
 import jakarta.persistence.Column
 import jakarta.persistence.CollectionTable
 import jakarta.persistence.ElementCollection
@@ -35,6 +36,22 @@ class EmployeeJpaEntity : AuditedJpaEntity() {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     var status: EmployeeStatus = EmployeeStatus.ACTIVE
+
+    @Column(name = "primary_role_code")
+    var primaryRoleCode: String? = null
+
+    @Column(name = "supervisor_employee_id", columnDefinition = "uuid")
+    var supervisorEmployeeId: UUID? = null
+
+    @Column(name = "home_area")
+    var homeArea: String? = null
+
+    @Column(name = "languages", columnDefinition = "text[]")
+    var languages: Array<String> = emptyArray()
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "operational_status", nullable = false)
+    var operationalStatus: EmployeeOperationalStatus = EmployeeOperationalStatus.OFFLINE
 
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(

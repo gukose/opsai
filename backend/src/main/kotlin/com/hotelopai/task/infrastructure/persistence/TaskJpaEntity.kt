@@ -64,6 +64,9 @@ class TaskJpaEntity : AuditedJpaEntity() {
     @Column(name = "assigned_at")
     var assignedAt: Instant? = null
 
+    @Column(name = "unassigned_reason_code")
+    var unassignedReasonCode: String? = null
+
     @Column(name = "started_at")
     var startedAt: Instant? = null
 

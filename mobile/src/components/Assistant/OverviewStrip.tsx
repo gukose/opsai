@@ -1,10 +1,11 @@
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { Bell, ClipboardCheck, TriangleAlert } from "lucide-react-native";
 import { ComponentType } from "react";
 import { LucideProps } from "lucide-react-native";
 
 import { colors, radius, shadow, spacing, typography } from "../../theme/tokens";
 import { TaskBoardOverview } from "../../tasks/taskBoardSelectors";
+import { resolveResponsiveLayout } from "../../layout/responsiveLayout";
 
 type OverviewStripProps = TaskBoardOverview;
 
@@ -14,6 +15,8 @@ export function OverviewStrip({
   completionPercent,
   unreadNotificationCount
 }: OverviewStripProps) {
+  const { width } = useWindowDimensions();
+  const desktop = resolveResponsiveLayout(width).mode === "desktop";
   return (
     <View style={styles.wrap}>
       <Text style={styles.title}>Today's Overview</Text>
@@ -41,7 +44,7 @@ export function OverviewStrip({
             value={String(unreadNotificationCount)}
           />
         ) : null}
-        <View style={styles.progressCard}>
+        <View style={[styles.progressCard, desktop ? styles.cardDesktop : null]}>
           <View style={styles.track}>
             <View style={[styles.progress, { width: `${Math.max(0, Math.min(100, completionPercent))}%` }]} />
           </View>
@@ -73,7 +76,7 @@ function OverviewCard({
         <Icon color={iconColor} size={18} strokeWidth={2.35} />
       </View>
       <View style={styles.metricText}>
-        <Text style={styles.metricTitle}>{title}</Text>
+        <Text style={styles.metricTitle} numberOfLines={1}>{title}</Text>
         <Text style={styles.metricValue}>{value}</Text>
       </View>
     </View>
@@ -98,11 +101,15 @@ const styles = StyleSheet.create({
   },
   metrics: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 6
   },
   overviewCard: {
-    flex: 1,
-    minHeight: 46,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 145,
+    minWidth: 140,
+    minHeight: 62,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
@@ -126,18 +133,21 @@ const styles = StyleSheet.create({
   },
   metricTitle: {
     color: colors.text,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "900"
   },
   metricValue: {
     marginTop: 3,
     color: colors.nav,
-    fontSize: 8,
+    fontSize: 15,
     fontWeight: "900"
   },
   progressCard: {
-    flex: 1.35,
-    minHeight: 46,
+    flexGrow: 1.35,
+    flexShrink: 1,
+    flexBasis: 170,
+    minWidth: 150,
+    minHeight: 62,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -163,5 +173,8 @@ const styles = StyleSheet.create({
     color: colors.nav,
     fontSize: 11,
     fontWeight: "900"
+  },
+  cardDesktop: {
+    flexBasis: 220
   }
 });

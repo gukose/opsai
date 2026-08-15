@@ -17,6 +17,8 @@ import com.hotelopai.pms.domain.PmsStay
 import com.hotelopai.pms.domain.PmsUpdateResult
 import com.hotelopai.pms.domain.RoomStatusUpdate
 import java.time.Instant
+import com.hotelopai.pms.domain.FolioChargeRequest
+import com.hotelopai.pms.domain.FolioChargeResult
 
 interface PmsProvider {
     val id: PmsProviderId
@@ -102,6 +104,12 @@ interface PmsProvider {
         roomNumber: String,
         request: RoomStatusUpdate
     ): PmsUpdateResult
+
+    fun markRoomReady(roomNumber: String, idempotencyKey: String): PmsUpdateResult =
+        throw UnsupportedPmsCapabilityException(id.value, PmsCapability.ROOM_READY_UPDATE)
+
+    fun postFolioCharge(request: FolioChargeRequest): FolioChargeResult =
+        throw UnsupportedPmsCapabilityException(id.value, PmsCapability.FOLIO_CHARGE)
 
     fun updateMaintenance(request: MaintenanceUpdate): PmsUpdateResult
 

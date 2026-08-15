@@ -23,7 +23,8 @@ abstract class BaseReservationTaskAutomationRule(
         intentType: TaskIntentType,
         priority: TaskPriority,
         dueAt: Instant,
-        roomNumber: String? = context.reservation.roomAssignment?.roomId?.value
+        roomNumber: String? = context.reservation.roomAssignment?.roomId?.value,
+        safeMetadata: Map<String, String> = emptyMap()
     ): ReservationTaskProposal =
         ReservationTaskProposal(
             ruleId = id,
@@ -36,7 +37,7 @@ abstract class BaseReservationTaskAutomationRule(
             priority = context.dueDatePolicy.priority(id, priority),
             dueAt = dueAt,
             deduplicationKey = dedupe(context),
-            safeMetadata = mapOf("rule" to id.value, "eventType" to context.outboxEvent.eventType)
+            safeMetadata = mapOf("rule" to id.value, "eventType" to context.outboxEvent.eventType) + safeMetadata
         )
 
     protected fun defaultDue(context: ReservationTaskAutomationContext, date: LocalDate = context.reservation.stayPeriod.arrival): Instant =
@@ -221,12 +222,37 @@ class GuestCheckoutFollowUpRule : BaseReservationTaskAutomationRule(
         listOf(
             proposal(
                 context,
-                title = "Complete checkout follow-up",
-                description = "Confirm room and operational follow-up after guest checkout.",
+                title = "Departure Cleaning",
+                description = "Clean and prepare the checked-out room for inspection.",
                 intentType = TaskIntentType.HOUSEKEEPING,
                 priority = TaskPriority.MEDIUM,
-                dueAt = sameDayDue(context)
+                dueAt = sameDayDue(context),
+                safeMetadata = mapOf("housekeeping_type" to "DEPARTURE_CLEANING", "inspection_required" to "true")
             )
         )
-        }
+}
+
+@Component
+class StayoverCleaningRule : BaseReservationTaskAutomationRule(
+    ReservationTaskAutomationRuleId("stayover-cleaning"),
+    1,
+    setOf(OperationalOutboxEventTypes.RESERVATION_IMPORTED, OperationalOutboxEventTypes.RESERVATION_UPDATED)
+) {
+    override fun evaluate(context: ReservationTaskAutomationContext): List<ReservationTaskProposal> {
+        if (blockedByPolicy(context) || context.reservation.stayStatus != StayStatus.IN_HOUSE) return emptyList()
+        val room = context.reservation.roomAssignment?.roomId?.value ?: return emptyList()
+        val today = context.now.atZone(context.dueDatePolicy.policyFor(id).timezone).toLocalDate()
+        if (today.isBefore(context.reservation.stayPeriod.arrival) || !today.isBefore(context.reservation.stayPeriod.departure)) return emptyList()
+        return listOf(proposal(
+            context,
+            title = "Stayover Cleaning",
+            description = "Complete the configured in-house stayover service.",
+            intentType = TaskIntentType.HOUSEKEEPING,
+            priority = TaskPriority.MEDIUM,
+            dueAt = sameDayDue(context),
+            roomNumber = room,
+            safeMetadata = mapOf("housekeeping_type" to "STAYOVER_CLEANING", "inspection_required" to "false")
+        ))
+    }
+}
 }

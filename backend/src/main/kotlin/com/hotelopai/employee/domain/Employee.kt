@@ -15,6 +15,11 @@ data class Employee(
     val roleIds: Set<UUID> = emptySet(),
     val skillIds: Set<UUID> = emptySet(),
     val status: EmployeeStatus = EmployeeStatus.ACTIVE,
+    val primaryRoleCode: String? = null,
+    val supervisorEmployeeId: UUID? = null,
+    val homeArea: String? = null,
+    val languages: Set<String> = emptySet(),
+    val operationalStatus: EmployeeOperationalStatus = EmployeeOperationalStatus.AVAILABLE,
     override val version: Long = 0,
     override val createdAt: Instant = Instant.now(),
     override val createdBy: String? = null,
@@ -50,4 +55,7 @@ data class Employee(
             updatedBy = updatedBy,
             version = version + 1
         )
+
+    fun updateOperationalStatus(status: EmployeeOperationalStatus, updatedBy: String? = null, now: Instant = Instant.now()): Employee =
+        copy(operationalStatus = status, updatedAt = now, updatedBy = updatedBy, version = version + 1)
 }

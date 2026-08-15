@@ -84,6 +84,8 @@ data class TaskResponse(
     val status: String,
     val slaDeadline: Instant,
     val assignment: TaskAssignmentResponse?,
+    val unassignedReasonCode: String?,
+    val unassignedReason: String?,
     val createdAt: Instant,
     val updatedAt: Instant,
     val startedAt: Instant?,
@@ -105,6 +107,8 @@ data class TaskResponse(
                 status = task.status.name,
                 slaDeadline = task.slaDeadline,
                 assignment = task.assignment?.let { TaskAssignmentResponse.from(it) },
+                unassignedReasonCode = task.unassignedReasonCode,
+                unassignedReason = task.unassignedReasonCode?.let(::safeUnassignedReason),
                 createdAt = task.createdAt,
                 updatedAt = task.updatedAt,
                 startedAt = task.startedAt,
@@ -112,6 +116,14 @@ data class TaskResponse(
                 cancelledAt = task.cancelledAt,
                 overdueAt = task.overdueAt
             )
+
+        private fun safeUnassignedReason(code: String): String = when (code) {
+            "NO_ACTIVE_SHIFT" -> "No eligible employee is currently on an active shift."
+            "NO_REQUIRED_SKILL" -> "No active employee has the required skill."
+            "NO_AVAILABLE_EMPLOYEE" -> "Eligible employees are currently unavailable."
+            "CAPACITY_EXCEEDED" -> "Eligible employees are currently at capacity."
+            else -> "Supervisor assignment is required."
+        }
     }
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { SafeAreaView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { colors } from "../../theme/tokens";
 import { assistantBackendEnabled } from "../../config/assistantConfig";
@@ -27,16 +27,16 @@ import { AssistantCard } from "./AssistantCard";
 import { AssistantHeader } from "./AssistantHeader";
 import { NextTaskCard } from "./NextTaskCard";
 import { OverviewStrip } from "./OverviewStrip";
-import { ReportingSection } from "./ReportingSection";
 import { useAssistantHomeState } from "../../assistant/useAssistantHomeState";
 import { useDashboardSummaryState } from "../../dashboard/useDashboardSummaryState";
-import { useTaskReportingState } from "../../dashboard/useTaskReportingState";
 import { useTaskBoardState } from "../../tasks/useTaskBoardState";
 import { TaskEmptyState } from "../Tasks/TaskEmptyState";
 import { TasksScreen } from "../Tasks/TasksScreen";
 import { ProfilePanel } from "../Profile/ProfilePanel";
 import { BottomNavigationKey } from "../Navigation/BottomNavigation";
 import { KnowledgeAssistantScreen } from "../Knowledge/KnowledgeAssistantScreen";
+import { VoiceRecorderPanel } from "../Voice/VoiceRecorderPanel";
+import { resolveResponsiveLayout } from "../../layout/responsiveLayout";
 
 type AssistantHomeScreenProps = {
   accessToken: string | null;
@@ -46,12 +46,17 @@ type AssistantHomeScreenProps = {
 };
 
 export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessToken, onLogout }: AssistantHomeScreenProps) {
+  const { width } = useWindowDimensions();
+  const responsiveLayout = resolveResponsiveLayout(width);
+  const isDesktop = responsiveLayout.mode === "desktop";
+  const isTablet = responsiveLayout.mode === "tablet";
   const [activeSection, setActiveSection] = useState<BottomNavigationKey>("home");
   const [composerText, setComposerText] = useState("");
   const [selectedAttachments, setSelectedAttachments] = useState<LocalAttachmentMetadata[]>([]);
   const [voiceTranscript, setVoiceTranscript] = useState<LocalVoiceTranscriptMetadata | null>(null);
   const [imageObservations, setImageObservations] = useState<LocalImageObservationMetadata[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [voiceRecorderVisible, setVoiceRecorderVisible] = useState(false);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const {
     conversationId,
@@ -94,12 +99,6 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
     cachedAt: dashboardCachedAt,
     refreshDashboard
   } = useDashboardSummaryState(accessToken, currentUser, refreshAccessToken);
-  const {
-    report: taskReport,
-    isLoading: isReportLoading,
-    errorMessage: reportingErrorMessage,
-    refreshReport
-  } = useTaskReportingState(accessToken, refreshAccessToken);
   const overviewForDisplay = dashboardSummary?.overview ?? overview;
   const assistantActionDisabled = isSending || isConfirming;
   const isHomeSurface = activeSection === "home" || activeSection === "assistant";
@@ -234,13 +233,16 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
           onLogout={onLogout}
         />
         {isHomeSurface ? (
-          <>
+          <ScrollView
+            style={styles.homeScroll}
+            contentContainerStyle={[
+              styles.homeContent,
+              isTablet ? styles.homeContentTablet : null,
+              isDesktop ? styles.homeContentDesktop : null
+            ]}
+            showsVerticalScrollIndicator={false}
+          >
             <OverviewStrip {...overviewForDisplay} />
-            <ReportingSection
-              report={taskReport}
-              isLoading={isReportLoading}
-              errorMessage={reportingErrorMessage}
-            />
             {dashboardStaleReason ? (
               <TaskErrorBanner
                 title="Offline data"
@@ -283,12 +285,11 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
                 if (createdTaskId) {
                   await refreshTasks();
                   await refreshDashboard();
-                  await refreshReport();
                 }
               }}
               isActionDisabled={assistantActionDisabled}
             />
-          </>
+          </ScrollView>
         ) : activeSection === "tasks" ? (
           <TasksScreen
             tasks={tasks}
@@ -326,8 +327,9 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
             message={`Operational tools for ${currentUser?.hotelName ?? "this hotel"} will appear here.`}
           />
         )}
-        <View style={styles.footer}>
+        <View style={[styles.footer, isDesktop ? styles.footerDesktop : null]}>
           {isHomeSurface ? (
+            <>
             <Composer
               onSend={async (text, attachments, transcript, observations = []) => {
                 if (assistantBackendEnabled && attachments.some((attachment) => attachment.storageStatus !== "REGISTERED")) {
@@ -389,16 +391,9 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
                 }
               }}
               onAddVoiceTranscript={() => {
-                try {
-                  setVoiceTranscript(createLocalVoiceTranscriptMetadata({
-                    transcript: "Room 502 sink is leaking",
-                    languageCode: "en",
-                    durationMs: 4200
-                  }));
-                  setAttachmentError(null);
-                } catch (error) {
-                  setAttachmentError(error instanceof Error ? error.message : "Client transcript could not be added.");
-                }
+                if (!accessToken) { setAttachmentError("Sign in before recording a voice request."); return; }
+                setVoiceRecorderVisible((visible) => !visible);
+                setAttachmentError(null);
               }}
               onRemoveVoiceTranscript={() => {
                 setVoiceTranscript(null);
@@ -427,8 +422,21 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
                 setImageObservations((current) => current.filter((observation) => observation.id !== observationId));
                 setAttachmentError(null);
               }}
+              voiceRecorderActive={voiceRecorderVisible}
+              voiceRecorder={voiceRecorderVisible && accessToken ? (
+                <VoiceRecorderPanel
+                  accessToken={accessToken}
+                  onClose={() => setVoiceRecorderVisible(false)}
+                  onUseTranscript={(proposal) => {
+                    setVoiceTranscript(createLocalVoiceTranscriptMetadata({ transcript: proposal.transcript, languageCode: proposal.languageCode, durationMs: proposal.durationMs, source: "SERVER_STT" }));
+                    setComposerText(proposal.transcript);
+                    setAttachmentError(proposal.confirmationRequired ? "Low-confidence voice intent: review the transcript before sending." : null);
+                  }}
+                />
+              ) : null}
               disabled={assistantActionDisabled}
             />
+            </>
           ) : null}
           <BottomNavigation
             activeKey={activeSection}
@@ -474,13 +482,32 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     width: "100%",
-    maxWidth: 390,
+    maxWidth: 1360,
     alignSelf: "center",
     backgroundColor: colors.background
+  },
+  homeScroll: {
+    flex: 1,
+    width: "100%"
+  },
+  homeContent: {
+    width: "100%",
+    paddingBottom: 8
+  },
+  homeContentTablet: {
+    paddingHorizontal: 12
+  },
+  homeContentDesktop: {
+    paddingHorizontal: 24,
+    paddingBottom: 18
   },
   footer: {
     paddingTop: 5,
     backgroundColor: colors.background
+  },
+  footerDesktop: {
+    paddingHorizontal: 24,
+    paddingBottom: 8
   },
   errorBanner: {
     marginHorizontal: 13,

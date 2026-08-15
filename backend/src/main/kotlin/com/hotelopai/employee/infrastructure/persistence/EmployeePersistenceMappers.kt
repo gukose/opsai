@@ -79,6 +79,11 @@ internal object EmployeePersistenceMapper {
             roleIds = entity.roleIds.toSet(),
             skillIds = entity.skillIds.toSet(),
             status = entity.status,
+            primaryRoleCode = entity.primaryRoleCode,
+            supervisorEmployeeId = entity.supervisorEmployeeId,
+            homeArea = entity.homeArea,
+            languages = entity.languages.toSet(),
+            operationalStatus = entity.operationalStatus,
             version = requireNotNull(entity.version) { "employee.version must not be null" },
             createdAt = requireNotNull(entity.createdAt) { "employee.createdAt must not be null" },
             createdBy = entity.createdBy,
@@ -95,6 +100,11 @@ internal object EmployeePersistenceMapper {
             displayName = domain.displayName
             departmentId = domain.departmentId
             status = domain.status
+            primaryRoleCode = domain.primaryRoleCode
+            supervisorEmployeeId = domain.supervisorEmployeeId
+            homeArea = domain.homeArea
+            languages = domain.languages.toTypedArray()
+            operationalStatus = domain.operationalStatus
             roleIds = domain.roleIds.toMutableSet()
             skillIds = domain.skillIds.toMutableSet()
             version = domain.version.takeIf { it > 0 }

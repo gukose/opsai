@@ -12,6 +12,9 @@ import com.hotelopai.shared.kernel.PersistenceInstant
 import com.hotelopai.task.application.CreateTaskCommand
 import com.hotelopai.task.application.TaskApplicationPort
 import com.hotelopai.task.domain.TaskSource
+import com.hotelopai.housekeeping.application.CreateHousekeepingCommand
+import com.hotelopai.housekeeping.application.HousekeepingService
+import com.hotelopai.housekeeping.domain.HousekeepingWorkflowType
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.core.env.Environment
 import org.springframework.stereotype.Service
@@ -28,6 +31,7 @@ class ReservationTaskAutomationService(
     private val repository: ReservationTaskAutomationRepository,
     private val reservationRepository: ReservationRepository,
     private val taskApplicationPort: TaskApplicationPort,
+    private val housekeepingService: HousekeepingService? = null,
     private val objectMapper: ObjectMapper,
     private val properties: ReservationTaskAutomationProperties,
     private val clock: Clock,
@@ -269,7 +273,16 @@ class ReservationTaskAutomationService(
             }
             is ReservationTaskAutomationInsertResult.Inserted -> {
                 try {
-                    val task = taskApplicationPort.createTask(
+                    val housekeepingType = proposal.safeMetadata["housekeeping_type"]?.let(HousekeepingWorkflowType::valueOf)
+                    val createdTaskId = if (housekeepingType != null) {
+                        requireNotNull(housekeepingService) { "Housekeeping automation requires HousekeepingService" }.create(CreateHousekeepingCommand(
+                            hotelId = requireNotNull(properties.hotelId),
+                            roomNumber = requireNotNull(proposal.roomNumber),
+                            type = housekeepingType,
+                            inspectionRequired = proposal.safeMetadata["inspection_required"].toBoolean(),
+                            idempotencyKey = proposal.deduplicationKey
+                        )).taskId
+                    } else taskApplicationPort.createTask(
                         CreateTaskCommand(
                             hotelId = requireNotNull(properties.hotelId),
                             intentType = proposal.intentType,
@@ -281,11 +294,11 @@ class ReservationTaskAutomationService(
                             slaDeadline = proposal.dueAt.ensureAfter(now)
                         ),
                         now
-                    )
+                    ).id
                     repository.saveExecution(
                         inserted.execution.copy(
                             outcome = ReservationTaskAutomationOutcome.CREATED,
-                            createdTaskId = task.id,
+                            createdTaskId = createdTaskId,
                             skipReason = null,
                             completedAt = PersistenceInstant.now(clock),
                             updatedAt = PersistenceInstant.now(clock)

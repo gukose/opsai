@@ -28,7 +28,9 @@ class TaskLifecycleService @Autowired constructor(
     private val completionPolicy: CompletionPolicy,
     private val taskNotificationPublisher: TaskNotificationPublisher = NoOpTaskNotificationPublisher,
     private val observability: OperationalObservability = OperationalObservability.noop(),
-    private val clock: Clock = Clock.systemUTC()
+    private val clock: Clock = Clock.systemUTC(),
+    private val completionObservers: List<TaskCompletionObserver> = emptyList(),
+    private val taskCreationAssignmentOrchestrator: TaskCreationAssignmentOrchestrator = NoOpTaskCreationAssignmentOrchestrator
 ) : TaskApplicationPort {
     constructor(taskRepository: TaskRepository) : this(
         taskRepository = taskRepository,
@@ -84,7 +86,20 @@ class TaskLifecycleService @Autowired constructor(
                     }
                 )
             } else {
-                saved
+                val automatic = taskCreationAssignmentOrchestrator.evaluate(saved, persistedNow)
+                when {
+                    automatic.assignment != null -> mutate(
+                        taskId = saved.id.toString(),
+                        hotelId = saved.hotelId,
+                        operation = TaskTransition.ASSIGN,
+                        now = persistedNow,
+                        mutation = { current, normalizedNow -> current.assign(automatic.assignment, normalizedNow) },
+                        successMessage = { _, _ -> "Task automatically assigned by persisted workforce rules" }
+                    )
+                    automatic.reasonCode != "ORCHESTRATION_DISABLED" ->
+                        taskRepository.save(saved.remainUnassigned(automatic.reasonCode, persistedNow))
+                    else -> saved
+                }
             }
             taskNotificationPublisher.taskCreated(created, persistedNow)
             recordLifecycle(operation = TaskTransition.CREATE, outcome = "success", reasonCode = "none")
@@ -158,7 +173,7 @@ class TaskLifecycleService @Autowired constructor(
                 successMessage = { _, _ ->
                     verificationLogId?.let { "Task completed after PMS verification $it" } ?: "Task completed"
                 }
-            )
+            ).also { completed -> completionObservers.forEach { observer -> observer.completed(completed) } }
         }
 
     fun cancelTask(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task =

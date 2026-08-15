@@ -1,6 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import {
-  BookOpen,
   CheckSquare,
   Home,
   Settings,
@@ -10,9 +9,10 @@ import {
 import { ComponentType } from "react";
 import { LucideProps } from "lucide-react-native";
 
-import { getCurrentUserDisplayName, hasPermission } from "../../auth/currentUserHelpers";
+import { getCurrentUserDisplayName } from "../../auth/currentUserHelpers";
 import { CurrentUserSnapshot } from "../../session/sessionTypes";
 import { colors, spacing, typography } from "../../theme/tokens";
+import { resolveResponsiveLayout } from "../../layout/responsiveLayout";
 
 type NavigationItem = {
   key: BottomNavigationKey;
@@ -24,7 +24,6 @@ const items: NavigationItem[] = [
   { key: "home", icon: Home, label: "Home" },
   { key: "tasks", icon: CheckSquare, label: "My Tasks" },
   { key: "assistant", icon: Sparkles, label: "Assistant" },
-  { key: "knowledge", icon: BookOpen, label: "Knowledge" },
   { key: "operations", icon: Settings, label: "Operations" },
   { key: "profile", icon: User, label: "Profile" }
 ];
@@ -38,11 +37,13 @@ type BottomNavigationProps = {
 };
 
 export function BottomNavigation({ activeKey, currentUser, onSelect }: BottomNavigationProps) {
+  const { width } = useWindowDimensions();
+  const desktop = resolveResponsiveLayout(width).mode === "desktop";
   const displayName = getCurrentUserDisplayName(currentUser ?? null);
-  const visibleItems = items.filter((item) => item.key !== "knowledge" || hasPermission(currentUser ?? null, "KNOWLEDGE_OPERATIONS"));
+  const visibleItems = items;
 
   return (
-    <View style={styles.nav}>
+    <View style={[styles.nav, desktop ? styles.navDesktop : null]}>
       {visibleItems.map((item) => {
         const Icon = item.icon;
         const isActive = item.key === activeKey;
@@ -55,6 +56,7 @@ export function BottomNavigation({ activeKey, currentUser, onSelect }: BottomNav
             onPress={() => onSelect?.(item.key)}
             style={({ pressed }) => [
               styles.item,
+              desktop && styles.itemDesktop,
               pressed && styles.pressed,
               isActive && styles.activeItem
             ]}
@@ -74,7 +76,7 @@ export function BottomNavigation({ activeKey, currentUser, onSelect }: BottomNav
 
 const styles = StyleSheet.create({
   nav: {
-    height: 47,
+    minHeight: 54,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-around",
@@ -82,7 +84,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface
   },
   item: {
-    width: 53,
+    flex: 1,
+    minWidth: 0,
+    maxWidth: 92,
     height: 39,
     alignItems: "center",
     justifyContent: "center"
@@ -96,8 +100,19 @@ const styles = StyleSheet.create({
   label: {
     marginTop: 1,
     color: colors.nav,
-    fontSize: typography.tiny,
+    fontSize: 9,
     fontWeight: "900"
+  },
+  navDesktop: {
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 760,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    borderRadius: 18
+  },
+  itemDesktop: {
+    maxWidth: 120
   },
   active: {
     color: colors.green

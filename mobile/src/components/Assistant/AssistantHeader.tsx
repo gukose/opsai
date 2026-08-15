@@ -3,10 +3,9 @@ import { Bell, LogOut, RotateCcw } from "lucide-react-native";
 import { useMemo, useState } from "react";
 
 import { assistantDataSourceMode } from "../../config/assistantConfig";
+import { isDemoEnvironment } from "../../config/appConfig";
 import {
   getCurrentUserDisplayName,
-  getCurrentUserHotelLabel,
-  getCurrentUserPermissionCount,
   getCurrentUserRoleCodes
 } from "../../auth/currentUserHelpers";
 import { CurrentUserSnapshot } from "../../session/sessionTypes";
@@ -40,15 +39,6 @@ export function AssistantHeader({
   const displayName = getCurrentUserDisplayName(currentUser);
   const roleCodes = getCurrentUserRoleCodes(currentUser);
   const roleLabel = roleCodes.length > 0 ? roleCodes.join(" · ") : "Session active";
-  const hotelLabel = getCurrentUserHotelLabel(currentUser);
-  const permissionCount = getCurrentUserPermissionCount(currentUser);
-  const sessionMeta = [
-    currentUser?.employeeId ? `Employee ${currentUser.employeeId}` : null,
-    currentUser?.hotelId ? `Hotel ${currentUser.hotelId}` : null,
-    `${permissionCount} permissions`
-  ]
-    .filter((value): value is string => Boolean(value))
-    .join(" · ");
   const visibleNotifications = useMemo(
     () => visibleRecentNotifications(recentNotifications),
     [recentNotifications]
@@ -58,11 +48,14 @@ export function AssistantHeader({
   return (
     <View style={styles.header}>
       <View style={styles.content}>
-        <View>
-          <Text style={styles.greeting}>👋 Good Morning{displayName ? `, ${displayName}` : ""}</Text>
+        <View style={styles.identity}>
+          <Text style={styles.greeting} numberOfLines={1}>👋 Good Morning{displayName ? `, ${displayName}` : ""}</Text>
           <Text style={styles.role}>{roleLabel}</Text>
-          <Text style={styles.shift}>{hotelLabel}</Text>
-          {sessionMeta ? <Text style={styles.sessionMeta}>{sessionMeta}</Text> : null}
+          {isDemoEnvironment ? (
+            <View style={styles.demoPill} accessibilityLabel="Demo environment">
+              <Text style={styles.demoLabel}>DEMO</Text>
+            </View>
+          ) : null}
           {__DEV__ ? (
             <View style={styles.modePill}>
               <Text style={styles.modeLabel}>assistant mode</Text>
@@ -148,9 +141,15 @@ const styles = StyleSheet.create({
     justifyContent: "space-between"
   },
   actions: {
+    flexShrink: 0,
     flexDirection: "row",
     alignItems: "center",
     gap: 8
+  },
+  identity: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 10
   },
   greeting: {
     color: colors.text,
@@ -162,18 +161,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: typography.subtitle,
     fontWeight: "800"
-  },
-  shift: {
-    marginTop: spacing.xxs,
-    color: colors.nav,
-    fontSize: typography.subtitle,
-    fontWeight: "700"
-  },
-  sessionMeta: {
-    marginTop: 2,
-    color: colors.textMuted,
-    fontSize: 9,
-    fontWeight: "700"
   },
   modePill: {
     marginTop: 6,
@@ -187,6 +174,20 @@ const styles = StyleSheet.create({
     borderColor: "#d8dee9",
     borderRadius: radius.pill,
     backgroundColor: "#f7f9fc"
+  },
+  demoPill: {
+    marginTop: 5,
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    backgroundColor: "#fff3cd"
+  },
+  demoLabel: {
+    color: "#7a4d00",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.7
   },
   modeLabel: {
     color: colors.textMuted,

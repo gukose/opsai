@@ -86,7 +86,7 @@ export type LocalVoiceTranscriptMetadata = {
   transcript: string;
   languageCode?: string;
   durationMs?: number;
-  source: "CLIENT_TRANSCRIPT";
+  source: "CLIENT_TRANSCRIPT" | "SERVER_STT";
   state: "selected" | "sending" | "sent" | "failed";
 };
 

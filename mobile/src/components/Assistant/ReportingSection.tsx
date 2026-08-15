@@ -1,7 +1,8 @@
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { TaskReportingSummary } from "../../dashboard/types";
 import { colors, radius, shadow, spacing, typography } from "../../theme/tokens";
+import { resolveResponsiveLayout } from "../../layout/responsiveLayout";
 
 type ReportingSectionProps = {
   report: TaskReportingSummary | null;
@@ -10,6 +11,8 @@ type ReportingSectionProps = {
 };
 
 export function ReportingSection({ report, isLoading, errorMessage }: ReportingSectionProps) {
+  const { width } = useWindowDimensions();
+  const compact = resolveResponsiveLayout(width).mode === "phone";
   if (errorMessage) {
     return (
       <View style={styles.wrap}>
@@ -34,7 +37,7 @@ export function ReportingSection({ report, isLoading, errorMessage }: ReportingS
         <Text style={styles.title}>Reporting</Text>
         <Text style={styles.range}>{rangeLabel(report.range)} · {report.window.timeBasis}</Text>
       </View>
-      <View style={styles.columns}>
+      <View style={[styles.columns, compact ? styles.columnsCompact : null]}>
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Created in range</Text>
           <MetricLine label="Total" value={report.createdInRange.total} />
@@ -108,10 +111,16 @@ const styles = StyleSheet.create({
   },
   columns: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 7
   },
+  columnsCompact: {
+    flexDirection: "column"
+  },
   panel: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 260,
+    minWidth: 240,
     minHeight: 110,
     borderWidth: 1,
     borderColor: colors.cardBorder,

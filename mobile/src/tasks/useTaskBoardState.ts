@@ -5,6 +5,8 @@ import { getAppApiErrorMessage } from "../api/client/AppApiError";
 import { nextAssignedTask } from "../assistant/sampleConversation";
 import { CurrentUserSnapshot } from "../session/sessionTypes";
 import { defaultOfflineCache, taskListCacheKey } from "../offline/offlineCache";
+import { defaultOfflineMutationQueue, OfflineMutationType } from "../offline/offlineMutationQueue";
+import { AppApiError } from "../api/client/AppApiError";
 import { TaskService } from "./TaskService";
 import {
   emptyTaskFilters,
@@ -122,6 +124,10 @@ export function useTaskBoardState(
           return;
         }
 
+        if(currentUser?.hotelId&&currentUser.userId&&globalThis.navigator?.onLine!==false){
+          await defaultOfflineMutationQueue.sync({hotelId:currentUser.hotelId,userId:currentUser.userId},item=>service.submitOfflineOperation(item));
+        }
+
         const nextTasks = await service.listTasks(filtersRef.current);
         setTasks(nextTasks);
         const cacheKey = scopedTaskCacheKey(currentUser, filtersRef.current);
@@ -179,7 +185,7 @@ export function useTaskBoardState(
         }
       }
     },
-    [accessToken, service, useMockTasks]
+    [accessToken, service, useMockTasks,currentUser]
   );
 
   useEffect(() => {
@@ -211,7 +217,7 @@ export function useTaskBoardState(
   );
 
   const runCommand = useCallback(
-    async (command: TaskCommand) => {
+    async (operation:OfflineMutationType|null,command: TaskCommand) => {
       if (inFlightRef.current) {
         return;
       }
@@ -230,13 +236,17 @@ export function useTaskBoardState(
           current.map((task) => (task.id === updatedTask.id ? taskSummaryFromDetail(updatedTask) : task))
         );
       } catch (error) {
-        setErrorMessage(getAppApiErrorMessage(error));
+        const scope=currentUser?.hotelId&&currentUser.userId?{hotelId:currentUser.hotelId,userId:currentUser.userId}:null;
+        if(operation && scope && (error instanceof AppApiError ? error.kind==="network"||error.kind==="timeout" : !globalThis.navigator?.onLine)){
+          await defaultOfflineMutationQueue.enqueue(scope,operation,taskId);
+          setErrorMessage("Saved offline. This operation will sync when connectivity returns.");
+        } else setErrorMessage(getAppApiErrorMessage(error));
       } finally {
         inFlightRef.current = false;
         setIsRefreshing(false);
       }
     },
-    [selectedTaskId]
+    [selectedTaskId,currentUser]
   );
 
   const runHomeCommand = useCallback(
@@ -298,11 +308,11 @@ export function useTaskBoardState(
     clearFilters,
     selectTask,
     refreshTasks,
-    startSelectedTask: async () => runCommand((taskId) => service.startTask(taskId)),
-    pauseSelectedTask: async () => runCommand((taskId) => service.pauseTask(taskId)),
-    resumeSelectedTask: async () => runCommand((taskId) => service.resumeTask(taskId)),
-    completeSelectedTask: async () => runCommand((taskId) => service.completeTask(taskId)),
-    cancelSelectedTask: async () => runCommand((taskId) => service.cancelTask(taskId)),
+    startSelectedTask: async () => runCommand("TASK_START",(taskId) => service.startTask(taskId)),
+    pauseSelectedTask: async () => runCommand("TASK_PAUSE",(taskId) => service.pauseTask(taskId)),
+    resumeSelectedTask: async () => runCommand("TASK_RESUME",(taskId) => service.resumeTask(taskId)),
+    completeSelectedTask: async () => runCommand("TASK_COMPLETE",(taskId) => service.completeTask(taskId)),
+    cancelSelectedTask: async () => runCommand(null,(taskId) => service.cancelTask(taskId)),
     startHomeTask: async () => runHomeCommand((taskId) => service.startTask(taskId)),
     resumeHomeTask: async () => runHomeCommand((taskId) => service.resumeTask(taskId))
   };

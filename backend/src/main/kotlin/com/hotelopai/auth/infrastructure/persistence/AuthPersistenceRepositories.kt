@@ -40,7 +40,18 @@ class JpaRoleRepositoryAdapter(
 ) : RoleRepository {
     override fun save(role: Role): Role =
         RolePersistenceMapper.toDomain(
-            roleJpaRepository.saveAndFlush(RolePersistenceMapper.toEntity(role))
+            roleJpaRepository.saveAndFlush(
+                roleJpaRepository.findById(role.id).orElse(null)?.apply {
+                    hotelId = role.hotelId
+                    code = role.code
+                    name = role.name
+                    description = role.description
+                    permissionIds.clear()
+                    permissionIds.addAll(role.permissionIds)
+                    updatedAt = PersistenceInstant.toPersistencePrecision(role.updatedAt)
+                    updatedBy = role.updatedBy
+                } ?: RolePersistenceMapper.toEntity(role)
+            )
         )
 
     override fun findById(id: UUID): Role? =

@@ -33,6 +33,7 @@ import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.TestPropertySource
 import java.time.Instant
+import java.time.Clock
 import java.util.UUID
 
 @SpringBootTest
@@ -71,6 +72,9 @@ class KnowledgePersistenceIntegrationTest : PostgresIntegrationTestSupport() {
 
     @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
+
+    @Autowired
+    private lateinit var clock: Clock
 
     @BeforeEach
     fun cleanKnowledgeTables() {
@@ -373,6 +377,7 @@ class KnowledgePersistenceIntegrationTest : PostgresIntegrationTestSupport() {
     fun `dashboard cancellation and abandoned recovery expose only safe aggregate metadata`() {
         val hotel = UUID.randomUUID()
         val actor = UUID.randomUUID()
+        val now = clock.instant()
         service.importDocument(
             KnowledgeImportCommand(
                 hotelId = hotel,
@@ -401,8 +406,8 @@ class KnowledgePersistenceIntegrationTest : PostgresIntegrationTestSupport() {
             retrievalMode = KnowledgeSearchMode.HYBRID,
             requestFingerprint = "cancel-fingerprint",
             inFlightLimit = 2,
-            abandonedBefore = Instant.parse("2026-08-01T10:00:00Z").minusSeconds(600),
-            now = Instant.parse("2026-08-01T10:00:00Z")
+            abandonedBefore = now.minusSeconds(600),
+            now = now
         )
         val abandoned = answerRepository.acquireAnswerRequestLifecycle(
             hotelId = hotel,
@@ -412,8 +417,8 @@ class KnowledgePersistenceIntegrationTest : PostgresIntegrationTestSupport() {
             retrievalMode = KnowledgeSearchMode.KEYWORD,
             requestFingerprint = "abandoned-fingerprint",
             inFlightLimit = 3,
-            abandonedBefore = Instant.parse("2025-08-01T10:00:00Z"),
-            now = Instant.parse("2025-08-01T10:00:00Z")
+            abandonedBefore = now.minusSeconds(86_400),
+            now = now.minusSeconds(7_200)
         )
 
         val cancelled = answerService.cancelRequest(cancellable!!.requestId, hotel, actor)

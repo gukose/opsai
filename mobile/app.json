@@ -9,15 +9,26 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.hotelopai.mobile",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Hotel OpAI uses the microphone only when you record an operational request."
+      }
     },
     "android": {
+      "package": "com.hotelopai.mobile",
       "adaptiveIcon": {
         "backgroundColor": "#ffffff"
       }
     },
     "plugins": [
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Hotel OpAI to record operational voice requests."
+        }
+      ]
     ]
   }
 }

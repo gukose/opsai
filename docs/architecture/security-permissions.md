@@ -149,3 +149,6 @@ existing public behavior.
 Access tokens carry role and permission claims at issue time. Permission mapping
 changes apply to newly issued access tokens through login or refresh. Existing
 access tokens keep their embedded claims until expiry.
+# MVP operational permissions
+
+MVP bounded domains add `HOUSEKEEPING_OPERATIONS`, `HOUSEKEEPING_INSPECTION`, `INVENTORY_OPERATIONS`, `MINIBAR_OPERATIONS`, `DAMAGE_REVIEW`, `EMPLOYEE_OPERATIONS`, `SHIFT_OPERATIONS`, `SERVICE_RECOVERY_OPERATIONS`, `MANAGER_REPORTING`, `BILLING_REPORTS`, `GAMIFICATION_VIEW`, and `GUEST_MESSAGING_OPERATIONS`. ADMIN receives all. Other seeded roles receive conservative operational subsets; financial review is not granted to ordinary staff.
