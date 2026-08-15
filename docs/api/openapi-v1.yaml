@@ -2948,6 +2948,14 @@ components:
           oneOf:
           - $ref: "#/components/schemas/TaskAssignmentResponse"
           - type: "null"
+        unassignedReasonCode:
+          type:
+          - string
+          - "null"
+        unassignedReason:
+          type:
+          - string
+          - "null"
         createdAt:
           type: string
           format: date-time

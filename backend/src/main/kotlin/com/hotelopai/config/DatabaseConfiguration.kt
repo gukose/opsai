@@ -18,6 +18,9 @@ class DatabaseConfiguration {
             password = properties.password
             driverClassName = properties.driverClassName
             maximumPoolSize = properties.maximumPoolSize
+            minimumIdle = properties.minimumIdle.coerceAtMost(properties.maximumPoolSize)
+            connectionTimeout = properties.connectionTimeout
+            poolName = "hotelopai-db"
         }
 
         return HikariDataSource(config)

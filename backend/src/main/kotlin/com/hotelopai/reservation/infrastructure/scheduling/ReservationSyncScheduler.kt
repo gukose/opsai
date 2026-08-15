@@ -10,7 +10,7 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
 @Component
-@Profile("local", "prod")
+@Profile("local", "demo", "prod")
 @EnableConfigurationProperties(ReservationSyncScheduleProperties::class)
 class ReservationSyncScheduler(
     private val operationsService: ReservationSyncOperationsService,

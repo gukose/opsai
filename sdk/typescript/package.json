@@ -1,6 +1,6 @@
 {
   "name": "@hotelopai/api-client",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Generated TypeScript client for the reviewed Hotel OpAI public v1 API contract.",
   "type": "module",

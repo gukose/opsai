@@ -7,6 +7,8 @@ data class DatabaseProperties(
     val url: String,
     val username: String,
     val password: String,
-    val driverClassName: String,
-    val maximumPoolSize: Int
+    val driverClassName: String = "org.postgresql.Driver",
+    val maximumPoolSize: Int = 5,
+    val minimumIdle: Int = 1,
+    val connectionTimeout: Long = 20_000
 )

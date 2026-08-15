@@ -1,0 +1,21 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "backend/Dockerfile",
+    "watchPatterns": [
+      "/backend/**",
+      "/gradle/**",
+      "/gradlew",
+      "/build.gradle.kts",
+      "/settings.gradle.kts"
+    ]
+  },
+  "deploy": {
+    "healthcheckPath": "/actuator/health/readiness",
+    "healthcheckTimeout": 300,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10,
+    "drainingSeconds": 20
+  }
+}

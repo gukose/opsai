@@ -2,6 +2,10 @@
 
 Hotel operations AI workspace.
 
+## DEMO deployment
+
+The non-production `demo` profile supports Railway + Supabase, private Railway UniMock, real backend-only OpenAI configuration, idempotent reviewer users/data, and Expo/EAS native internal builds. No cloud action is automatic. Follow [deployment](docs/runbooks/demo-deployment.md), [environment variables](docs/runbooks/demo-environment-variables.md), and the [reviewer walkthrough](docs/runbooks/mvp-demo-walkthrough.md).
+
 ## MVP operations
 
 The local/InternalDemo stack now includes first-class housekeeping and inspection, deterministic workforce assignment, smart task interruption, inventory/minibar and damage approval boundaries, guest-session simulation, rule-based guest risk/service recovery, safe manager reporting, occupied-room billing counters, gamification, and idempotent offline task mutations. External PMS, STT, and guest-messaging providers remain disabled unless explicitly configured; unsupported Apaleo room-ready/folio operations are not advertised.

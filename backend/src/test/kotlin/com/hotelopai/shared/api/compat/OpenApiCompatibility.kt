@@ -159,7 +159,7 @@ object OpenApiCompatibility {
                     appendLine()
                 }
             }
-        }
+        }.trimEnd() + "\n"
     }
 
     private fun normalizeDocumentation(node: JsonNode) {

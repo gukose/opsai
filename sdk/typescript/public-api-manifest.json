@@ -1,6 +1,6 @@
 {
   "packageName": "@hotelopai/api-client",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "entryPoints": {
     ".": {
       "import": "./dist/index.js",

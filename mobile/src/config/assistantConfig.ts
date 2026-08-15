@@ -38,7 +38,9 @@ export const assistantBackendEnabled = assistantDataSourceMode === "backend";
 export const assistantLocalMockEnabled = assistantDataSourceMode === "local-mock";
 export const assistantStaticMockEnabled = assistantDataSourceMode === "static-mock";
 
-export const assistantApiBaseUrl =
-  process.env.EXPO_PUBLIC_ASSISTANT_API_BASE_URL?.trim() || appApiBaseUrl;
+// Every mobile API surface shares the same environment-selected backend. Keeping
+// this centralized prevents a DEMO build from accidentally targeting a local or
+// stale Assistant endpoint.
+export const assistantApiBaseUrl = appApiBaseUrl;
 
 export const currentAppEnvironment = appEnvironment;

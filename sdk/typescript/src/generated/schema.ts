@@ -433,6 +433,8 @@ export interface components {
             /** Format: date-time */
             slaDeadline: string;
             assignment?: components["schemas"]["TaskAssignmentResponse"] | null;
+            unassignedReasonCode?: string | null;
+            unassignedReason?: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */

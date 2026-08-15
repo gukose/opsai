@@ -95,7 +95,10 @@ class TaskControllerTest : PostgresIntegrationTestSupport() {
         )
 
         assertEquals(200, createResponse.statusCode())
-        assertContains(createResponse.body(), """"status":"CREATED"""")
+        // The persisted demo workforce contains an on-shift HVAC technician, so
+        // central post-create orchestration must assign this maintenance task.
+        assertContains(createResponse.body(), """"status":"ASSIGNED"""")
+        assertContains(createResponse.body(), """"displayName":"Demo HVAC Technician"""")
         val taskId = extractId(createResponse.body())
 
         val getResponse = get("/api/v1/tasks/$taskId", login.accessToken)

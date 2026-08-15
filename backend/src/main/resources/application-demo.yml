@@ -1,0 +1,137 @@
+server:
+  address: 0.0.0.0
+  port: ${PORT:8080}
+  forward-headers-strategy: framework
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+
+ops:
+  ai:
+    database:
+      url: ${OPS_AI_DB_URL:jdbc:postgresql://${SUPABASE_DB_HOST}:${SUPABASE_DB_PORT:5432}/${SUPABASE_DB_NAME:postgres}?sslmode=require}
+      username: ${OPS_AI_DB_USERNAME:${SUPABASE_DB_USER}}
+      password: ${OPS_AI_DB_PASSWORD:${SUPABASE_DB_PASSWORD}}
+      driver-class-name: org.postgresql.Driver
+      maximum-pool-size: ${OPS_AI_DB_MAXIMUM_POOL_SIZE:5}
+      minimum-idle: ${OPS_AI_DB_MINIMUM_IDLE:1}
+      connection-timeout: ${OPS_AI_DB_CONNECTION_TIMEOUT_MS:20000}
+    unimock:
+      base-url: ${OPS_AI_UNIMOCK_BASE_URL:http://unimock.railway.internal:8090}
+    auth:
+      jwt:
+        secret: ${OPS_AI_AUTH_JWT_SECRET}
+      seed:
+        enabled: false
+    demo:
+      bootstrap:
+        enabled: ${OPS_AI_DEMO_BOOTSTRAP_ENABLED:true}
+        gm-password: ${DEMO_GM_PASSWORD:}
+        housekeeping-supervisor-password: ${DEMO_HOUSEKEEPING_SUPERVISOR_PASSWORD:}
+        housekeeper-password: ${DEMO_HOUSEKEEPER_PASSWORD:}
+        technician-password: ${DEMO_TECHNICIAN_PASSWORD:}
+        reception-password: ${DEMO_RECEPTION_PASSWORD:}
+        guest-relations-password: ${DEMO_GUEST_RELATIONS_PASSWORD:}
+        admin-password: ${DEMO_ADMIN_PASSWORD:}
+    voice:
+      active-provider: ${OPS_AI_VOICE_PROVIDER:external}
+      maximum-audio-bytes: ${OPS_AI_VOICE_MAXIMUM_AUDIO_BYTES:8000000}
+      external:
+        enabled: ${OPS_AI_OPENAI_VOICE_ENABLED:true}
+        endpoint: https://api.openai.com/v1/audio/transcriptions
+        model: ${OPENAI_STT_MODEL:gpt-4o-mini-transcribe}
+        credential-reference: env:OPENAI_API_KEY
+        allowed-profiles: [demo]
+        timeout: PT30S
+    pms:
+      active-provider: internal-demo
+      providers:
+        internal-demo:
+          enabled: true
+          request-timeout: PT5S
+        apaleo:
+          enabled: false
+    rate-limit:
+      enabled: true
+      default-limit: ${OPS_AI_RATE_LIMIT_DEFAULT_LIMIT:300}
+      auth-limit: ${OPS_AI_RATE_LIMIT_AUTH_LIMIT:30}
+      write-limit: ${OPS_AI_RATE_LIMIT_WRITE_LIMIT:120}
+      window: PT60S
+    reservation:
+      task-automation:
+        enabled: false
+        allowed-profiles: [demo]
+        enabled-rule-ids: [guest-checkout-follow-up, stayover-cleaning]
+        schedule:
+          enabled: false
+          allowed-profiles: [demo]
+      task-recommendations:
+        active-provider: internal-demo
+        allowed-profiles: [demo]
+    knowledge:
+      answers:
+        enabled: ${OPS_AI_OPENAI_KNOWLEDGE_ENABLED:true}
+        active-provider: ${OPS_AI_KNOWLEDGE_ANSWER_PROVIDER:openai}
+        hourly-request-limit: 30
+        daily-request-limit: 100
+        maximum-concurrent-requests: 2
+        providers:
+          openai:
+            enabled: ${OPS_AI_OPENAI_KNOWLEDGE_ENABLED:true}
+            model: ${OPENAI_KNOWLEDGE_MODEL:gpt-4.1-mini}
+            credential-reference: env:OPENAI_API_KEY
+            allowed-profiles: [demo]
+            smoke-test-only: false
+            max-attempts: 2
+          external-policy:
+            production-prohibited: true
+            allowed-profiles: [demo]
+      semantic-search:
+        enabled: ${OPS_AI_OPENAI_EMBEDDINGS_ENABLED:true}
+        active-provider: ${OPS_AI_EMBEDDING_PROVIDER:openai}
+        model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+        vector-dimension: ${OPENAI_EMBEDDING_DIMENSIONS:1536}
+        allowed-profiles: [demo]
+        credential-reference: env:OPENAI_API_KEY
+        external-providers:
+          production-prohibited: true
+          allowed-profiles: [demo]
+          openai:
+            enabled: ${OPS_AI_OPENAI_EMBEDDINGS_ENABLED:true}
+            model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+            dimensions: ${OPENAI_EMBEDDING_DIMENSIONS:1536}
+            allowed-profiles: [demo]
+            credential-reference: env:OPENAI_API_KEY
+
+assistant:
+  vision:
+    enabled: true
+    provider: deterministic
+    deterministic-fixtures-enabled: true
+  ai:
+    provider: ${ASSISTANT_AI_PROVIDER:openai}
+    fallback-enabled: ${ASSISTANT_AI_FALLBACK_ENABLED:false}
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      base-url: https://api.openai.com
+      model: ${OPENAI_MODEL:gpt-4.1-mini}
+      request-timeout: PT20S
+      max-output-tokens: 400
+      temperature: 0.0
+      retries: 1
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never

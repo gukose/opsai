@@ -4,4 +4,9 @@ Generated from the reviewed OpenAPI snapshot comparison. Do not edit generated e
 
 ## v1
 
-No contract changes detected.
+### BACKWARD_COMPATIBLE
+
+- `backward_compatible:property.added:schema:TaskResponse.unassignedReason` Schema property added
+  - Location: `schema:TaskResponse.unassignedReason`
+- `backward_compatible:property.added:schema:TaskResponse.unassignedReasonCode` Schema property added
+  - Location: `schema:TaskResponse.unassignedReasonCode`

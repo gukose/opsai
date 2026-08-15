@@ -11,7 +11,7 @@ import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 
 @Component
-@Profile("local", "prod")
+@Profile("local", "demo", "prod")
 @EnableConfigurationProperties(ReservationWebhookScheduleProperties::class)
 class ReservationWebhookProcessingScheduler(
     private val processingService: ReservationWebhookProcessingService,
