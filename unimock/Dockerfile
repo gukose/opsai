@@ -1,8 +1,9 @@
 FROM eclipse-temurin:21-jdk-alpine AS build
 WORKDIR /workspace
-COPY gradlew settings.gradle.kts build.gradle.kts gradle.properties ./
+COPY gradlew settings.gradle.kts build.gradle.kts ./
 COPY gradle ./gradle
 COPY unimock ./unimock
+RUN mkdir backend
 RUN chmod +x gradlew && ./gradlew :unimock:bootJar --no-daemon
 
 FROM eclipse-temurin:21-jre-alpine

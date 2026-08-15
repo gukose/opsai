@@ -3,6 +3,7 @@ WORKDIR /workspace
 COPY gradlew settings.gradle.kts build.gradle.kts ./
 COPY gradle ./gradle
 COPY backend ./backend
+RUN mkdir unimock
 RUN chmod +x gradlew && ./gradlew :backend:bootJar --no-daemon
 
 FROM eclipse-temurin:21-jre-alpine
