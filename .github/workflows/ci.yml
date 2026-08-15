@@ -82,6 +82,9 @@ jobs:
         working-directory: mobile
         run: npm test
 
+      - name: Verify knowledge retrieval quality
+        run: ./gradlew :backend:verifyKnowledgeRetrievalQuality
+
       - name: Run backend and UniMock tests
         run: ./gradlew :backend:test :unimock:test
 

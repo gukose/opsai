@@ -60,6 +60,8 @@ class InternalReservationSyncOperationsControllerIntegrationTest : PostgresInteg
         assertThat(get("/api/v1/internal/reservations/sync-runs", noPermission).statusCode()).isEqualTo(403)
 
         val operator = login(createUser("RES_SYNC_ALLOWED", setOf(PermissionCodes.RESERVATION_SYNC_OPERATIONS)))
+        val reviewOperator = login(createUser("AI_REVIEW_ALLOWED", setOf(PermissionCodes.AI_RECOMMENDATION_REVIEW_OPERATIONS)))
+        val knowledgeOperator = login(createUser("KNOWLEDGE_ALLOWED", setOf(PermissionCodes.KNOWLEDGE_OPERATIONS)))
         assertThat(get("/api/v1/internal/reservations/sync-runs", operator).statusCode()).isEqualTo(200)
         assertThat(get("/api/v1/internal/reservations/sync-schedule", operator).statusCode()).isEqualTo(200)
         assertThat(get("/api/v1/internal/reservations/webhooks", operator).statusCode()).isEqualTo(200)
@@ -77,6 +79,24 @@ class InternalReservationSyncOperationsControllerIntegrationTest : PostgresInteg
         assertThat(get("/api/v1/internal/reservations/task-recommendations/pilot/analytics", operator).statusCode()).isEqualTo(200)
         assertThat(get("/api/v1/internal/reservations/task-recommendations/pilot/analytics/review-outcomes", operator).statusCode()).isEqualTo(200)
         assertThat(get("/api/v1/internal/reservations/task-recommendations/pilot/analytics/confidence-category", operator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/reservations/task-recommendations/pilot/dashboard", reviewOperator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/reservations/task-recommendations/pilot/review-queue", reviewOperator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/reservations/task-recommendations/pilot/reports/decisions.json", reviewOperator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/reservations/task-recommendations/pilot/reports/decisions.csv", reviewOperator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/knowledge/documents", knowledgeOperator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/knowledge/search?query=maintenance", knowledgeOperator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/knowledge/embeddings/status", knowledgeOperator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/knowledge/embeddings/providers", knowledgeOperator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/knowledge/embeddings/retrieval-readiness", knowledgeOperator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/knowledge/embeddings/failures", knowledgeOperator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/knowledge/embeddings/diagnostics", knowledgeOperator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/knowledge/embeddings/schedule", knowledgeOperator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/knowledge/retrieval/readiness-report", knowledgeOperator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/knowledge/retrieval/evaluations", knowledgeOperator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/knowledge/retrieval/curated-dataset/validate", knowledgeOperator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/knowledge/retrieval/quality-gate/latest", knowledgeOperator).statusCode()).isIn(200, 404)
+        assertThat(get("/api/v1/internal/knowledge/answers/provider-readiness", knowledgeOperator).statusCode()).isEqualTo(200)
+        assertThat(get("/api/v1/internal/knowledge/answers", knowledgeOperator).statusCode()).isEqualTo(200)
         assertThat(get("/api/v1/internal/reservations/task-recommendations/schedule", operator).statusCode()).isEqualTo(200)
         assertThat(get("/api/v1/internal/reservations/task-recommendations/generation-runs", operator).statusCode()).isEqualTo(200)
         assertThat(post("/api/v1/internal/reservations/sync-schedule/pause", "{}", noPermission).statusCode()).isEqualTo(403)
@@ -101,6 +121,35 @@ class InternalReservationSyncOperationsControllerIntegrationTest : PostgresInteg
         assertThat(post("/api/v1/internal/reservations/task-recommendations/pilot/disable", "{}", noPermission).statusCode()).isEqualTo(403)
         assertThat(post("/api/v1/internal/reservations/task-recommendations/pilot/rollback-to-internal-demo", "{}", noPermission).statusCode()).isEqualTo(403)
         assertThat(post("/api/v1/internal/reservations/task-recommendations/pilot/cleanup", "{}", noPermission).statusCode()).isEqualTo(403)
+        assertThat(get("/api/v1/internal/reservations/task-recommendations/pilot/dashboard", noPermission).statusCode()).isEqualTo(403)
+        assertThat(get("/api/v1/internal/reservations/task-recommendations/pilot/review-queue", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/reservations/task-recommendations/pilot/review/bulk-approve", """{"recommendationReferences":[],"reason":"OPERATIONALLY_RELEVANT"}""", noPermission).statusCode()).isEqualTo(403)
+        assertThat(get("/api/v1/internal/knowledge/documents", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/knowledge/documents/import", KNOWLEDGE_IMPORT_BODY, noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/knowledge/embeddings/generate", "{}", noPermission).statusCode()).isEqualTo(403)
+        assertThat(post("/api/v1/internal/knowledge/embeddings/schedule/run-now", "{}", noPermission).statusCode()).isEqualTo(403)
+        assertThat(get("/api/v1/internal/knowledge/retrieval/evaluations", noPermission).statusCode()).isEqualTo(403)
+        assertThat(get("/api/v1/internal/knowledge/retrieval/curated-dataset/validate", noPermission).statusCode()).isEqualTo(403)
+        assertThat(get("/api/v1/internal/knowledge/answers/provider-readiness", noPermission).statusCode()).isEqualTo(403)
+        val imported = post("/api/v1/internal/knowledge/documents/import", KNOWLEDGE_IMPORT_BODY, knowledgeOperator)
+        assertThat(imported.statusCode()).isEqualTo(200)
+        assertThat(json(imported.body()).toString()).doesNotContain("prompt", "credential", "providerConfiguration")
+    }
+
+    @Test
+    fun `knowledge operations are scoped to the authenticated hotel`() {
+        val firstHotelOperator = login(createUser("KNOWLEDGE_HOTEL_ONE", setOf(PermissionCodes.KNOWLEDGE_OPERATIONS)))
+        val secondHotelOperator = login(createUser("KNOWLEDGE_HOTEL_TWO", setOf(PermissionCodes.KNOWLEDGE_OPERATIONS)))
+
+        val imported = post("/api/v1/internal/knowledge/documents/import", KNOWLEDGE_IMPORT_BODY, firstHotelOperator)
+        val firstHotelList = get("/api/v1/internal/knowledge/documents", firstHotelOperator)
+        val secondHotelList = get("/api/v1/internal/knowledge/documents", secondHotelOperator)
+        val secondHotelSearch = get("/api/v1/internal/knowledge/search?query=valve", secondHotelOperator)
+
+        assertThat(imported.statusCode()).isEqualTo(200)
+        assertThat(json(firstHotelList.body()).path("content").size()).isEqualTo(1)
+        assertThat(json(secondHotelList.body()).path("content").size()).isZero()
+        assertThat(json(secondHotelSearch.body()).path("content").size()).isZero()
     }
 
     @Test
@@ -304,5 +353,7 @@ class InternalReservationSyncOperationsControllerIntegrationTest : PostgresInteg
 
     companion object {
         private const val PASSWORD = "reservation-sync-password"
+        private const val KNOWLEDGE_IMPORT_BODY =
+            """{"title":"Maintenance SOP","category":"MAINTENANCE","source":"IMPORTED_MARKDOWN","language":"en","content":"# Valve\n\nInspect valve safely.","contentType":"MARKDOWN","tags":["maintenance"],"metadata":{"owner":"ops"}}"""
     }
 }

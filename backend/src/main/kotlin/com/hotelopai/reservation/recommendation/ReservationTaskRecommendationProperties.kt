@@ -30,6 +30,7 @@ data class ReservationTaskRecommendationProperties(
     val providers: RecommendationProviderGovernanceProperties = RecommendationProviderGovernanceProperties(),
     val pilot: RecommendationPilotProperties = RecommendationPilotProperties(),
     val pilotSchedule: RecommendationPilotScheduleProperties = RecommendationPilotScheduleProperties(),
+    val pilotReview: RecommendationPilotReviewProperties = RecommendationPilotReviewProperties(),
     val schedule: RecommendationGenerationScheduleProperties = RecommendationGenerationScheduleProperties(),
     val retention: RecommendationRetentionProperties = RecommendationRetentionProperties()
 ) {
@@ -163,6 +164,20 @@ data class RecommendationPilotScheduleProperties(
                 "recommendation pilot schedule override end date must not be before start date"
             }
         }
+    }
+}
+
+data class RecommendationPilotReviewProperties(
+    val maxBulkReviewItems: Int = 50,
+    val maxDecisionNoteLength: Int = 500,
+    val maxExportRows: Int = 1_000,
+    val maxExportDateRange: Duration = Duration.ofDays(31)
+) {
+    init {
+        require(maxBulkReviewItems in 1..500) { "recommendation pilot review max bulk items must be between 1 and 500" }
+        require(maxDecisionNoteLength in 0..500) { "recommendation pilot review decision note length must be between 0 and 500" }
+        require(maxExportRows in 1..10_000) { "recommendation pilot review max export rows must be between 1 and 10000" }
+        require(maxExportDateRange > Duration.ZERO) { "recommendation pilot review max export date range must be positive" }
     }
 }
 

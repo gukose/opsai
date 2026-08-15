@@ -28,7 +28,7 @@ class ReservationTaskRecommendationJdbcRepository(
                 explanation_rationale, explanation_signals, task_intent_type,
                 task_title, task_description, task_priority, task_due_at,
                 deduplication_key, status, reviewed_by, reviewed_at,
-                applied_task_id, pilot_run_id, attempt_count, next_attempt_at, failure_category,
+                decision_reason, decision_note, applied_task_id, pilot_run_id, attempt_count, next_attempt_at, failure_category,
                 created_at, updated_at, expires_at, version
             ) values (
                 :id, :reservationId, :source, :providerName, :modelIdentifier,
@@ -36,7 +36,7 @@ class ReservationTaskRecommendationJdbcRepository(
                 :explanationRationale, :explanationSignals, :intentType,
                 :title, :description, :priority, :dueAt,
                 :deduplicationKey, :status, :reviewedBy, :reviewedAt,
-                :appliedTaskId, :pilotRunId, :attemptCount, :nextAttemptAt, :failureCategory,
+                :decisionReason, :decisionNote, :appliedTaskId, :pilotRunId, :attemptCount, :nextAttemptAt, :failureCategory,
                 :createdAt, :updatedAt, :expiresAt, :version
             )
             on conflict (deduplication_key) do nothing
@@ -62,6 +62,8 @@ class ReservationTaskRecommendationJdbcRepository(
             set status = :status,
                 reviewed_by = :reviewedBy,
                 reviewed_at = :reviewedAt,
+                decision_reason = :decisionReason,
+                decision_note = :decisionNote,
                 applied_task_id = :appliedTaskId,
                 attempt_count = :attemptCount,
                 next_attempt_at = :nextAttemptAt,
@@ -113,6 +115,49 @@ class ReservationTaskRecommendationJdbcRepository(
             from reservation_task_recommendation
             $whereSql
             order by created_at desc, id desc
+            limit :limit offset :offset
+            """.trimIndent(),
+            params,
+            ::mapRecommendation
+        )
+        return RecommendationPage(content, page, size, total, if (total == 0L) 0 else ceil(total.toDouble() / size.toDouble()).toInt())
+    }
+
+    @Transactional(readOnly = true)
+    override fun findPilotReviewQueue(filter: RecommendationPilotReviewQueueFilter, now: Instant): RecommendationPage {
+        val page = filter.page.coerceAtLeast(0)
+        val size = filter.size.coerceIn(1, 100)
+        val params = MapSqlParameterSource()
+            .addValue("limit", size)
+            .addValue("offset", page * size)
+            .addValue("now", Timestamp.from(PersistenceInstant.toPersistencePrecision(now)))
+        val where = mutableListOf("pilot_run_id is not null")
+        filter.status?.let { where += "status = :status"; params.addValue("status", it.name) }
+        filter.category?.let { where += "category = :category"; params.addValue("category", it.name) }
+        filter.confidence?.let { where += "confidence = :confidence"; params.addValue("confidence", it.name) }
+        filter.providerId?.let { where += "provider_name = :providerId"; params.addValue("providerId", it.value) }
+        filter.modelIdentifier?.let { where += "model_identifier = :modelIdentifier"; params.addValue("modelIdentifier", it) }
+        filter.pilotRunId?.let { where += "pilot_run_id = :pilotRunId"; params.addValue("pilotRunId", it.value) }
+        filter.generatedFrom?.let { where += "created_at >= :generatedFrom"; params.addValue("generatedFrom", Timestamp.from(PersistenceInstant.toPersistencePrecision(it))) }
+        filter.generatedTo?.let { where += "created_at < :generatedTo"; params.addValue("generatedTo", Timestamp.from(PersistenceInstant.toPersistencePrecision(it))) }
+        filter.ageBand?.let {
+            where += when (it) {
+                "under_30_minutes" -> "extract(epoch from (:now - created_at)) < 1800"
+                "30_minutes_to_2_hours" -> "extract(epoch from (:now - created_at)) >= 1800 and extract(epoch from (:now - created_at)) < 7200"
+                "2_to_24_hours" -> "extract(epoch from (:now - created_at)) >= 7200 and extract(epoch from (:now - created_at)) < 86400"
+                "1_to_7_days" -> "extract(epoch from (:now - created_at)) >= 86400 and extract(epoch from (:now - created_at)) < 604800"
+                "over_7_days" -> "extract(epoch from (:now - created_at)) >= 604800"
+                else -> "1 = 0"
+            }
+        }
+        val whereSql = "where ${where.joinToString(" and ")}"
+        val total = jdbcTemplate.queryForObject("select count(*) from reservation_task_recommendation $whereSql", params, Long::class.java) ?: 0L
+        val content = jdbcTemplate.query(
+            """
+            select *
+            from reservation_task_recommendation
+            $whereSql
+            order by created_at asc, id asc
             limit :limit offset :offset
             """.trimIndent(),
             params,
@@ -509,6 +554,8 @@ class ReservationTaskRecommendationJdbcRepository(
             .addValue("status", status.name)
             .addValue("reviewedBy", reviewedBy)
             .addValue("reviewedAt", reviewedAt?.let(Timestamp::from))
+            .addValue("decisionReason", decisionReason?.name)
+            .addValue("decisionNote", decisionNote)
             .addValue("appliedTaskId", appliedTaskId)
             .addValue("pilotRunId", pilotRunId?.value)
             .addValue("attemptCount", attemptCount)
@@ -545,6 +592,8 @@ class ReservationTaskRecommendationJdbcRepository(
             status = RecommendationStatus.valueOf(rs.getString("status")),
             reviewedBy = rs.getObject("reviewed_by", UUID::class.java),
             reviewedAt = rs.getTimestamp("reviewed_at")?.toInstant(),
+            decisionReason = runCatching { rs.getString("decision_reason") }.getOrNull()?.let(RecommendationDecisionReason::valueOf),
+            decisionNote = runCatching { rs.getString("decision_note") }.getOrNull(),
             appliedTaskId = rs.getObject("applied_task_id", UUID::class.java),
             pilotRunId = runCatching { rs.getObject("pilot_run_id", UUID::class.java) }.getOrNull()
                 ?.let(::RecommendationPilotRunId),

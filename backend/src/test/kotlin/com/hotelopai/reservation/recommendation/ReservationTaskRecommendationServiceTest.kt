@@ -120,6 +120,64 @@ class ReservationTaskRecommendationServiceTest {
     }
 
     @Test
+    fun `bulk review records structured decisions without exposing notes in operational queue`() {
+        val fixture = fixture(reservation = reservation(room = null, adults = 1, children = 0))
+        fixture.repository.sources += source(fixture.reservation.id)
+        fixture.service.generateBatch(UUID.randomUUID())
+        val recommendation = fixture.repository.recommendations.single()
+        val pilotRunId = RecommendationPilotRunId(UUID.randomUUID())
+        fixture.repository.save(recommendation.copy(pilotRunId = pilotRunId))
+
+        val result = fixture.service.bulkApprove(
+            RecommendationBulkReviewRequest(
+                recommendationIds = listOf(recommendation.id, recommendation.id),
+                reason = RecommendationDecisionReason.OPERATIONALLY_RELEVANT,
+                note = "safe internal note".repeat(100)
+            ),
+            UUID.randomUUID()
+        )
+        val queue = fixture.service.pilotReviewQueue(
+            RecommendationPilotReviewQueueFilter(status = RecommendationStatus.APPROVED),
+            UUID.randomUUID()
+        )
+
+        assertThat(result.results).hasSize(1)
+        assertThat(result.results.single().outcome).isEqualTo("approved")
+        assertThat(queue.content).hasSize(1)
+        assertThat(queue.content.single().decisionReason).isEqualTo(RecommendationDecisionReason.OPERATIONALLY_RELEVANT)
+        assertThat(queue.content.single().decisionNote).hasSizeLessThanOrEqualTo(500)
+        assertThat(queue.content.single().toString()).doesNotContain("Ada", "RES-", "MUC")
+    }
+
+    @Test
+    fun `pilot review queue excludes non pilot recommendations and orders deterministically`() {
+        val fixture = fixture(reservation = reservation(room = null, adults = 1, children = 0))
+        fixture.repository.sources += source(fixture.reservation.id)
+        fixture.service.generateBatch(UUID.randomUUID())
+        val generated = fixture.repository.recommendations.single()
+        val pilotRunId = RecommendationPilotRunId(UUID.randomUUID())
+        val olderPilot = generated.copy(
+            id = RecommendationId(UUID.fromString("00000000-0000-0000-0000-000000000111")),
+            deduplicationKey = "pilot-older",
+            pilotRunId = pilotRunId,
+            createdAt = clock.instant().minusSeconds(60)
+        )
+        val newerPilot = generated.copy(
+            id = RecommendationId(UUID.fromString("00000000-0000-0000-0000-000000000222")),
+            deduplicationKey = "pilot-newer",
+            pilotRunId = pilotRunId,
+            createdAt = clock.instant()
+        )
+        fixture.repository.insert(olderPilot)
+        fixture.repository.insert(newerPilot)
+
+        val queue = fixture.service.pilotReviewQueue(RecommendationPilotReviewQueueFilter(size = 10), UUID.randomUUID())
+
+        assertThat(queue.content.map { it.id }).containsExactly(olderPilot.id, newerPilot.id)
+        assertThat(queue.content).noneMatch { it.pilotRunId == null }
+    }
+
+    @Test
     fun `provider registry rejects duplicate provider ids`() {
         assertThrows(IllegalArgumentException::class.java) {
             TaskRecommendationProviderRegistry(
@@ -311,6 +369,16 @@ class ReservationTaskRecommendationServiceTest {
 
         override fun find(filter: RecommendationFilter): RecommendationPage =
             RecommendationPage(recommendations, filter.page, filter.size, recommendations.size.toLong(), if (recommendations.isEmpty()) 0 else 1)
+
+        override fun findPilotReviewQueue(filter: RecommendationPilotReviewQueueFilter, now: Instant): RecommendationPage {
+            val content = recommendations
+                .filter { it.pilotRunId != null }
+                .filter { filter.status == null || it.status == filter.status }
+                .filter { filter.category == null || it.category == filter.category }
+                .filter { filter.confidence == null || it.confidence == filter.confidence }
+                .sortedWith(compareBy<ReservationTaskRecommendation> { it.createdAt }.thenBy { it.id.value })
+            return RecommendationPage(content.drop(filter.page * filter.size).take(filter.size), filter.page, filter.size, content.size.toLong(), if (content.isEmpty()) 0 else 1)
+        }
 
         override fun claimEligibleAutomationExecutions(now: Instant, batchSize: Int, createdAfter: Instant): List<RecommendationSourceExecution> =
             sources

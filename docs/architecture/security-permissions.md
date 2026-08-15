@@ -125,6 +125,21 @@ vision import, dashboard, report, cancel, mark-overdue, or Dev PMS permissions.
   budget, disable, rollback, and pilot recommendation expiration operations.
   Sprint 14B also uses it for pilot schedule status, run-now, pause/resume,
   cleanup, and aggregate pilot review analytics: `RESERVATION_SYNC_OPERATIONS`
+- Sprint 14C pilot review dashboard, review queue, bulk approve/reject/expire,
+  and decision export endpoints:
+  `AI_RECOMMENDATION_REVIEW_OPERATIONS`
+- Sprint 15A/15B internal knowledge import, list, detail, delete, re-chunk,
+  keyword, semantic, hybrid search, embedding status, embedding generation,
+  document embedding regeneration, failed embedding listing, and embedding retry
+  endpoints:
+  `KNOWLEDGE_OPERATIONS`
+- Sprint 15F/16A internal knowledge answer operations, answer history,
+  provider readiness, provider smoke tests, provider diagnostics, diagnostic
+  cleanup, retained answer cleanup, and answer feedback. Sprint 16B also uses
+  this permission for the Knowledge Assistant operations dashboard, active
+  request listing/detail, cooperative cancellation, abandoned-request recovery,
+  feedback analytics, and cleanup operations:
+  `KNOWLEDGE_OPERATIONS`
 
 Login, refresh, CORS preflight, actuator health, and actuator info keep their
 existing public behavior.

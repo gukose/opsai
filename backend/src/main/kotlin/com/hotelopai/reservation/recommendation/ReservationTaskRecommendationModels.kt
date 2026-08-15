@@ -82,6 +82,16 @@ enum class RecommendationOutcome {
     EXPIRED
 }
 
+enum class RecommendationDecisionReason {
+    OPERATIONALLY_RELEVANT,
+    DUPLICATE_WORK,
+    LOW_CONFIDENCE,
+    INCORRECT_CATEGORY,
+    NOT_ACTIONABLE,
+    OUTDATED,
+    OTHER
+}
+
 enum class RecommendationFailureCategory {
     FEATURE_DISABLED,
     RESERVATION_NOT_FOUND,
@@ -300,6 +310,8 @@ data class ReservationTaskRecommendation(
     val status: RecommendationStatus,
     val reviewedBy: UUID? = null,
     val reviewedAt: Instant? = null,
+    val decisionReason: RecommendationDecisionReason? = null,
+    val decisionNote: String? = null,
     val appliedTaskId: UUID? = null,
     val pilotRunId: RecommendationPilotRunId? = null,
     val attemptCount: Int = 0,
@@ -620,6 +632,48 @@ data class RecommendationFilter(
     val category: RecommendationCategory? = null,
     val page: Int = 0,
     val size: Int = 20
+)
+
+data class RecommendationPilotReviewQueueFilter(
+    val status: RecommendationStatus? = null,
+    val category: RecommendationCategory? = null,
+    val confidence: RecommendationConfidence? = null,
+    val providerId: RecommendationProviderId? = null,
+    val modelIdentifier: String? = null,
+    val pilotRunId: RecommendationPilotRunId? = null,
+    val generatedFrom: Instant? = null,
+    val generatedTo: Instant? = null,
+    val ageBand: String? = null,
+    val page: Int = 0,
+    val size: Int = 20
+)
+
+data class RecommendationBulkReviewRequest(
+    val recommendationIds: List<RecommendationId>,
+    val reason: RecommendationDecisionReason,
+    val note: String? = null
+)
+
+data class RecommendationBulkReviewItemResult(
+    val recommendationId: RecommendationId,
+    val outcome: String,
+    val status: RecommendationStatus?,
+    val failureCategory: RecommendationFailureCategory? = null
+)
+
+data class RecommendationBulkReviewResult(
+    val results: List<RecommendationBulkReviewItemResult>
+)
+
+data class RecommendationPilotDashboard(
+    val readiness: RecommendationPilotReadiness,
+    val schedule: RecommendationPilotScheduleStatus,
+    val budget: RecommendationPilotBudgetStatus,
+    val recentRuns: List<RecommendationPilotRun>,
+    val pendingReviewCount: Long,
+    val analytics: RecommendationPilotAnalytics,
+    val providerReadiness: List<RecommendationProviderReadiness>,
+    val recentFailureSummary: List<RecommendationPilotBreakdown>
 )
 
 data class RecommendationPage(

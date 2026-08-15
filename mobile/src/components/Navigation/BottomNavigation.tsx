@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import {
+  BookOpen,
   CheckSquare,
   Home,
   Settings,
@@ -9,7 +10,7 @@ import {
 import { ComponentType } from "react";
 import { LucideProps } from "lucide-react-native";
 
-import { getCurrentUserDisplayName } from "../../auth/currentUserHelpers";
+import { getCurrentUserDisplayName, hasPermission } from "../../auth/currentUserHelpers";
 import { CurrentUserSnapshot } from "../../session/sessionTypes";
 import { colors, spacing, typography } from "../../theme/tokens";
 
@@ -23,11 +24,12 @@ const items: NavigationItem[] = [
   { key: "home", icon: Home, label: "Home" },
   { key: "tasks", icon: CheckSquare, label: "My Tasks" },
   { key: "assistant", icon: Sparkles, label: "Assistant" },
+  { key: "knowledge", icon: BookOpen, label: "Knowledge" },
   { key: "operations", icon: Settings, label: "Operations" },
   { key: "profile", icon: User, label: "Profile" }
 ];
 
-export type BottomNavigationKey = "home" | "tasks" | "assistant" | "operations" | "profile";
+export type BottomNavigationKey = "home" | "tasks" | "assistant" | "knowledge" | "operations" | "profile";
 
 type BottomNavigationProps = {
   activeKey: BottomNavigationKey;
@@ -37,10 +39,11 @@ type BottomNavigationProps = {
 
 export function BottomNavigation({ activeKey, currentUser, onSelect }: BottomNavigationProps) {
   const displayName = getCurrentUserDisplayName(currentUser ?? null);
+  const visibleItems = items.filter((item) => item.key !== "knowledge" || hasPermission(currentUser ?? null, "KNOWLEDGE_OPERATIONS"));
 
   return (
     <View style={styles.nav}>
-      {items.map((item) => {
+      {visibleItems.map((item) => {
         const Icon = item.icon;
         const isActive = item.key === activeKey;
 

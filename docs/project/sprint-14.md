@@ -92,6 +92,43 @@ disabled by default. Cleanup uses a separate distributed job name,
 recommendations according to longer retention policy, and does not remove
 audit history.
 
+## Sprint 14C - Internal Pilot Review Dashboard and Decision Reporting
+
+Sprint 14C adds an internal review dashboard for pilot recommendations. The
+dashboard consolidates pilot readiness, scheduler state, budget usage, recent
+pilot runs, pending review count, aggregate review analytics, provider
+readiness, and safe recent failure counts. It is internal-only and uses
+`AI_RECOMMENDATION_REVIEW_OPERATIONS`.
+
+The pilot review queue is bounded, deterministic, and filterable by status,
+category, confidence, provider, model presence, pilot run, generated date
+range, and age band. Queue rows expose only opaque recommendation reference,
+pilot run reference, category, priority, confidence, structured rationale,
+supporting signals, provider/model presence, generated timestamp, review state,
+decision reason, and review timestamp. They do not expose reservation ids,
+property ids, task ids, task descriptions, prompts, provider responses, guest
+data, PMS identifiers, or credentials.
+
+Bulk approve, reject, and expire operations accept explicit opaque
+recommendation references and a structured decision reason:
+`OPERATIONALLY_RELEVANT`, `DUPLICATE_WORK`, `LOW_CONFIDENCE`,
+`INCORRECT_CATEGORY`, `NOT_ACTIONABLE`, `OUTDATED`, or `OTHER`. Optional notes
+are bounded and treated as sensitive internal data. Bulk operations report
+per-item outcomes so one invalid item does not hide valid updates. Bulk apply
+is intentionally not implemented.
+
+Decision reports are exportable as CSV or JSON with deterministic fields:
+opaque recommendation reference, pilot run reference, provider, model-present
+flag, category, confidence, review status, structured decision reason,
+generated/reviewed timestamps, review-time band, and applied flag. Reports
+exclude recommendation text, task text, reservation ids, guest data, property
+ids, prompts, provider responses, and credentials. CSV output escapes cells and
+prefixes spreadsheet formula-leading values.
+
+Quality indicators remain review indicators, not model accuracy. Approval
+rate, rejection rate, and apply rate use generated pilot recommendations as the
+denominator; empty data returns zero rates. Review-time values are banded.
+
 ## Future Production Infrastructure Notes
 
 The broader Sprint 14 production-infrastructure plan remains future scope after

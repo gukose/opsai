@@ -379,6 +379,15 @@ class ExternalRecommendationPilotServiceTest {
         }
         override fun find(id: RecommendationId): ReservationTaskRecommendation? = recommendations.firstOrNull { it.id == id }
         override fun find(filter: RecommendationFilter): RecommendationPage = RecommendationPage(recommendations, filter.page, filter.size, recommendations.size.toLong(), 1)
+        override fun findPilotReviewQueue(filter: RecommendationPilotReviewQueueFilter, now: Instant): RecommendationPage {
+            val content = recommendations
+                .filter { it.pilotRunId != null }
+                .filter { filter.status == null || it.status == filter.status }
+                .filter { filter.category == null || it.category == filter.category }
+                .filter { filter.confidence == null || it.confidence == filter.confidence }
+                .sortedWith(compareBy<ReservationTaskRecommendation> { it.createdAt }.thenBy { it.id.value })
+            return RecommendationPage(content.drop(filter.page * filter.size).take(filter.size), filter.page, filter.size, content.size.toLong(), if (content.isEmpty()) 0 else 1)
+        }
         override fun claimEligibleAutomationExecutions(now: Instant, batchSize: Int, createdAfter: Instant): List<RecommendationSourceExecution> =
             sources.filter { !it.createdAt.isBefore(createdAfter) }
                 .filterNot { source -> recommendations.any { it.reservationId == source.reservationId && it.status in setOf(RecommendationStatus.GENERATED, RecommendationStatus.REVIEW_REQUIRED, RecommendationStatus.APPROVED, RecommendationStatus.APPLIED) } }

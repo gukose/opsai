@@ -264,17 +264,40 @@ class ReservationTaskRecommendationService(
     fun list(filter: RecommendationFilter): RecommendationPage =
         recommendationRepository.find(filter.copy(page = filter.page.coerceAtLeast(0), size = filter.size.coerceIn(1, 100)))
 
+    fun pilotReviewQueue(filter: RecommendationPilotReviewQueueFilter, actorUserId: UUID?): RecommendationPage {
+        audit("pilot_review_queue", "inspected", actorUserId, null, PersistenceInstant.now(clock))
+        return recommendationRepository.findPilotReviewQueue(filter.copy(page = filter.page.coerceAtLeast(0), size = filter.size.coerceIn(1, 100)), PersistenceInstant.now(clock))
+    }
+
     fun detail(id: RecommendationId): ReservationTaskRecommendation =
         recommendationRepository.find(id) ?: throw ReservationTaskRecommendationNotFoundException(id)
 
     fun approve(id: RecommendationId, actorUserId: UUID?): ReservationTaskRecommendation =
-        transitionReview(id, actorUserId, RecommendationStatus.APPROVED, "approved")
+        transitionReview(id, actorUserId, RecommendationStatus.APPROVED, "approved", null, null)
+
+    fun approve(id: RecommendationId, actorUserId: UUID?, reason: RecommendationDecisionReason, note: String?): ReservationTaskRecommendation =
+        transitionReview(id, actorUserId, RecommendationStatus.APPROVED, "approved", reason, note)
 
     fun reject(id: RecommendationId, actorUserId: UUID?): ReservationTaskRecommendation =
-        transitionReview(id, actorUserId, RecommendationStatus.REJECTED, "rejected")
+        transitionReview(id, actorUserId, RecommendationStatus.REJECTED, "rejected", null, null)
+
+    fun reject(id: RecommendationId, actorUserId: UUID?, reason: RecommendationDecisionReason, note: String?): ReservationTaskRecommendation =
+        transitionReview(id, actorUserId, RecommendationStatus.REJECTED, "rejected", reason, note)
 
     fun expire(id: RecommendationId, actorUserId: UUID?): ReservationTaskRecommendation =
-        transitionReview(id, actorUserId, RecommendationStatus.EXPIRED, "expired")
+        transitionReview(id, actorUserId, RecommendationStatus.EXPIRED, "expired", null, null)
+
+    fun expire(id: RecommendationId, actorUserId: UUID?, reason: RecommendationDecisionReason, note: String?): ReservationTaskRecommendation =
+        transitionReview(id, actorUserId, RecommendationStatus.EXPIRED, "expired", reason, note)
+
+    fun bulkApprove(request: RecommendationBulkReviewRequest, actorUserId: UUID?): RecommendationBulkReviewResult =
+        bulkTransition(request, actorUserId, RecommendationStatus.APPROVED, "approved")
+
+    fun bulkReject(request: RecommendationBulkReviewRequest, actorUserId: UUID?): RecommendationBulkReviewResult =
+        bulkTransition(request, actorUserId, RecommendationStatus.REJECTED, "rejected")
+
+    fun bulkExpire(request: RecommendationBulkReviewRequest, actorUserId: UUID?): RecommendationBulkReviewResult =
+        bulkTransition(request, actorUserId, RecommendationStatus.EXPIRED, "expired")
 
     @Transactional
     fun apply(id: RecommendationId, actorUserId: UUID?): ReservationTaskRecommendation {
@@ -338,6 +361,27 @@ class ReservationTaskRecommendationService(
         val retried = recommendationRepository.retry(id, PersistenceInstant.now(clock))
         audit("retry", "requested", actorUserId, retried.id.value, PersistenceInstant.now(clock))
         return retried
+    }
+
+    private fun bulkTransition(
+        request: RecommendationBulkReviewRequest,
+        actorUserId: UUID?,
+        status: RecommendationStatus,
+        outcome: String
+    ): RecommendationBulkReviewResult {
+        val ids = request.recommendationIds.distinctBy { it.value }.take(properties.pilotReview.maxBulkReviewItems)
+        val sanitizedNote = sanitizeDecisionNote(request.note)
+        val results = ids.map { id ->
+            runCatching { transitionReview(id, actorUserId, status, outcome, request.reason, sanitizedNote) }
+                .fold(
+                    onSuccess = { RecommendationBulkReviewItemResult(id, outcome, it.status) },
+                    onFailure = {
+                        RecommendationBulkReviewItemResult(id, "rejected", null, classifyFailure(it))
+                    }
+                )
+        }
+        audit("pilot_bulk_review", outcome, actorUserId, null, PersistenceInstant.now(clock))
+        return RecommendationBulkReviewResult(results)
     }
 
     private fun generateForSource(source: RecommendationSourceExecution, now: java.time.Instant): RecommendationGenerationSummary {
@@ -415,7 +459,9 @@ class ReservationTaskRecommendationService(
         id: RecommendationId,
         actorUserId: UUID?,
         status: RecommendationStatus,
-        outcome: String
+        outcome: String,
+        reason: RecommendationDecisionReason?,
+        note: String?
     ): ReservationTaskRecommendation {
         val now = PersistenceInstant.now(clock)
         val recommendation = detail(id)
@@ -426,12 +472,22 @@ class ReservationTaskRecommendationService(
             throw ReservationTaskRecommendationRejectedException("Applied recommendation cannot be changed.")
         }
         val updated = recommendationRepository.save(
-            recommendation.copy(status = status, reviewedBy = actorUserId, reviewedAt = now, updatedAt = now)
+            recommendation.copy(
+                status = status,
+                reviewedBy = actorUserId,
+                reviewedAt = now,
+                decisionReason = reason,
+                decisionNote = sanitizeDecisionNote(note),
+                updatedAt = now
+            )
         )
         recordMetric(updated.category.name.lowercase(), outcome, null)
         audit("review", outcome, actorUserId, updated.id.value, now)
         return updated
     }
+
+    private fun sanitizeDecisionNote(note: String?): String? =
+        note?.trim()?.takeIf { it.isNotBlank() }?.take(properties.pilotReview.maxDecisionNoteLength)
 
     private fun validateEnabled() {
         requireNotNull(properties.hotelId) { "reservation task recommendations hotel id must be configured when enabled" }

@@ -1,7 +1,10 @@
 package com.hotelopai.reservation.recommendation.api
 
 import com.hotelopai.reservation.recommendation.RecommendationCategory
+import com.hotelopai.reservation.recommendation.RecommendationBulkReviewRequest
+import com.hotelopai.reservation.recommendation.RecommendationBulkReviewResult
 import com.hotelopai.reservation.recommendation.RecommendationConfidence
+import com.hotelopai.reservation.recommendation.RecommendationDecisionReason
 import com.hotelopai.reservation.recommendation.RecommendationEndpointClassification
 import com.hotelopai.reservation.recommendation.ExternalRecommendationProviderSmokeService
 import com.hotelopai.reservation.recommendation.ExternalRecommendationPilotService
@@ -27,6 +30,7 @@ import com.hotelopai.reservation.recommendation.RecommendationPilotRunPage
 import com.hotelopai.reservation.recommendation.RecommendationPilotRunStatus
 import com.hotelopai.reservation.recommendation.RecommendationPilotRunSummary
 import com.hotelopai.reservation.recommendation.RecommendationPilotScheduleStatus
+import com.hotelopai.reservation.recommendation.RecommendationPilotReviewQueueFilter
 import com.hotelopai.reservation.recommendation.RecommendationPilotState
 import com.hotelopai.reservation.recommendation.RecommendationPilotTrigger
 import com.hotelopai.reservation.recommendation.RecommendationProviderDiagnostic
@@ -43,6 +47,7 @@ import com.hotelopai.reservation.recommendation.RecommendationSmokeTestResult
 import com.hotelopai.reservation.recommendation.RecommendationStatus
 import com.hotelopai.reservation.recommendation.ReservationTaskRecommendation
 import com.hotelopai.reservation.recommendation.ReservationTaskRecommendationNotFoundException
+import com.hotelopai.reservation.recommendation.ReservationTaskRecommendationProperties
 import com.hotelopai.reservation.recommendation.ReservationTaskRecommendationRejectedException
 import com.hotelopai.reservation.recommendation.ReservationTaskRecommendationService
 import com.hotelopai.shared.security.CurrentUserContextResolver
@@ -50,6 +55,8 @@ import com.hotelopai.shared.security.PermissionExpressions
 import com.hotelopai.task.domain.TaskIntentType
 import com.hotelopai.task.domain.TaskPriority
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
+import org.springframework.http.ResponseEntity
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -68,6 +75,7 @@ class InternalReservationTaskRecommendationController(
     private val service: ReservationTaskRecommendationService,
     private val smokeService: ExternalRecommendationProviderSmokeService,
     private val pilotService: ExternalRecommendationPilotService,
+    private val properties: ReservationTaskRecommendationProperties,
     private val currentUserContextResolver: CurrentUserContextResolver
 ) {
     @GetMapping
@@ -246,6 +254,95 @@ class InternalReservationTaskRecommendationController(
     fun pilotRunAnalytics(@RequestParam pilotRunId: UUID): RecommendationPilotAnalyticsResponse =
         safely { pilotService.analytics(RecommendationPilotAnalyticsFilter(pilotRunId = RecommendationPilotRunId(pilotRunId)), actorUserId()).toResponse() }
 
+    @GetMapping("/pilot/dashboard")
+    @PreAuthorize(PermissionExpressions.AI_RECOMMENDATION_REVIEW_OPERATIONS)
+    fun pilotDashboard(): RecommendationPilotDashboardResponse =
+        safely {
+            val readiness = pilotService.readiness(RecommendationProviderId("openai"), actorUserId())
+            val analytics = pilotService.analytics(RecommendationPilotAnalyticsFilter(), actorUserId())
+            RecommendationPilotDashboardResponse(
+                readiness = readiness.toResponse(),
+                scheduler = pilotService.scheduleStatus(actorUserId()).toResponse(),
+                budget = readiness.budget.toResponse(),
+                recentRuns = pilotService.runs(RecommendationPilotRunFilter(page = 0, size = 5), actorUserId()).content.map { it.toResponse() },
+                pendingReviewCount = service.pilotReviewQueue(RecommendationPilotReviewQueueFilter(status = RecommendationStatus.REVIEW_REQUIRED, size = 1), actorUserId()).totalElements,
+                analytics = analytics.toResponse(),
+                providerReadiness = smokeService.readiness(actorUserId()).map { it.toResponse() },
+                recentFailureSummary = analytics.reviewOutcomes.filter { it.key in setOf("FAILED", "EXPIRED", "REJECTED") }.map { it.toResponse() }
+            )
+        }
+
+    @GetMapping("/pilot/review-queue")
+    @PreAuthorize(PermissionExpressions.AI_RECOMMENDATION_REVIEW_OPERATIONS)
+    fun pilotReviewQueue(
+        @RequestParam(required = false) status: RecommendationStatus?,
+        @RequestParam(required = false) category: RecommendationCategory?,
+        @RequestParam(required = false) confidence: RecommendationConfidence?,
+        @RequestParam(required = false) providerId: String?,
+        @RequestParam(required = false) modelIdentifier: String?,
+        @RequestParam(required = false) pilotRunId: UUID?,
+        @RequestParam(required = false) generatedFrom: Instant?,
+        @RequestParam(required = false) generatedTo: Instant?,
+        @RequestParam(required = false) ageBand: String?,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int
+    ): RecommendationPilotReviewQueueResponse =
+        safely {
+            service.pilotReviewQueue(
+                RecommendationPilotReviewQueueFilter(
+                    status = status,
+                    category = category,
+                    confidence = confidence,
+                    providerId = providerId?.takeIf { it.isNotBlank() }?.let(::RecommendationProviderId),
+                    modelIdentifier = modelIdentifier?.takeIf { it.isNotBlank() },
+                    pilotRunId = pilotRunId?.let(::RecommendationPilotRunId),
+                    generatedFrom = generatedFrom,
+                    generatedTo = generatedTo,
+                    ageBand = ageBand,
+                    page = page,
+                    size = size
+                ),
+                actorUserId()
+            ).toPilotReviewQueueResponse()
+        }
+
+    @PostMapping("/pilot/review/bulk-approve")
+    @PreAuthorize(PermissionExpressions.AI_RECOMMENDATION_REVIEW_OPERATIONS)
+    fun bulkApprove(@RequestBody request: RecommendationBulkReviewRequestBody): RecommendationBulkReviewResponse =
+        safely { service.bulkApprove(request.toCommand(), actorUserId()).toResponse() }
+
+    @PostMapping("/pilot/review/bulk-reject")
+    @PreAuthorize(PermissionExpressions.AI_RECOMMENDATION_REVIEW_OPERATIONS)
+    fun bulkReject(@RequestBody request: RecommendationBulkReviewRequestBody): RecommendationBulkReviewResponse =
+        safely { service.bulkReject(request.toCommand(), actorUserId()).toResponse() }
+
+    @PostMapping("/pilot/review/bulk-expire")
+    @PreAuthorize(PermissionExpressions.AI_RECOMMENDATION_REVIEW_OPERATIONS)
+    fun bulkExpire(@RequestBody request: RecommendationBulkReviewRequestBody): RecommendationBulkReviewResponse =
+        safely { service.bulkExpire(request.toCommand(), actorUserId()).toResponse() }
+
+    @GetMapping("/pilot/reports/decisions.csv", produces = ["text/csv"])
+    @PreAuthorize(PermissionExpressions.AI_RECOMMENDATION_REVIEW_OPERATIONS)
+    fun exportPilotDecisionsCsv(
+        @RequestParam(required = false) generatedFrom: Instant?,
+        @RequestParam(required = false) generatedTo: Instant?
+    ): ResponseEntity<String> =
+        safely {
+            val rows = exportRows(generatedFrom, generatedTo)
+            ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .header("Content-Disposition", "attachment; filename=\"pilot-recommendation-decisions.csv\"")
+                .body(toCsv(rows))
+        }
+
+    @GetMapping("/pilot/reports/decisions.json")
+    @PreAuthorize(PermissionExpressions.AI_RECOMMENDATION_REVIEW_OPERATIONS)
+    fun exportPilotDecisionsJson(
+        @RequestParam(required = false) generatedFrom: Instant?,
+        @RequestParam(required = false) generatedTo: Instant?
+    ): List<RecommendationPilotDecisionExportRow> =
+        safely { exportRows(generatedFrom, generatedTo) }
+
     @PostMapping("/pilot/disable")
     @PreAuthorize(PermissionExpressions.RESERVATION_SYNC_OPERATIONS)
     fun disablePilot(): RecommendationPilotStateResponse =
@@ -336,6 +433,68 @@ class InternalReservationTaskRecommendationController(
     fun retry(@PathVariable recommendationId: UUID): RecommendationResponse =
         safely { service.retry(RecommendationId(recommendationId), actorUserId()).toResponse() }
 
+    private fun exportRows(generatedFrom: Instant?, generatedTo: Instant?): List<RecommendationPilotDecisionExportRow> {
+        val to = generatedTo ?: Instant.now()
+        val maxRange = properties.pilotReview.maxExportDateRange
+        val from = generatedFrom ?: to.minus(maxRange)
+        if (!from.isBefore(to)) {
+            throw IllegalArgumentException("Export start must be before export end.")
+        }
+        if (java.time.Duration.between(from, to) > maxRange) {
+            throw IllegalArgumentException("Pilot decision export date range is too large.")
+        }
+        val rows = mutableListOf<RecommendationPilotDecisionExportRow>()
+        val pageSize = 100
+        var page = 0
+        do {
+            val result = service.pilotReviewQueue(
+                RecommendationPilotReviewQueueFilter(generatedFrom = from, generatedTo = to, page = page, size = pageSize),
+                actorUserId()
+            )
+            rows += result.content.map { it.toExportRow() }.take(properties.pilotReview.maxExportRows - rows.size)
+            page += 1
+        } while (rows.size < properties.pilotReview.maxExportRows && result.content.isNotEmpty())
+        return rows
+    }
+
+    private fun toCsv(rows: List<RecommendationPilotDecisionExportRow>): String {
+        val header = listOf(
+            "recommendationReference",
+            "pilotRunReference",
+            "provider",
+            "modelPresent",
+            "category",
+            "confidence",
+            "reviewStatus",
+            "decisionReason",
+            "generatedAt",
+            "reviewedAt",
+            "reviewTimeBand",
+            "applied"
+        )
+        return buildString {
+            appendLine(header.joinToString(","))
+            rows.forEach { row ->
+                appendLine(
+                    listOf(
+                        row.recommendationReference.toString(),
+                        row.pilotRunReference?.toString() ?: "",
+                        row.provider,
+                        row.modelPresent.toString(),
+                        row.category,
+                        row.confidence,
+                        row.reviewStatus,
+                        row.decisionReason ?: "",
+                        row.generatedAt.toString(),
+                        row.reviewedAt?.toString() ?: "",
+                        row.reviewTimeBand,
+                        row.applied.toString()
+                    ).joinToString(",") { safePilotDecisionCsvCell(it) }
+                )
+            }
+        }
+    }
+
     private fun actorUserId(): UUID =
         currentUserContextResolver.current().userId
 
@@ -349,6 +508,11 @@ class InternalReservationTaskRecommendationController(
         } catch (exception: IllegalArgumentException) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid reservation task recommendation request.", exception)
         }
+}
+
+internal fun safePilotDecisionCsvCell(value: String): String {
+    val safe = if (value.firstOrNull() in setOf('=', '+', '-', '@')) "'$value" else value
+    return "\"${safe.replace("\"", "\"\"")}\""
 }
 
 data class RecommendationResponse(
@@ -585,6 +749,77 @@ data class RecommendationPilotConfidenceCategoryResponse(
     val categoryDistribution: List<RecommendationPilotBreakdownResponse>
 )
 
+data class RecommendationPilotDashboardResponse(
+    val readiness: RecommendationPilotReadinessResponse,
+    val scheduler: RecommendationPilotScheduleStatusResponse,
+    val budget: RecommendationPilotBudgetResponse,
+    val recentRuns: List<RecommendationPilotRunResponse>,
+    val pendingReviewCount: Long,
+    val analytics: RecommendationPilotAnalyticsResponse,
+    val providerReadiness: List<RecommendationProviderReadinessResponse>,
+    val recentFailureSummary: List<RecommendationPilotBreakdownResponse>
+)
+
+data class RecommendationPilotReviewQueueItemResponse(
+    val recommendationReference: UUID,
+    val category: RecommendationCategory,
+    val priority: TaskPriority,
+    val confidence: RecommendationConfidence,
+    val situation: String,
+    val rationale: String,
+    val supportingSignals: List<String>,
+    val providerName: String,
+    val modelIdentifierPresent: Boolean,
+    val generatedAt: Instant,
+    val reviewState: RecommendationStatus,
+    val pilotRunReference: UUID?,
+    val decisionReason: RecommendationDecisionReason?,
+    val reviewedAt: Instant?
+)
+
+data class RecommendationPilotReviewQueueResponse(
+    val content: List<RecommendationPilotReviewQueueItemResponse>,
+    val page: Int,
+    val size: Int,
+    val totalElements: Long,
+    val totalPages: Int
+)
+
+data class RecommendationBulkReviewRequestBody(
+    val recommendationReferences: List<UUID>,
+    val reason: RecommendationDecisionReason,
+    val note: String? = null
+) {
+    fun toCommand(): RecommendationBulkReviewRequest =
+        RecommendationBulkReviewRequest(recommendationReferences.map(::RecommendationId), reason, note)
+}
+
+data class RecommendationBulkReviewItemResponse(
+    val recommendationReference: UUID,
+    val outcome: String,
+    val status: RecommendationStatus?,
+    val failureCategory: String?
+)
+
+data class RecommendationBulkReviewResponse(
+    val results: List<RecommendationBulkReviewItemResponse>
+)
+
+data class RecommendationPilotDecisionExportRow(
+    val recommendationReference: UUID,
+    val pilotRunReference: UUID?,
+    val provider: String,
+    val modelPresent: Boolean,
+    val category: String,
+    val confidence: String,
+    val reviewStatus: String,
+    val decisionReason: String?,
+    val generatedAt: Instant,
+    val reviewedAt: Instant?,
+    val reviewTimeBand: String,
+    val applied: Boolean
+)
+
 data class RecommendationProviderDiagnosticResponse(
     val diagnosticId: UUID,
     val providerId: String,
@@ -818,6 +1053,66 @@ private fun RecommendationPilotBreakdown.toResponse(): RecommendationPilotBreakd
 
 private fun RecommendationPage.toResponse(): RecommendationPageResponse =
     RecommendationPageResponse(content.map { it.toResponse() }, page, size, totalElements, totalPages)
+
+private fun RecommendationPage.toPilotReviewQueueResponse(): RecommendationPilotReviewQueueResponse =
+    RecommendationPilotReviewQueueResponse(content.map { it.toPilotQueueItem() }, page, size, totalElements, totalPages)
+
+private fun ReservationTaskRecommendation.toPilotQueueItem(): RecommendationPilotReviewQueueItemResponse =
+    RecommendationPilotReviewQueueItemResponse(
+        recommendationReference = id.value,
+        category = category,
+        priority = priority,
+        confidence = confidence,
+        situation = explanation.situation,
+        rationale = explanation.rationale,
+        supportingSignals = explanation.supportingSignals,
+        providerName = providerName,
+        modelIdentifierPresent = modelIdentifier != null,
+        generatedAt = createdAt,
+        reviewState = status,
+        pilotRunReference = pilotRunId?.value,
+        decisionReason = decisionReason,
+        reviewedAt = reviewedAt
+    )
+
+private fun ReservationTaskRecommendation.toExportRow(): RecommendationPilotDecisionExportRow =
+    RecommendationPilotDecisionExportRow(
+        recommendationReference = id.value,
+        pilotRunReference = pilotRunId?.value,
+        provider = providerName,
+        modelPresent = modelIdentifier != null,
+        category = category.name,
+        confidence = confidence.name,
+        reviewStatus = status.name,
+        decisionReason = decisionReason?.name,
+        generatedAt = createdAt,
+        reviewedAt = reviewedAt,
+        reviewTimeBand = reviewTimeBand(createdAt, reviewedAt ?: updatedAt),
+        applied = status == RecommendationStatus.APPLIED
+    )
+
+private fun RecommendationBulkReviewResult.toResponse(): RecommendationBulkReviewResponse =
+    RecommendationBulkReviewResponse(
+        results.map {
+            RecommendationBulkReviewItemResponse(
+                recommendationReference = it.recommendationId.value,
+                outcome = it.outcome,
+                status = it.status,
+                failureCategory = it.failureCategory?.name
+            )
+        }
+    )
+
+private fun reviewTimeBand(createdAt: Instant, reviewedAt: Instant): String {
+    val seconds = java.time.Duration.between(createdAt, reviewedAt).seconds
+    return when {
+        seconds < 300 -> "under_5_minutes"
+        seconds < 1800 -> "5_to_30_minutes"
+        seconds < 7200 -> "30_minutes_to_2_hours"
+        seconds < 86400 -> "2_to_24_hours"
+        else -> "over_24_hours"
+    }
+}
 
 private fun RecommendationGenerationSummary.toResponse(): RecommendationGenerationSummaryResponse =
     RecommendationGenerationSummaryResponse(processedReservations, generated, duplicates, skipped, failed)

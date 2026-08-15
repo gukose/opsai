@@ -8,6 +8,7 @@ interface ReservationTaskRecommendationRepository {
     fun save(recommendation: ReservationTaskRecommendation): ReservationTaskRecommendation
     fun find(id: RecommendationId): ReservationTaskRecommendation?
     fun find(filter: RecommendationFilter): RecommendationPage
+    fun findPilotReviewQueue(filter: RecommendationPilotReviewQueueFilter, now: Instant): RecommendationPage
     fun claimEligibleAutomationExecutions(now: Instant, batchSize: Int, createdAfter: Instant): List<RecommendationSourceExecution>
     fun retry(id: RecommendationId, now: Instant): ReservationTaskRecommendation
     fun saveRun(run: RecommendationGenerationRun): RecommendationGenerationRun

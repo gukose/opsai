@@ -188,6 +188,11 @@ ops:
           retention-cleanup-enabled: false
           cleanup-execution-interval: PT24H
           cleanup-batch-size: 100
+        pilot-review:
+          max-bulk-review-items: 50
+          max-decision-note-length: 500
+          max-export-rows: 1000
+          max-export-date-range: P31D
         schedule:
           enabled: false
           execution-interval: PT5M
@@ -252,6 +257,123 @@ ops:
           allowed-profiles: []
           retention-cleanup-enabled: false
           retention-cleanup-max-runs: 100
+    knowledge:
+      chunk-size: 1200
+      chunk-overlap: 120
+      max-import-characters: 1000000
+      retrieval-quality:
+        gates-enabled: false
+        verification-enabled: false
+        dataset-version: hotel-operations-curated-v1
+        k: 5
+        modes: [KEYWORD, SEMANTIC, HYBRID]
+        default-thresholds:
+          minimum-precision-at-k: 0.1
+          minimum-recall-at-k: 0.1
+          minimum-mrr: 0.1
+          minimum-ndcg: 0.1
+          minimum-hit-rate: 0.5
+          maximum-average-latency-millis: 5000
+          minimum-evaluated-query-count: 1
+        keyword-thresholds:
+          minimum-hit-rate: 0.7
+        semantic-thresholds:
+          minimum-hit-rate: 0.5
+        hybrid-thresholds:
+          minimum-hit-rate: 0.7
+      rag-context:
+        maximum-retrieved-chunks: 8
+        maximum-chunks-per-document: 3
+        maximum-characters-per-chunk: 800
+        maximum-total-context-characters: 4000
+        minimum-retrieval-score: 0.0
+        allowed-categories: []
+        language-policy: [en]
+      answers:
+        enabled: false
+        active-provider: internal-demo
+        model: internal-demo-knowledge-answer-v1
+        prompt-template-id: knowledge-answer-v1
+        prompt-version: knowledge-answer-prompt-v1
+        context-schema-version: knowledge-context-v1
+        max-prompt-characters: 8000
+        max-query-characters: 200
+        max-answer-characters: 1200
+        minimum-context-items: 1
+        duplicate-window: PT15M
+        history-retention: P30D
+        history-cleanup-batch-size: 100
+        hourly-request-limit: 60
+        daily-request-limit: 250
+        maximum-concurrent-requests: 2
+        in-flight-abandoned-timeout: PT10M
+        max-retry-attempts: 2
+        providers:
+          internal-demo:
+            enabled: true
+          openai:
+            enabled: false
+            endpoint: https://api.openai.com/v1/chat/completions
+            model: gpt-5-mini
+            credential-reference:
+            timeout: PT10S
+            max-attempts: 2
+            maximum-tokens: 512
+            temperature: 0.0
+            top-p: 1.0
+            allowed-profiles: []
+            smoke-test-only: true
+            smoke-test-enabled: false
+            fixture-mode-enabled: false
+            allow-fallback-to-internal-demo: false
+          external-policy:
+            production-prohibited: true
+            allowed-profiles: [local, test]
+            require-https-outside-local: true
+            local-endpoint-allowlist: [http://localhost, http://127.0.0.1]
+            diagnostics-retention: P30D
+            diagnostics-cleanup-batch-size: 100
+      semantic-search:
+        enabled: false
+        active-provider: deterministic-local
+        model: deterministic-local-v1
+        vector-dimension: 16
+        batch-size: 20
+        request-timeout: PT5S
+        max-attempts: 3
+        allowed-profiles: []
+        credential-reference:
+        similarity-threshold: 0.15
+        semantic-result-limit: 20
+        hybrid-keyword-weight: 0.55
+        hybrid-semantic-weight: 0.45
+        keyword-fallback-enabled: false
+        diagnostics-retention: P30D
+        diagnostics-cleanup-batch-size: 100
+        external-providers:
+          production-prohibited: true
+          allowed-profiles: [local, test]
+          require-https-outside-local: true
+          local-endpoint-allowlist: [http://localhost, http://127.0.0.1]
+          openai:
+            enabled: false
+            endpoint: https://api.openai.com/v1/embeddings
+            model: text-embedding-3-small
+            dimensions: 1536
+            timeout: PT10S
+            max-attempts: 2
+            allowed-profiles: []
+            credential-reference:
+            smoke-test-enabled: false
+        schedule:
+          enabled: false
+          execution-interval: PT10M
+          startup-delay: PT2M
+          batch-size: 20
+          lock-timeout: PT5M
+          allowed-profiles: [local, test]
+          cleanup-enabled: false
+          cleanup-execution-interval: PT24H
     outbox:
       enabled: true
       poll-interval: PT5S

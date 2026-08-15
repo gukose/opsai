@@ -111,6 +111,12 @@ Recommended state groups:
 
 Mobile should call backend APIs only. It should never call OpenAI or UniMock directly.
 
+Internal-only mobile tools may call `/api/v1/internal/**` endpoints directly
+when those endpoints are intentionally excluded from the public generated SDK.
+Sprint 16A uses this pattern for the Knowledge Assistant and still routes every
+answer through backend authorization, retrieval, privacy, grounding, quota, and
+provider governance.
+
 Mobile sends:
 
 - message text
@@ -129,6 +135,15 @@ Mobile receives:
 - next task
 - notification summaries
 - task attachment metadata/provenance
+- internal knowledge answers and citation excerpts only when the signed-in user
+  has `KNOWLEDGE_OPERATIONS`
+
+The Knowledge Assistant tab is hidden unless `KNOWLEDGE_OPERATIONS` is present
+in the current token. It displays advisory cited answers, insufficient-context
+and provider-failure states, recent retained answer history, provider readiness,
+and structured feedback actions. It never displays prompt text, provider
+payloads, embeddings, credentials, database internals, PMS data, reservation
+data, or guest data.
 
 Sprint 7 image handling is metadata registration, not binary upload. Local image previews are device/browser local only. The mobile app must not send local URIs, file/device URIs, base64, raw bytes, storage references, or provider URLs as durable backend media.
 

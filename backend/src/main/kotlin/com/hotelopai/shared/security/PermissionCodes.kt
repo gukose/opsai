@@ -30,6 +30,8 @@ object PermissionCodes {
     const val DEV_PMS_ACCESS = "DEV_PMS_ACCESS"
     const val PMS_OPERATIONS_ACCESS = "PMS_OPERATIONS_ACCESS"
     const val RESERVATION_SYNC_OPERATIONS = "RESERVATION_SYNC_OPERATIONS"
+    const val AI_RECOMMENDATION_REVIEW_OPERATIONS = "AI_RECOMMENDATION_REVIEW_OPERATIONS"
+    const val KNOWLEDGE_OPERATIONS = "KNOWLEDGE_OPERATIONS"
 }
 
 object PermissionExpressions {
@@ -60,4 +62,6 @@ object PermissionExpressions {
     const val DEV_PMS_ACCESS = "@permissionGuard.hasAnyPermission('${PermissionCodes.DEV_PMS_ACCESS}')"
     const val PMS_OPERATIONS_ACCESS = "@permissionGuard.hasAnyPermission('${PermissionCodes.PMS_OPERATIONS_ACCESS}')"
     const val RESERVATION_SYNC_OPERATIONS = "@permissionGuard.hasAnyPermission('${PermissionCodes.RESERVATION_SYNC_OPERATIONS}')"
+    const val AI_RECOMMENDATION_REVIEW_OPERATIONS = "@permissionGuard.hasAnyPermission('${PermissionCodes.AI_RECOMMENDATION_REVIEW_OPERATIONS}')"
+    const val KNOWLEDGE_OPERATIONS = "@permissionGuard.hasAnyPermission('${PermissionCodes.KNOWLEDGE_OPERATIONS}')"
 }

@@ -297,3 +297,30 @@ Analytics return bands instead of per-record durations. Recommendation titles,
 descriptions, explanations, reservation ids, task ids, property ids, prompts,
 provider responses, guest data, credentials, and raw provider metadata are not
 returned.
+
+## Sprint 14C Review Dashboard and Decision Reports
+
+The internal pilot review dashboard is an aggregation facade over existing
+pilot readiness, schedule status, budget, run history, provider readiness, and
+analytics services. It does not introduce public APIs or mobile behavior.
+
+Review queue responses are decision-safe. They include opaque recommendation
+references, pilot-run references, category, priority, confidence, structured
+rationale, supporting signals, provider/model presence, generated time, status,
+decision reason, and review time. They intentionally omit reservation ids,
+property ids, task ids, task descriptions, guest data, prompts, provider
+responses, raw provider metadata, and credentials.
+
+Bulk review supports approve, reject, and expire only. Operators must provide a
+structured decision reason, and optional notes are bounded internal-sensitive
+data. Bulk apply is out of scope, so no task is created without the existing
+explicit single recommendation apply workflow.
+
+Decision exports are transient CSV or JSON responses. Export rows contain only
+opaque references and review-safe metadata. CSV output uses stable column order,
+quoted cells, and spreadsheet formula-prefix protection. Export contents are
+not persisted server-side.
+
+Review quality indicators are operational review indicators, not accuracy
+claims. Denominators are documented as generated pilot recommendations, and
+empty data returns zero rates.

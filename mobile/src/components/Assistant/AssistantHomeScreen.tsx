@@ -20,6 +20,7 @@ import {
   saveAssistantDraft
 } from "../../assistant/assistantDraftStorage";
 import { CurrentUserSnapshot } from "../../session/sessionTypes";
+import { hasPermission } from "../../auth/currentUserHelpers";
 import { Composer } from "../Composer/Composer";
 import { BottomNavigation } from "../Navigation/BottomNavigation";
 import { AssistantCard } from "./AssistantCard";
@@ -35,6 +36,7 @@ import { TaskEmptyState } from "../Tasks/TaskEmptyState";
 import { TasksScreen } from "../Tasks/TasksScreen";
 import { ProfilePanel } from "../Profile/ProfilePanel";
 import { BottomNavigationKey } from "../Navigation/BottomNavigation";
+import { KnowledgeAssistantScreen } from "../Knowledge/KnowledgeAssistantScreen";
 
 type AssistantHomeScreenProps = {
   accessToken: string | null;
@@ -101,6 +103,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
   const overviewForDisplay = dashboardSummary?.overview ?? overview;
   const assistantActionDisabled = isSending || isConfirming;
   const isHomeSurface = activeSection === "home" || activeSection === "assistant";
+  const canUseKnowledgeAssistant = hasPermission(currentUser, "KNOWLEDGE_OPERATIONS");
   const offlineScope = useMemo(
     () =>
       currentUser?.hotelId && currentUser.userId
@@ -308,6 +311,8 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
             onCompleteTask={completeSelectedTask}
             onCancelTask={cancelSelectedTask}
           />
+        ) : activeSection === "knowledge" && canUseKnowledgeAssistant ? (
+          <KnowledgeAssistantScreen accessToken={accessToken} currentUser={currentUser} />
         ) : activeSection === "profile" ? (
           <ProfilePanel
             currentUser={currentUser}
@@ -429,7 +434,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
             activeKey={activeSection}
             currentUser={currentUser}
             onSelect={(key) => {
-              if (key === "home" || key === "tasks" || key === "assistant" || key === "operations" || key === "profile") {
+              if (key === "home" || key === "tasks" || key === "assistant" || key === "knowledge" || key === "operations" || key === "profile") {
                 setActiveSection(key);
               }
             }}

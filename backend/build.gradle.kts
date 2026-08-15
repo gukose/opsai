@@ -125,6 +125,18 @@ tasks.register<Test>("apaleoSandboxSmokeTest") {
     outputs.upToDateWhen { false }
 }
 
+tasks.register<Test>("verifyKnowledgeRetrievalQuality") {
+    description = "Runs deterministic curated knowledge retrieval quality gates with local embeddings."
+    group = "verification"
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching("com.hotelopai.knowledge.application.KnowledgeRetrievalQualityVerificationTest")
+    }
+    outputs.upToDateWhen { false }
+}
+
 springBoot {
     mainClass.set("com.hotelopai.OpsaiApplicationKt")
 }

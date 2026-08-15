@@ -217,7 +217,9 @@ class AuthSeedDataService(
             PermissionSeed(PermissionCodes.REPORT_READ, "Read task reports"),
             PermissionSeed(PermissionCodes.DEV_PMS_ACCESS, "Access local Dev PMS proxy"),
             PermissionSeed(PermissionCodes.PMS_OPERATIONS_ACCESS, "Access PMS operations"),
-            PermissionSeed(PermissionCodes.RESERVATION_SYNC_OPERATIONS, "Operate reservation synchronization")
+            PermissionSeed(PermissionCodes.RESERVATION_SYNC_OPERATIONS, "Operate reservation synchronization"),
+            PermissionSeed(PermissionCodes.AI_RECOMMENDATION_REVIEW_OPERATIONS, "Review AI pilot recommendations"),
+            PermissionSeed(PermissionCodes.KNOWLEDGE_OPERATIONS, "Operate internal knowledge base")
         )
     }
 

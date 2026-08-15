@@ -198,3 +198,71 @@ pilot generation. To roll back provider selection, use the
 rollback-to-InternalDemo operation and remove external provider overrides from
 the environment. Existing recommendations, diagnostics, audit history, and
 applied tasks are preserved.
+
+## Pilot Review Dashboard and Decision Reports
+
+Operators with `AI_RECOMMENDATION_REVIEW_OPERATIONS` can open the internal
+pilot dashboard to inspect readiness, schedule state, budgets, recent runs,
+pending review count, provider readiness, aggregate analytics, and safe failure
+counts.
+
+Use the review queue to filter pilot recommendations by status, category,
+confidence, provider/model, pilot run, generated date range, and age band.
+Queue entries are sanitized and use opaque recommendation references. They do
+not include reservation ids, property ids, task ids, task descriptions, prompts,
+provider responses, guest data, PMS identifiers, or credentials.
+
+Bulk approve, reject, and expire require explicit opaque recommendation
+references plus a structured decision reason. Optional notes are bounded and
+internal-sensitive. Bulk apply is not available; creating a task still requires
+the existing explicit apply workflow for an approved recommendation.
+
+CSV and JSON decision reports are generated on demand and are not persisted
+server-side. Report rows contain only opaque references, provider/model
+presence, category, confidence, status, structured decision reason,
+generated/reviewed timestamps, review-time band, and applied flag. CSV output
+uses deterministic columns and spreadsheet formula-injection protection.
+
+## Knowledge Answer Provider Pilot
+
+Sprint 16A adds a separate external provider pilot boundary for internal
+knowledge answers. `InternalDemoKnowledgeAnswerProvider` remains the default.
+The OpenAI knowledge answer provider is disabled by default, uses the same
+credential-reference and safe HTTP conventions as other external providers, and
+is blocked in production.
+
+Local fixture smoke testing requires explicit non-production configuration:
+
+```yaml
+ops:
+  ai:
+    knowledge:
+      answers:
+        enabled: true
+        active-provider: internal-demo
+        providers:
+          openai:
+            enabled: true
+            endpoint: http://localhost/openai-fixture
+            credential-reference: OPENAI_API_KEY
+            allowed-profiles: [local, test]
+            smoke-test-only: true
+            smoke-test-enabled: true
+            fixture-mode-enabled: true
+          external-policy:
+            production-prohibited: true
+            allowed-profiles: [local, test]
+```
+
+Use the internal knowledge operations endpoints to inspect provider readiness,
+run fixture smoke tests, inspect safe diagnostic history, and clean old
+diagnostics. Smoke tests use a fixed synthetic context and do not read real
+documents, persist answer-history rows, create tasks, or call PMS/reservation
+systems.
+
+Knowledge answer diagnostics never include prompts, request bodies, provider
+responses, credentials, embeddings, guest data, reservation data, PMS data, or
+provider request identifiers. If a fixture fails, readiness may report
+temporary unavailability or misconfiguration depending on the safe failure
+category. Returning the active provider to `internal-demo` and disabling the
+OpenAI provider stops external answer traffic.

@@ -1,5 +1,96 @@
 # Sprint 16 - Go Live Readiness
-/statu
+
+## Sprint 16A - Internal Knowledge Assistant UI And External Answer Provider Pilot
+
+Sprint 16A adds an internal operator-facing knowledge assistant and the first
+disabled-by-default external knowledge answer provider pilot boundary.
+
+Implemented scope:
+
+- Internal knowledge assistant endpoints remain under
+  `/api/v1/internal/knowledge/**` and require `KNOWLEDGE_OPERATIONS`.
+- Mobile exposes a Knowledge Assistant tab only for users whose current token
+  includes `KNOWLEDGE_OPERATIONS`.
+- `InternalDemoKnowledgeAnswerProvider` remains the default answer provider.
+- `OpenAiKnowledgeAnswerProvider` is registered as an external provider but is
+  disabled by default and blocked in production.
+- Provider readiness, lifecycle, endpoint classification, smoke diagnostics,
+  diagnostic cleanup, and local fixture smoke tests are available internally.
+- Answer requests remain grounded in assembled knowledge context and every
+  `ANSWERED` response must cite supplied context.
+- Feedback supports `HELPFUL`, `NOT_HELPFUL`, `INSUFFICIENT`, and
+  `INCORRECT_SOURCE` without free text.
+- Per-operator/hotel request quota checks use retained answer history and store
+  only safe quota outcomes.
+
+Out of scope:
+
+- User-facing/public knowledge assistant APIs.
+- Autonomous task creation or reservation mutation from answers.
+- Production external-provider activation.
+- Live OpenAI calls in automated tests or default verification.
+- Prompt, provider response, credential, embedding, PMS, reservation, guest, or
+  payment data persistence in diagnostics, metrics, or audit.
+
+Configuration defaults keep answer generation disabled unless explicitly
+enabled:
+
+```yaml
+ops:
+  ai:
+    knowledge:
+      answers:
+        enabled: false
+        active-provider: internal-demo
+        providers:
+          internal-demo:
+            enabled: true
+          openai:
+            enabled: false
+            credential-reference: OPENAI_API_KEY
+            smoke-test-only: true
+            smoke-test-enabled: false
+            fixture-mode-enabled: false
+          external-policy:
+            production-prohibited: true
+            allowed-profiles: [local, test]
+```
+
+## Sprint 16B - Knowledge Assistant Hardening
+
+Sprint 16B completes the internal Knowledge Assistant operating surface.
+
+Implemented scope:
+
+- Durable per-hotel/operator in-flight request coordination in PostgreSQL.
+- Safe answer-request lifecycle records with statuses from `REQUESTED` through
+  terminal `COMPLETED`, `INSUFFICIENT_CONTEXT`, `FAILED`, `REJECTED`, or
+  `ABANDONED`.
+- Abandoned active request recovery based on the configured timeout.
+- Internal dashboard aggregation for provider readiness, retrieval readiness,
+  recent answer outcomes, quota usage, active/abandoned requests, feedback
+  distribution, citation-count bands, latency bands, and safe failure
+  categories.
+- Internal active-request listing, request detail, cancellation, abandoned
+  recovery, feedback analytics, and cleanup operations under
+  `KNOWLEDGE_OPERATIONS`.
+- Mobile Knowledge Assistant operations panel with readiness, quota, in-flight,
+  recent outcome, and feedback summaries.
+
+Persisted lifecycle metadata intentionally excludes query text, prompts,
+retrieved chunk text, provider responses, credentials, PMS data, reservation
+data, guest data, and payment data.
+
+Cancellation is cooperative at the lifecycle boundary. It prevents an active
+request record from continuing to consume in-flight capacity after cancellation,
+but the current JDK HTTP provider boundary does not expose hard request
+interruption for an already running provider call.
+
+Retry remains privacy-constrained: failed history records do not retain query
+text, so operator retry requires resubmitting the query. This preserves the
+Sprint 15/16 rule that query text is not persisted outside the retained answer
+record.
+
 ## Goal
 Complete production launch readiness for Hotel OpAI.
 

@@ -102,7 +102,54 @@ operator review analytics. Scheduled pilot runs use the distributed scheduler
 lease, respect the same readiness and budget guardrails, and never approve,
 apply, or create tasks autonomously. Analytics return only aggregate counts,
 rates, and bands.
+Sprint 14C adds an internal pilot review dashboard, bounded review queue, bulk
+approve/reject/expire decisions, and CSV/JSON decision reports under
+`AI_RECOMMENDATION_REVIEW_OPERATIONS`. Reports and dashboard responses are
+sanitized and exclude reservation ids, guest data, task text, prompts,
+provider responses, credentials, and raw PMS identifiers.
+Sprint 15A adds an internal-only knowledge base foundation under
+`/api/v1/internal/knowledge`. It supports markdown/plain-text imports,
+deterministic chunking, PostgreSQL-backed document/chunk/metadata persistence,
+and keyword search only. The endpoints require `KNOWLEDGE_OPERATIONS`; no
+public API, SDK, mobile behavior, vector database, or OpenAI integration is
+added.
+Sprint 15B adds disabled-by-default semantic and hybrid knowledge search using a
+provider-neutral embedding boundary, deterministic local embeddings, and
+PostgreSQL-backed chunk embedding records. Internal embedding operations remain
+under `KNOWLEDGE_OPERATIONS`; raw vectors, prompts, provider payloads,
+credentials, and AI responses are not exposed. Internal document and search
+operations are scoped to the authenticated user's hotel. External embedding
+providers and RAG answer generation remain out of scope.
+Sprint 15C adds a disabled-by-default OpenAI embedding adapter, safe provider
+diagnostics, retrieval-readiness reporting, and controlled scheduled embedding
+refresh. OpenAI requires explicit configuration, remains blocked for production
+activation by default, and is never called by the default local/test validation
+path.
+Sprint 15D adds internal retrieval evaluation and benchmarking with aggregate
+Precision@K, Recall@K, MRR, NDCG, and Hit Rate metrics. The readiness report now
+includes evaluation status for future RAG gates, but no AI answers are generated.
 No public reservation endpoint, SDK surface, or mobile behavior is added.
+Sprint 15E adds synthetic curated retrieval fixtures, disabled-by-default
+quality gates, `:backend:verifyKnowledgeRetrievalQuality`, and a provider-neutral
+RAG context assembly boundary. Context assembly returns bounded internal source
+items and citations only; it does not build prompts or generate answers.
+Sprint 15F adds disabled-by-default internal advisory answer generation from
+assembled knowledge context. Prompt text and provider payloads are not
+persisted, every answered response requires citations, and generated answers
+cannot create tasks or mutate operational records.
+Sprint 16A adds an internal Knowledge Assistant screen for users with
+`KNOWLEDGE_OPERATIONS`, provider readiness/smoke diagnostics, answer feedback,
+and a disabled-by-default OpenAI answer provider pilot. Production external
+answer-provider activation remains blocked, and no prompts, credentials,
+provider payloads, embeddings, PMS data, reservation data, or guest data are
+exposed through diagnostics or mobile UI.
+Sprint 16B hardens the internal Knowledge Assistant with PostgreSQL-backed
+in-flight request coordination per hotel/operator, safe request lifecycle
+records, cooperative cancellation, abandoned-request recovery, feedback
+analytics, cleanup operations, and a compact internal operations dashboard in
+the mobile assistant. The dashboard remains gated by `KNOWLEDGE_OPERATIONS` and
+shows aggregate readiness, quota, in-flight, outcome, feedback, latency, and
+failure-band data only.
 Focused reservation verification:
 
 ```bash
