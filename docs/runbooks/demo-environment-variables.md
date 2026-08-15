@@ -8,7 +8,7 @@ Store values in Railway or EAS; never in Git or Expo public configuration.
 - `PORT`: injected by Railway; fallback `8080`.
 - `OPS_AI_AUTH_JWT_SECRET`: high-entropy signing secret.
 - `OPS_AI_DEMO_BOOTSTRAP_ENABLED`: enables idempotent bootstrap.
-- `OPS_AI_UNIMOCK_BASE_URL`: normally `http://unimock.railway.internal:8090`.
+- `OPS_AI_UNIMOCK_BASE_URL`: use Railway reference variables, normally `http://${{unimock.RAILWAY_PRIVATE_DOMAIN}}:${{unimock.PORT}}` when the service is named `unimock`.
 - `OPS_AI_DB_MAXIMUM_POOL_SIZE`, `OPS_AI_DB_MINIMUM_IDLE`: optional Hikari limits.
 
 ## Supabase PostgreSQL
@@ -21,6 +21,17 @@ Store values in Railway or EAS; never in Git or Expo public configuration.
 - `OPS_AI_DB_URL`, `OPS_AI_DB_USERNAME`, `OPS_AI_DB_PASSWORD`: optional complete overrides.
 
 Use the free Supavisor **session pooler** for a persistent Railway JVM when direct IPv6 is unavailable. It supports prepared statements and Flyway. Require SSL. Transaction mode (`6543`) targets transient/serverless clients.
+
+## UniMock runtime
+
+- `SPRING_PROFILES_ACTIVE`: `prod`.
+- `PORT`: `8090`; set this explicitly because the backend's private URL must include UniMock's listening port.
+- `OPS_AI_UNIMOCK_DB_URL`: JDBC URL with `sslmode=require`.
+- `OPS_AI_UNIMOCK_DB_USERNAME`
+- `OPS_AI_UNIMOCK_DB_PASSWORD`
+- `OPS_AI_UNIMOCK_DB_MAXIMUM_POOL_SIZE`: optional; use a small value for the shared demo database.
+
+Keep UniMock private: do not generate a public Railway domain. Its application also honors a Railway-injected `PORT`; `SERVER_PORT` remains a non-Railway compatibility fallback.
 
 ## OpenAI — backend only
 
