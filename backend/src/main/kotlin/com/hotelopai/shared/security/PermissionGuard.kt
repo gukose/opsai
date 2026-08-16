@@ -11,7 +11,9 @@ class PermissionGuard(
         return permissions.any { permission -> permission in current.permissions }
     }
 
+    fun hasRole(roleCode: String): Boolean =
+        roleCode in currentUserContextResolver.current().roles
+
     fun currentHotelId(): java.util.UUID =
         currentUserContextResolver.current().hotelId
 }
-

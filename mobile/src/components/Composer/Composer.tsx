@@ -1,6 +1,6 @@
 import { ReactNode, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { Camera, FileText, Grid2X2, MessageSquareText, Mic, Paperclip, SendHorizontal, X } from "lucide-react-native";
+import { Camera, FileText, Grid2X2, MessageSquareText, Mic, Paperclip, SendHorizontal, Sparkles, X } from "lucide-react-native";
 
 import {
   LocalAttachmentMetadata,
@@ -83,6 +83,16 @@ export function Composer({
 
   return (
     <View style={[styles.container, isFocused ? styles.containerFocused : null]}>
+      <View style={styles.contextRow}>
+        <View style={styles.contextIdentity}>
+          <Sparkles color={colors.amber} size={11} strokeWidth={2.3} />
+          <Text style={styles.contextLabel}>Assistant commands</Text>
+        </View>
+        <View style={styles.contextStatus}>
+          <View style={styles.contextStatusDot} />
+          <Text style={styles.contextStatusText}>Online</Text>
+        </View>
+      </View>
       <View style={styles.composerRow}>
         <View style={styles.opaiControl}>
           <Text style={styles.opaiLabel}>OpAI</Text>
@@ -256,13 +266,14 @@ const styles = StyleSheet.create({
   container: {
     minHeight: 62,
     marginHorizontal: 5,
-    borderWidth: 1.5,
-    borderColor: "#cbd5e1",
-    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    borderTopColor: "#cbd5e1",
+    borderRadius: radius.lg,
     backgroundColor: colors.surface,
-    paddingTop: 5,
-    paddingBottom: 5,
-    ...shadow.card
+    paddingTop: 3,
+    paddingBottom: 3,
+    ...shadow.soft
   },
   containerFocused: {
     borderColor: colors.blue,
@@ -270,27 +281,63 @@ const styles = StyleSheet.create({
     elevation: 3
   },
   composerRow: {
-    minHeight: 42,
+    minHeight: 38,
     flexDirection: "row",
     alignItems: "center"
   },
+  contextRow: {
+    minHeight: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 10,
+    paddingTop: 2
+  },
+  contextIdentity: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5
+  },
+  contextLabel: {
+    color: colors.nav,
+    fontSize: typography.tiny,
+    fontWeight: "900",
+    letterSpacing: 0.2
+  },
+  contextStatus: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4
+  },
+  contextStatusDot: {
+    width: 5,
+    height: 5,
+    borderRadius: radius.pill,
+    backgroundColor: colors.green
+  },
+  contextStatusText: {
+    color: colors.textMuted,
+    fontSize: typography.tiny,
+    fontWeight: "800"
+  },
   opaiControl: {
-    minWidth: 58,
-    height: 40,
-    alignItems: "flex-start",
+    height: 38,
+    alignItems: "center",
     justifyContent: "center",
-    borderRightWidth: 1,
-    borderRightColor: colors.divider,
-    paddingHorizontal: spacing.md
+    paddingLeft: 10,
+    paddingRight: 4
   },
   opaiLabel: {
     color: colors.nav,
     fontSize: typography.body,
-    fontWeight: "900"
+    fontWeight: "900",
+    lineHeight: 18,
+    includeFontPadding: false
   },
   attachmentTray: {
     gap: 5,
-    marginBottom: 5
+    marginBottom: 4,
+    paddingHorizontal: 8
   },
   attachmentPill: {
     minHeight: 30,
@@ -348,20 +395,23 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     minWidth: 0,
-    minHeight: 40,
+    height: 38,
     color: colors.text,
     fontSize: typography.body,
-    fontWeight: "700",
-    paddingHorizontal: spacing.md,
-    paddingVertical: 0
+    fontWeight: "600",
+    lineHeight: 18,
+    paddingLeft: 5,
+    paddingRight: 4,
+    paddingVertical: 0,
+    textAlignVertical: "center"
   },
   controls: {
-    minHeight: 34,
+    minHeight: 32,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: spacing.sm,
-    paddingHorizontal: spacing.md
+    paddingHorizontal: 8
   },
   leftActions: {
     flexDirection: "row",
@@ -374,12 +424,10 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent"
   },
   composerAction: {
-    width: 34,
-    height: 40,
+    width: 32,
+    height: 38,
     alignItems: "center",
-    justifyContent: "center",
-    borderLeftWidth: 1,
-    borderLeftColor: colors.divider
+    justifyContent: "center"
   },
   actionPressed: {
     opacity: 0.65
@@ -388,8 +436,9 @@ const styles = StyleSheet.create({
     opacity: 0.45
   },
   sendButton: {
-    width: 34,
-    height: 40,
+    width: 32,
+    height: 38,
+    marginRight: 3,
     borderRadius: 0,
     backgroundColor: "transparent"
   }

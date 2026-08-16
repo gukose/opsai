@@ -6,6 +6,7 @@ import com.hotelopai.employee.domain.EmployeeStatus
 import com.hotelopai.shared.kernel.UuidV7Generator
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.UUID
@@ -81,6 +82,40 @@ class DeterministicAssignmentServiceTest {
         )
 
         assertEquals(null, assignment)
+    }
+
+    @Test
+    fun `equal top scores require supervisor instead of employee number tie break`() {
+        val hotelId = UuidV7Generator.generate()
+        val departmentId = UuidV7Generator.generate()
+        val skillId = UuidV7Generator.generate()
+        val first = employee(hotelId, "E-001", "First", departmentId, setOf(skillId))
+        val second = employee(hotelId, "E-002", "Second", departmentId, setOf(skillId))
+        val service = DefaultDeterministicAssignmentService(FakeEmployeeRepository(listOf(first, second)))
+
+        val decision = service.evaluate(
+            AssignmentCriteria(hotelId = hotelId, departmentId = departmentId, requiredSkillId = skillId),
+            Instant.parse("2026-07-08T10:00:00Z")
+        )
+
+        assertNull(decision.assignment)
+        assertEquals("AMBIGUOUS", decision.outcome)
+        assertEquals(2, decision.candidates.size)
+    }
+
+    @Test
+    fun `urgent priority does not bypass the same eligibility and ranking policy`() {
+        val hotelId = UuidV7Generator.generate()
+        val departmentId = UuidV7Generator.generate()
+        val available = employee(hotelId, "E-010", "Available", departmentId, emptySet())
+        val service = DefaultDeterministicAssignmentService(FakeEmployeeRepository(listOf(available)))
+        val normalCriteria = AssignmentCriteria(hotelId = hotelId, departmentId = departmentId)
+
+        val normal = service.evaluate(normalCriteria, Instant.parse("2026-07-08T10:00:00Z"))
+        val urgent = service.evaluate(normalCriteria.copy(emergency = true), Instant.parse("2026-07-08T10:00:00Z"))
+
+        assertEquals(normal.assignment?.assigneeId, urgent.assignment?.assigneeId)
+        assertEquals(normal.candidates, urgent.candidates)
     }
 
     private fun employee(

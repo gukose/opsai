@@ -6,6 +6,9 @@ import com.hotelopai.task.application.TaskAssignmentFilter
 import com.hotelopai.task.application.TaskPageRequest
 import com.hotelopai.task.application.TaskSearchQuery
 import com.hotelopai.task.application.TaskLifecycleService
+import com.hotelopai.task.application.SupervisorTaskAssignmentService
+import com.hotelopai.task.application.TaskAssignmentCandidateQuery
+import com.hotelopai.task.application.AssignmentCandidateView
 import com.hotelopai.task.application.TaskAttachmentLinkService
 import com.hotelopai.task.domain.TaskPriority
 import com.hotelopai.task.domain.TaskStatus
@@ -24,7 +27,9 @@ import java.time.Instant
 class TaskController(
     private val taskLifecycleService: TaskLifecycleService,
     private val taskAttachmentLinkService: TaskAttachmentLinkService,
-    private val currentUserContextResolver: CurrentUserContextResolver
+    private val currentUserContextResolver: CurrentUserContextResolver,
+    private val supervisorTaskAssignmentService: SupervisorTaskAssignmentService,
+    private val taskAssignmentCandidateQuery: TaskAssignmentCandidateQuery
 ) {
     @PostMapping
     @PreAuthorize(PermissionExpressions.TASK_CREATE)
@@ -105,14 +110,25 @@ class TaskController(
     fun assignTask(
         @PathVariable taskId: String,
         @RequestBody request: AssignTaskRequest
-    ): TaskResponse =
-        TaskResponse.from(
-            taskLifecycleService.assignTask(
+    ): TaskResponse {
+        val current = currentUserContextResolver.current()
+        return TaskResponse.from(
+            supervisorTaskAssignmentService.assign(
                 taskId = taskId,
-                hotelId = currentUserContextResolver.current().hotelId,
+                hotelId = current.hotelId,
+                actorUserId = current.userId,
                 request = request.toCommand()
             )
         )
+    }
+
+    @GetMapping("/{taskId}/assignment-candidates")
+    @PreAuthorize(PermissionExpressions.TASK_ASSIGN)
+    fun assignmentCandidates(@PathVariable taskId: String): List<AssignmentCandidateView> {
+        val current = currentUserContextResolver.current()
+        val task = taskLifecycleService.getTaskForHotel(taskId, current.hotelId)
+        return taskAssignmentCandidateQuery.candidates(task, Instant.now())
+    }
 
     @PostMapping("/{taskId}/start")
     @PreAuthorize(PermissionExpressions.TASK_START)

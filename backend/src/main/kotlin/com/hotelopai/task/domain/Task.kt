@@ -32,9 +32,16 @@ data class Task(
     }
 
     fun assign(assignment: TaskAssignment, now: Instant = Instant.now()): Task {
-        TaskWorkflowDefinition.requireTransition(status, TaskStatus.ASSIGNED)
+        require(!isTerminal()) { "Cannot assign a terminal task" }
+        val nextStatus = when (status) {
+            TaskStatus.CREATED, TaskStatus.OVERDUE -> {
+                TaskWorkflowDefinition.requireTransition(status, TaskStatus.ASSIGNED)
+                TaskStatus.ASSIGNED
+            }
+            else -> status
+        }
         return copy(
-            status = TaskStatus.ASSIGNED,
+            status = nextStatus,
             assignment = assignment.copy(assignedAt = now),
             unassignedReasonCode = null,
             updatedAt = now

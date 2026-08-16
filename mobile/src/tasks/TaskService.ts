@@ -3,6 +3,7 @@ import { HttpTaskApi, TaskListFilters } from "../api/task/TaskApi";
 import { MobileHotelOpAiClient } from "../api/hotelOpAiClient";
 import {
   TaskDetail,
+  AssignmentCandidate,
   TaskFilterState,
   taskAttachmentFromResponse,
   taskDetailFromResponse,
@@ -67,6 +68,32 @@ export class TaskService {
 
   async cancelTask(taskId: string): Promise<TaskDetail> {
     return taskDetailFromResponse(await this.taskApi.cancelTask(taskId));
+  }
+
+  async assignmentCandidates(taskId: string): Promise<AssignmentCandidate[]> {
+    return this.authorizedJson<AssignmentCandidate[]>(`/api/v1/tasks/${taskId}/assignment-candidates`, { method: "GET" });
+  }
+
+  async assignTask(taskId: string, candidate: AssignmentCandidate): Promise<TaskDetail> {
+    const response = await this.authorizedJson<import("../api/task/TaskDtos").TaskResponseDto>(
+      `/api/v1/tasks/${taskId}/assign`,
+      {
+        method: "POST",
+        body: JSON.stringify({ assigneeType: "USER", assigneeId: candidate.assigneeId, displayName: candidate.displayName })
+      }
+    );
+    return taskDetailFromResponse(response);
+  }
+
+  private async authorizedJson<T>(path: string, init: RequestInit): Promise<T> {
+    const token = this.accessTokenProvider();
+    if (!token) throw new Error("Authentication required");
+    const response = await fetch(`${appApiBaseUrl}${path}`, {
+      ...init,
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(init.headers ?? {}) }
+    });
+    if (!response.ok) throw new Error(`Assignment request failed with ${response.status}`);
+    return response.json() as Promise<T>;
   }
 }
 

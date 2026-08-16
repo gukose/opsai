@@ -3,7 +3,6 @@ import {
   CheckSquare,
   Home,
   Settings,
-  Sparkles,
   User
 } from "lucide-react-native";
 import { ComponentType } from "react";
@@ -23,7 +22,6 @@ type NavigationItem = {
 const items: NavigationItem[] = [
   { key: "home", icon: Home, label: "Home" },
   { key: "tasks", icon: CheckSquare, label: "My Tasks" },
-  { key: "assistant", icon: Sparkles, label: "Assistant" },
   { key: "operations", icon: Settings, label: "Operations" },
   { key: "profile", icon: User, label: "Profile" }
 ];

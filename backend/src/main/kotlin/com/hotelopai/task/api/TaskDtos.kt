@@ -122,6 +122,9 @@ data class TaskResponse(
             "NO_REQUIRED_SKILL" -> "No active employee has the required skill."
             "NO_AVAILABLE_EMPLOYEE" -> "Eligible employees are currently unavailable."
             "CAPACITY_EXCEEDED" -> "Eligible employees are currently at capacity."
+            "AMBIGUOUS_CANDIDATES" -> "Multiple equally suitable employees require supervisor assignment."
+            "UNKNOWN_REQUIRED_SKILL" -> "The required skill could not be determined confidently."
+            "UNKNOWN_DEPARTMENT" -> "The responsible department could not be determined confidently."
             else -> "Supervisor assignment is required."
         }
     }

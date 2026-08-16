@@ -91,7 +91,9 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
     completeSelectedTask,
     cancelSelectedTask,
     startHomeTask,
-    resumeHomeTask
+    resumeHomeTask,
+    assignmentCandidates,
+    assignSelectedTask
   } = useTaskBoardState(accessToken, currentUser, refreshAccessToken);
   const {
     summary: dashboardSummary,
@@ -313,6 +315,8 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
             onResumeTask={resumeSelectedTask}
             onCompleteTask={completeSelectedTask}
             onCancelTask={cancelSelectedTask}
+            assignmentCandidates={assignmentCandidates}
+            onAssignTask={assignSelectedTask}
           />
         ) : activeSection === "knowledge" && canUseKnowledgeAssistant ? (
           <KnowledgeAssistantScreen accessToken={accessToken} currentUser={currentUser} />
@@ -331,8 +335,8 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
         )}
         <View style={[styles.footer, isDesktop ? styles.footerDesktop : null]}>
           {isHomeSurface ? (
-            <>
-            <Composer
+            <View style={isTablet && !isDesktop ? styles.composerTablet : null}>
+              <Composer
               onSend={async (text, attachments, transcript, observations = []) => {
                 if (assistantBackendEnabled && attachments.some((attachment) => attachment.storageStatus !== "REGISTERED")) {
                   setAttachmentError("Register attachment metadata before sending.");
@@ -437,8 +441,8 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
                 />
               ) : null}
               disabled={assistantActionDisabled}
-            />
-            </>
+              />
+            </View>
           ) : null}
           <BottomNavigation
             activeKey={activeSection}
@@ -510,6 +514,9 @@ const styles = StyleSheet.create({
   footerDesktop: {
     paddingHorizontal: 24,
     paddingBottom: 8
+  },
+  composerTablet: {
+    paddingHorizontal: 12
   },
   errorBanner: {
     marginHorizontal: 13,

@@ -53,12 +53,13 @@ const styles = StyleSheet.create({
     marginTop: 5,
     borderWidth: 1,
     borderColor: colors.cardBorder,
-    borderRadius: 15,
+    borderBottomColor: colors.divider,
+    borderRadius: radius.lg,
     backgroundColor: colors.surface,
     paddingHorizontal: 9,
     paddingTop: 8,
     paddingBottom: 5,
-    ...shadow.card
+    ...shadow.soft
   },
   header: {
     minHeight: 30,

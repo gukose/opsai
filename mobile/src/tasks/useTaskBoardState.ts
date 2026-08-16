@@ -12,6 +12,7 @@ import {
   emptyTaskFilters,
   shouldClearVisibleTasksBeforeLoad,
   TaskDetail,
+  AssignmentCandidate,
   TaskFilterState,
   TaskSummary,
   taskDetailFromResponse
@@ -41,6 +42,8 @@ type TaskBoardState = {
   cancelSelectedTask: () => Promise<void>;
   startHomeTask: () => Promise<void>;
   resumeHomeTask: () => Promise<void>;
+  assignmentCandidates: AssignmentCandidate[];
+  assignSelectedTask: (candidate: AssignmentCandidate) => Promise<void>;
 };
 
 type TaskCommand = (taskId: string) => Promise<TaskDetail>;
@@ -72,6 +75,7 @@ export function useTaskBoardState(
   const [staleReason, setStaleReason] = useState<string | null>(null);
   const [cachedAt, setCachedAt] = useState<string | null>(null);
   const [filters, setFilters] = useState<TaskFilterState>(emptyTaskFilters);
+  const [assignmentCandidates, setAssignmentCandidates] = useState<AssignmentCandidate[]>([]);
   const selectedTaskIdRef = useRef<string | null>(selectedTaskId);
   const homeTaskRef = useRef<TaskSummary | null>(useMockTasks ? mockTaskFromSample() : null);
   const inFlightRef = useRef(false);
@@ -207,13 +211,18 @@ export function useTaskBoardState(
         setIsRefreshing(true);
         const detail = await service.getTask(taskId);
         setSelectedTask(detail);
+        if (currentUser?.permissions?.some((permission) => permission.code === "TASK_ASSIGN")) {
+          setAssignmentCandidates(await service.assignmentCandidates(taskId));
+        } else {
+          setAssignmentCandidates([]);
+        }
       } catch (error) {
         setErrorMessage(getAppApiErrorMessage(error));
       } finally {
         setIsRefreshing(false);
       }
     },
-    [accessToken, service, useMockTasks]
+    [accessToken, currentUser?.permissions, service, useMockTasks]
   );
 
   const runCommand = useCallback(
@@ -314,7 +323,9 @@ export function useTaskBoardState(
     completeSelectedTask: async () => runCommand("TASK_COMPLETE",(taskId) => service.completeTask(taskId)),
     cancelSelectedTask: async () => runCommand(null,(taskId) => service.cancelTask(taskId)),
     startHomeTask: async () => runHomeCommand((taskId) => service.startTask(taskId)),
-    resumeHomeTask: async () => runHomeCommand((taskId) => service.resumeTask(taskId))
+    resumeHomeTask: async () => runHomeCommand((taskId) => service.resumeTask(taskId)),
+    assignmentCandidates,
+    assignSelectedTask: async (candidate) => runCommand(null, (taskId) => service.assignTask(taskId, candidate))
   };
 }
 
@@ -344,7 +355,9 @@ function taskSummaryFromDetail(task: TaskDetail): TaskSummary {
     assignmentLabel: task.assignmentLabel,
     updatedAt: task.updatedAt,
     intentType: task.intentType,
-    source: task.source
+    source: task.source,
+    unassignedReasonCode: task.unassignedReasonCode,
+    unassignedReason: task.unassignedReason
   };
 }
 
@@ -360,7 +373,9 @@ function mockTaskFromSample(): TaskSummary {
     assignmentLabel: "Housekeeping",
     updatedAt: new Date().toISOString(),
     intentType: "HOUSEKEEPING",
-    source: "STATIC_MOCK"
+    source: "STATIC_MOCK",
+    unassignedReasonCode: null,
+    unassignedReason: null
   };
 }
 

@@ -4,7 +4,7 @@ import { CalendarDays, Clock3, Flag, MapPin, Play, Pause, RotateCcw, Ban, CheckC
 import { LucideProps } from "lucide-react-native";
 
 import { colors, radius, shadow, spacing, typography } from "../../theme/tokens";
-import { TaskDetail } from "../../tasks/types";
+import { AssignmentCandidate, TaskDetail } from "../../tasks/types";
 import { formatDateTime, formatSlaCountdown } from "../../tasks/formatters";
 import { formatAttachmentSize } from "../../assistant/attachmentMetadata";
 import { TaskStatusChip } from "./TaskStatusChip";
@@ -17,6 +17,8 @@ type TaskDetailCardProps = {
   onComplete?: () => void;
   onCancel?: () => void;
   disabled?: boolean;
+  assignmentCandidates?: AssignmentCandidate[];
+  onAssign?: (candidate: AssignmentCandidate) => void;
 };
 
 export function TaskDetailCard({
@@ -26,7 +28,9 @@ export function TaskDetailCard({
   onResume,
   onComplete,
   onCancel,
-  disabled
+  disabled,
+  assignmentCandidates = [],
+  onAssign
 }: TaskDetailCardProps) {
   const actions = getAvailableActions(task.status);
 
@@ -57,6 +61,31 @@ export function TaskDetailCard({
         <InfoChip label="Intent" value={task.intentType} />
         <InfoChip label="Source" value={task.source} />
       </View>
+
+      {onAssign ? (
+        <View style={styles.assignmentPanel}>
+          <Text style={styles.attachmentSectionTitle}>{task.assignmentLabel ? "Reassign" : "Needs Assignment"}</Text>
+          {assignmentCandidates.length === 0 ? (
+            <Text style={styles.attachmentEmpty}>No active hotel employees are available for manual assignment.</Text>
+          ) : assignmentCandidates.map((candidate) => (
+            <Pressable
+              key={candidate.assigneeId}
+              accessibilityRole="button"
+              disabled={disabled}
+              onPress={() => onAssign(candidate)}
+              style={styles.assignmentCandidate}
+            >
+              <View style={styles.assignmentCandidateBody}>
+                <Text style={styles.assignmentCandidateName}>{candidate.displayName}</Text>
+                <Text style={styles.assignmentCandidateMeta}>
+                  {candidate.skillCodes.join(", ")} · {candidate.onShift ? "On shift" : "Off shift"} · {candidate.available ? "Available" : "Busy"} · workload {candidate.workload}
+                </Text>
+              </View>
+              <Text style={styles.assignLabel}>Assign</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
 
       <View style={styles.infoRow}>
         <InfoChip label="Assignment" value={task.assignmentLabel ?? "Unassigned"} />
@@ -377,6 +406,40 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.tiny,
     fontWeight: "700"
+  },
+  assignmentPanel: {
+    marginTop: 10,
+    gap: 6
+  },
+  assignmentCandidate: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMuted,
+    paddingHorizontal: 9,
+    paddingVertical: 7
+  },
+  assignmentCandidateBody: {
+    flex: 1,
+    minWidth: 0
+  },
+  assignmentCandidateName: {
+    color: colors.text,
+    fontSize: typography.caption,
+    fontWeight: "800"
+  },
+  assignmentCandidateMeta: {
+    marginTop: 2,
+    color: colors.textMuted,
+    fontSize: typography.tiny,
+    fontWeight: "700"
+  },
+  assignLabel: {
+    color: colors.blue,
+    fontSize: typography.caption,
+    fontWeight: "900"
   },
   actionButton: {
     minWidth: 84,

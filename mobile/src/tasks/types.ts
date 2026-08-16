@@ -24,6 +24,18 @@ export type TaskSummary = {
   updatedAt: string;
   intentType: string;
   source: string;
+  unassignedReasonCode: string | null;
+  unassignedReason: string | null;
+};
+
+export type AssignmentCandidate = {
+  assigneeId: string;
+  displayName: string;
+  skillCodes: string[];
+  onShift: boolean;
+  available: boolean;
+  workload: number;
+  score: number;
 };
 
 export type TaskDetail = TaskSummary & {
@@ -67,7 +79,9 @@ export function taskSummaryFromResponse(task: TaskResponseDto): TaskSummary {
     assignmentLabel: task.assignment?.displayName ?? null,
     updatedAt: task.updatedAt,
     intentType: task.intentType,
-    source: task.source
+    source: task.source,
+    unassignedReasonCode: task.unassignedReasonCode ?? null,
+    unassignedReason: task.unassignedReason ?? null
   };
 }
 

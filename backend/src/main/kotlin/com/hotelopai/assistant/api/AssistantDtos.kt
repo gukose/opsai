@@ -251,6 +251,8 @@ data class AssistantConversationResponse(
             val conversation = result.conversation
 
             return when {
+                result.createdTaskId != null && result.needsAssignment ->
+                    "Task created. A supervisor needs to assign it."
                 result.createdTaskId != null -> "Task created successfully. Task ID: ${result.createdTaskId}"
                 result.taskCreationCandidate != null -> "I have enough information. Please review the task."
                 conversation.followUpQuestion != null -> conversation.followUpQuestion.prompt

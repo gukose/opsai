@@ -76,6 +76,45 @@ class AutomaticTaskAssignmentIntegrationTest : PostgresIntegrationTestSupport() 
     }
 
     @Test
+    fun `electrical task selects the only on-shift electrician`() {
+        val f = fixture("electrical", "MAINTENANCE", "ELECTRICAL")
+        val electrician = employee(f, "ELECTRIC-1", setOf(f.skill.id))
+        activeShift(f.hotel.id, electrician.id)
+
+        val task = create(f.hotel.id, TaskIntentType.MAINTENANCE, "Room 401 bathroom light is not working", TaskSource.ASSISTANT)
+
+        assertThat(task.status).isEqualTo(TaskStatus.ASSIGNED)
+        assertThat(task.assignment?.assigneeId).isEqualTo(electrician.id.toString())
+    }
+
+    @Test
+    fun `equally suitable employees remain unassigned for supervisor`() {
+        val f = fixture("ambiguous", "MAINTENANCE", "HVAC_REPAIR")
+        val first = employee(f, "TECH-A", setOf(f.skill.id))
+        val second = employee(f, "TECH-B", setOf(f.skill.id))
+        activeShift(f.hotel.id, first.id)
+        activeShift(f.hotel.id, second.id)
+
+        val task = create(f.hotel.id, TaskIntentType.MAINTENANCE, "Room 302 HVAC failure", TaskSource.ASSISTANT)
+
+        assertThat(task.status).isEqualTo(TaskStatus.CREATED)
+        assertThat(task.assignment).isNull()
+        assertThat(task.unassignedReasonCode).isEqualTo("AMBIGUOUS_CANDIDATES")
+    }
+
+    @Test
+    fun `generic maintenance with unresolved skill requires supervisor`() {
+        val f = fixture("unknown-skill", "MAINTENANCE", "HVAC_REPAIR")
+        val technician = employee(f, "TECH-GENERIC", setOf(f.skill.id))
+        activeShift(f.hotel.id, technician.id)
+
+        val task = create(f.hotel.id, TaskIntentType.MAINTENANCE, "Room 302 needs maintenance", TaskSource.ASSISTANT)
+
+        assertThat(task.status).isEqualTo(TaskStatus.CREATED)
+        assertThat(task.unassignedReasonCode).isEqualTo("UNKNOWN_REQUIRED_SKILL")
+    }
+
+    @Test
     fun `checkout housekeeping task selects on-shift room attendant`() {
         val f = fixture("checkout", "HOUSEKEEPING", "ROOM_CLEANING")
         val housekeeper = employee(f, "HK-1", setOf(f.skill.id))

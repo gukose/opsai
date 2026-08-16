@@ -187,6 +187,7 @@ class PermissionMatrixIntegrationTest : PostgresIntegrationTestSupport() {
             RequestCheck("GET", "/api/v1/tasks/$taskId"),
             RequestCheck("POST", "/api/v1/tasks", createTaskBody(noPermissions.hotelId)),
             RequestCheck("GET", "/api/v1/tasks/$taskId/attachments"),
+            RequestCheck("GET", "/api/v1/tasks/$taskId/assignment-candidates"),
             RequestCheck("POST", "/api/v1/tasks/$taskId/assign", ASSIGN_BODY),
             RequestCheck("POST", "/api/v1/tasks/$taskId/start"),
             RequestCheck("POST", "/api/v1/tasks/$taskId/pause"),

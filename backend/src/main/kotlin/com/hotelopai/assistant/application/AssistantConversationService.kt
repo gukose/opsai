@@ -278,7 +278,8 @@ class AssistantConversationService(
             return ConversationTurnResult(
                 conversation = savedConversation,
                 taskCreationCandidate = candidate,
-                createdTaskId = createdTask.id.toString()
+                createdTaskId = createdTask.id.toString(),
+                needsAssignment = createdTask.assignment == null
             )
         } catch (exception: ConversationConcurrencyException) {
             outcome = "conflict"

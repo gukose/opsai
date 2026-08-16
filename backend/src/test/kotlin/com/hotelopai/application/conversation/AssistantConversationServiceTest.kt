@@ -7,6 +7,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import com.hotelopai.task.application.TaskLifecycleService
 import com.hotelopai.assistant.domain.ConversationState
@@ -34,6 +35,7 @@ class AssistantConversationServiceTest {
 
         assertEquals(ConversationState.TASK_CREATED, result.conversation.state)
         assertNotNull(result.createdTaskId)
+        assertTrue(result.needsAssignment)
         assertEquals(result.createdTaskId, result.conversation.createdTaskId)
         assertEquals(1, fixtures.taskRepository.findAll().size)
         val taskId = UUID.fromString(result.createdTaskId!!)

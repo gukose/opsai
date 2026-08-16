@@ -141,7 +141,15 @@ class NotificationService(
             }
         }
 
-        return NotificationRecipient.Role(DEFAULT_TASK_CREATED_ROLE)
+        return NotificationRecipient.Role(
+            when (task.intentType) {
+                com.hotelopai.task.domain.TaskIntentType.HOUSEKEEPING,
+                com.hotelopai.task.domain.TaskIntentType.MINIBAR,
+                com.hotelopai.task.domain.TaskIntentType.LAUNDRY,
+                com.hotelopai.task.domain.TaskIntentType.TRAY_REMOVAL -> "HOUSEKEEPING_SUPERVISOR"
+                else -> DEFAULT_TASK_CREATED_ROLE
+            }
+        )
     }
 
     private fun Notification.isAccessibleTo(currentUser: CurrentUserContext): Boolean =

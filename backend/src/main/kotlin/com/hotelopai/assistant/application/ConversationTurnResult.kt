@@ -6,5 +6,6 @@ import com.hotelopai.assistant.domain.TaskCreationCandidate
 data class ConversationTurnResult(
     val conversation: Conversation,
     val taskCreationCandidate: TaskCreationCandidate? = null,
-    val createdTaskId: String? = null
+    val createdTaskId: String? = null,
+    val needsAssignment: Boolean = false
 )

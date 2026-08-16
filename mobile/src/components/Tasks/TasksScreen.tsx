@@ -4,7 +4,7 @@ import { CircleCheckBig, ClipboardList } from "lucide-react-native";
 import { getCurrentUserDisplayName, getCurrentUserHotelLabel, getCurrentUserRoleCodes } from "../../auth/currentUserHelpers";
 import { colors, radius, shadow, spacing, typography } from "../../theme/tokens";
 import { CurrentUserSnapshot } from "../../session/sessionTypes";
-import { TaskDetail, TaskFilterState, TaskSummary, hasActiveTaskFilters } from "../../tasks/types";
+import { AssignmentCandidate, TaskDetail, TaskFilterState, TaskSummary, hasActiveTaskFilters } from "../../tasks/types";
 import { TaskListItem } from "./TaskListItem";
 import { TaskDetailCard } from "./TaskDetailCard";
 import { TaskEmptyState } from "./TaskEmptyState";
@@ -29,6 +29,8 @@ type TasksScreenProps = {
   onResumeTask: () => Promise<void>;
   onCompleteTask: () => Promise<void>;
   onCancelTask: () => Promise<void>;
+  assignmentCandidates: AssignmentCandidate[];
+  onAssignTask: (candidate: AssignmentCandidate) => Promise<void>;
 };
 
 export function TasksScreen({
@@ -50,9 +52,12 @@ export function TasksScreen({
   onPauseTask,
   onResumeTask,
   onCompleteTask,
-  onCancelTask
+  onCancelTask,
+  assignmentCandidates,
+  onAssignTask
 }: TasksScreenProps) {
   const taskCount = tasks.length;
+  const canAssignTasks = currentUser?.permissions?.some((permission) => permission.code === "TASK_ASSIGN") ?? false;
   const openTasks = tasks.filter((task) => task.status !== "COMPLETED" && task.status !== "CANCELLED");
   const displayName = getCurrentUserDisplayName(currentUser);
   const hotelLabel = getCurrentUserHotelLabel(currentUser);
@@ -139,6 +144,8 @@ export function TasksScreen({
                 void onCancelTask();
               }}
               disabled={isRefreshing}
+              assignmentCandidates={assignmentCandidates}
+              onAssign={canAssignTasks ? onAssignTask : undefined}
             />
           ) : null}
         </ScrollView>
@@ -219,7 +226,7 @@ function TaskFilterRow({
           onPress={() => onChange({ ...filters, assignment: filters.assignment === "mine" ? null : "mine" })}
         />
         <FilterChip
-          label="Unassigned"
+          label="Needs Assignment"
           active={filters.assignment === "unassigned"}
           onPress={() =>
             onChange({ ...filters, assignment: filters.assignment === "unassigned" ? null : "unassigned" })

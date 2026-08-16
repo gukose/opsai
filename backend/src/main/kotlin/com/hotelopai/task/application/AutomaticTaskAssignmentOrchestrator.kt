@@ -28,6 +28,20 @@ fun interface TaskCreationAssignmentOrchestrator {
     fun evaluate(task: Task, now: Instant): AutomaticAssignmentResult
 }
 
+data class AssignmentCandidateView(
+    val assigneeId: String,
+    val displayName: String,
+    val skillCodes: Set<String>,
+    val onShift: Boolean,
+    val available: Boolean,
+    val workload: Int,
+    val score: Int
+)
+
+fun interface TaskAssignmentCandidateQuery {
+    fun candidates(task: Task, now: Instant): List<AssignmentCandidateView>
+}
+
 object NoOpTaskCreationAssignmentOrchestrator : TaskCreationAssignmentOrchestrator {
     override fun evaluate(task: Task, now: Instant) =
         AutomaticAssignmentResult(null, "ORCHESTRATION_DISABLED")
@@ -41,7 +55,57 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
     private val skillRepository: SkillRepository,
     private val jdbc: NamedParameterJdbcTemplate,
     private val observability: OperationalObservability = OperationalObservability.noop()
-) : TaskCreationAssignmentOrchestrator {
+) : TaskCreationAssignmentOrchestrator, TaskAssignmentCandidateQuery {
+
+    override fun candidates(task: Task, now: Instant): List<AssignmentCandidateView> {
+        val requirement = resolveRequirement(task)
+        val employees = employeeRepository.findByHotelId(task.hotelId).filter { it.status == EmployeeStatus.ACTIVE }
+        val excluded = employees.filter { it.primaryRoleCode?.let(::isSupervisoryRole) == true }.map(Employee::id).toSet()
+        val shifts = activeShiftEmployeeIds(task.hotelId, now)
+        val workloads = workload(task.hotelId)
+        val decision = assignmentService.evaluate(
+            AssignmentCriteria(
+                hotelId = task.hotelId,
+                requiredSkillId = requirement.requiredSkillId,
+                departmentId = requirement.departmentId,
+                strictRequiredSkill = requirement.requiredSkillId != null,
+                employeeSkillLevels = skillLevels(task.hotelId),
+                activeShiftEmployeeIds = shifts,
+                requireActiveShift = true,
+                workloadByEmployeeId = workloads,
+                maximumWorkload = MAXIMUM_ACTIVE_WORKLOAD,
+                activeTaskEmployeeIds = activeTaskEmployeeIds(task.hotelId),
+                preferredArea = task.roomNumber,
+                unavailableEmployeeIds = excluded
+            ),
+            now
+        )
+        val skillCodeById = skillRepository.findByHotelId(task.hotelId).associate { it.id to it.code }
+        val rankedScore = decision.candidates.associate { it.employeeId to it.score }
+        val rankedIds = decision.candidates.map { it.employeeId }
+        val manualChoices = employees
+            .filterNot { it.id in excluded }
+            .filter { !requirement.departmentKnown || requirement.departmentId == null || it.departmentId == requirement.departmentId }
+            .sortedWith(
+                compareByDescending<Employee> { it.id in rankedIds }
+                    .thenByDescending { requirement.requiredSkillId != null && requirement.requiredSkillId in it.skillIds }
+                    .thenByDescending { it.id in shifts }
+                    .thenByDescending { it.operationalStatus.acceptsNormalWork() }
+                    .thenBy { workloads[it.id] ?: 0 }
+                    .thenBy { it.employeeNumber }
+            )
+        return manualChoices.map { employee ->
+                AssignmentCandidateView(
+                    assigneeId = (employee.userId ?: employee.id).toString(),
+                    displayName = employee.displayName,
+                    skillCodes = employee.skillIds.mapNotNull(skillCodeById::get).toSet(),
+                    onShift = employee.id in shifts,
+                    available = employee.operationalStatus.acceptsNormalWork(),
+                    workload = workloads[employee.id] ?: 0,
+                    score = rankedScore[employee.id] ?: Int.MIN_VALUE
+                )
+        }
+    }
 
     override fun evaluate(task: Task, now: Instant): AutomaticAssignmentResult {
         existing(task.id, task.hotelId)?.let { existing ->
@@ -51,16 +115,23 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         val requirement = resolveRequirement(task)
         val employees = employeeRepository.findByHotelId(task.hotelId)
             .filter { it.status == EmployeeStatus.ACTIVE }
+        val supervisorEmployeeIds = employees
+            .filter { employee -> employee.primaryRoleCode?.let(::isSupervisoryRole) == true }
+            .map(Employee::id)
+            .toSet()
+        val assignableEmployees = employees.filterNot { it.id in supervisorEmployeeIds }
         val activeShiftIds = activeShiftEmployeeIds(task.hotelId, now)
         val workload = workload(task.hotelId)
         val activeTaskIds = activeTaskEmployeeIds(task.hotelId)
         val skillLevels = skillLevels(task.hotelId)
 
         val reason = noCandidateReason(
-            employees = employees,
+            employees = assignableEmployees,
             departmentId = requirement.departmentId,
             requiredSkillId = requirement.requiredSkillId,
             requiredSkillKnown = requirement.requiredSkillKnown,
+            departmentKnown = requirement.departmentKnown,
+            skillResolutionRequired = requirement.skillResolutionRequired,
             activeShiftIds = activeShiftIds,
             workload = workload,
             maximumWorkload = MAXIMUM_ACTIVE_WORKLOAD
@@ -79,7 +150,8 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
                 workloadByEmployeeId = workload,
                 maximumWorkload = MAXIMUM_ACTIVE_WORKLOAD,
                 activeTaskEmployeeIds = activeTaskIds,
-                preferredArea = task.roomNumber
+                preferredArea = task.roomNumber,
+                unavailableEmployeeIds = supervisorEmployeeIds
             ),
             now
         ) else null
@@ -98,7 +170,10 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         }
         val result = AutomaticAssignmentResult(
             assignment = assignment,
-            reasonCode = if (assignment != null) "AUTO_ASSIGNED" else reason ?: "MANUAL_ASSIGNMENT_REQUIRED",
+            reasonCode = if (assignment != null) "AUTO_ASSIGNED" else reason ?: when (decision?.outcome) {
+                "AMBIGUOUS" -> "AMBIGUOUS_CANDIDATES"
+                else -> "MANUAL_ASSIGNMENT_REQUIRED"
+            },
             selectedEmployeeId = selectedEmployee?.id,
             candidateCount = decision?.candidates?.size ?: 0
         )
@@ -122,6 +197,8 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         }
         val skillCode = when {
             listOf("hvac", "air condition", "air-conditioning", "klima").any(text::contains) -> "HVAC_REPAIR"
+            listOf("electrical", "electric", "light", "lighting", "socket", "power").any(text::contains) -> "ELECTRICAL"
+            listOf("plumbing", "pipe", "faucet", "toilet", "drain", "leak").any(text::contains) -> "PLUMBING"
             task.intentType == TaskIntentType.HOUSEKEEPING -> "ROOM_CLEANING"
             task.intentType == TaskIntentType.MINIBAR || "minibar" in text -> "MINIBAR"
             else -> null
@@ -133,13 +210,23 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
             skills.firstOrNull { it.code.equals(code, true) } ?:
                 if (code == "HVAC_REPAIR") skills.firstOrNull { it.code.equals("HVAC", true) } else null
         }
-        return Requirement(department?.id, skill?.id, skillCode, skillCode == null || skill != null)
+        return Requirement(
+            department?.id,
+            skill?.id,
+            skillCode,
+            requiredSkillKnown = skillCode == null || skill != null,
+            departmentKnown = departmentCode != null && department != null,
+            skillResolutionRequired = task.intentType in setOf(TaskIntentType.MAINTENANCE, TaskIntentType.DAMAGE_REPORT)
+        )
     }
 
     private fun noCandidateReason(
         employees: List<Employee>, departmentId: UUID?, requiredSkillId: UUID?, requiredSkillKnown: Boolean,
+        departmentKnown: Boolean, skillResolutionRequired: Boolean,
         activeShiftIds: Set<UUID>, workload: Map<UUID, Int>, maximumWorkload: Int
     ): String? {
+        if (!departmentKnown) return "UNKNOWN_DEPARTMENT"
+        if (skillResolutionRequired && requiredSkillId == null) return "UNKNOWN_REQUIRED_SKILL"
         val departmental = employees.filter { departmentId == null || it.departmentId == departmentId }
         if (departmental.none { it.id in activeShiftIds }) return "NO_ACTIVE_SHIFT"
         val onShift = departmental.filter { it.id in activeShiftIds }
@@ -207,8 +294,12 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         .firstOrNull()
 
     private data class Requirement(
-        val departmentId: UUID?, val requiredSkillId: UUID?, val requiredSkillCode: String?, val requiredSkillKnown: Boolean
+        val departmentId: UUID?, val requiredSkillId: UUID?, val requiredSkillCode: String?, val requiredSkillKnown: Boolean,
+        val departmentKnown: Boolean, val skillResolutionRequired: Boolean
     )
+
+    private fun isSupervisoryRole(roleCode: String): Boolean =
+        roleCode == "GM" || roleCode == "ADMIN" || "SUPERVISOR" in roleCode || "MANAGER" in roleCode
 
     companion object {
         private const val MAXIMUM_ACTIVE_WORKLOAD = 5

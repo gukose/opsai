@@ -76,6 +76,14 @@ class DefaultDeterministicAssignmentService(
         val candidates = ranked.map { (employee, scored) -> AssignmentCandidate(employee.id,employee.displayName,scored.first,scored.second) }
         val selected = ranked.firstOrNull()?.first
         if(selected==null) return AssignmentDecision(null,candidates,"NO_CANDIDATE",if(criteria.emergency) "No eligible candidate; escalate to supervisor" else "No eligible candidate matched availability, shift, role, skill, and language rules")
+        if (ranked.size > 1 && ranked[0].second.first == ranked[1].second.first) {
+            return AssignmentDecision(
+                assignment = null,
+                candidates = candidates,
+                outcome = "AMBIGUOUS",
+                explanation = "Multiple equally suitable candidates require supervisor assignment"
+            )
+        }
         val assignment = TaskAssignment(
             assigneeType = TaskAssigneeType.USER,
             assigneeId = selected.id.toString(),
