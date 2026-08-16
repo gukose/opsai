@@ -144,7 +144,7 @@ export function Composer({
               <MessageSquareText color={colors.nav} size={11} strokeWidth={2.3} />
               <View style={styles.attachmentMeta}>
                 <Text style={styles.attachmentName} numberOfLines={1}>
-                  {voiceTranscript.source === "SERVER_STT" ? "Voice transcript" : "Client transcript"}
+                  {voiceTranscript.source === "SERVER_STT" ? "Ses kaydı · sunucu transkripti" : "Ses kaydı · cihaz transkripti"}
                 </Text>
                 <Text style={styles.attachmentState} numberOfLines={1}>
                   {voiceTranscript.source === "SERVER_STT" ? "Server transcribed" : "Client-provided · not server transcribed"} · {voiceTranscript.state}

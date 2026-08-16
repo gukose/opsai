@@ -29,7 +29,7 @@ export function TaskListItem({ task, active, onPress }: TaskListItemProps) {
             {task.title}
           </Text>
           <Text style={styles.description} numberOfLines={2}>
-            {task.description}
+            {`Problem: ${task.description}`}
           </Text>
           <View style={styles.metaRow}>
             <TaskStatusChip status={task.status} />
@@ -44,7 +44,7 @@ export function TaskListItem({ task, active, onPress }: TaskListItemProps) {
               <View style={styles.locationRow}>
                 <MapPin color={colors.textMuted} size={11} strokeWidth={2.2} />
                 <Text style={styles.location} numberOfLines={1}>
-                  {task.roomOrLocation}
+                  {formatLocation(task.roomOrLocation)}
                 </Text>
               </View>
             ) : null}
@@ -144,3 +144,8 @@ const styles = StyleSheet.create({
     fontWeight: "700"
   }
 });
+
+function formatLocation(value: string): string {
+  const room = value.match(/^Room\s+(.+)$/i);
+  return room ? `Lokasyon: ${room[1]} numaralı oda` : `Lokasyon: ${value}`;
+}

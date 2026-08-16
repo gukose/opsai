@@ -36,6 +36,7 @@ class AssistantAttachmentPersistenceRepository(
                 height_px,
                 storage_status,
                 storage_reference,
+                transcript_text,
                 registration_idempotency_key,
                 created_at,
                 updated_at
@@ -52,6 +53,7 @@ class AssistantAttachmentPersistenceRepository(
                 :heightPx,
                 :storageStatus,
                 :storageReference,
+                :transcriptText,
                 :registrationIdempotencyKey,
                 :createdAt,
                 :updatedAt
@@ -103,6 +105,7 @@ class AssistantAttachmentPersistenceRepository(
                     height_px,
                     storage_status,
                     storage_reference,
+                    transcript_text,
                     registration_idempotency_key,
                     created_at,
                     updated_at
@@ -146,6 +149,7 @@ class AssistantAttachmentPersistenceRepository(
                     height_px,
                     storage_status,
                     storage_reference,
+                    transcript_text,
                     registration_idempotency_key,
                     created_at,
                     updated_at
@@ -181,6 +185,7 @@ private fun RegisteredConversationAttachment.toSqlParameters(): MapSqlParameterS
         .addValue("heightPx", heightPx)
         .addValue("storageStatus", storageStatus.name)
         .addValue("storageReference", storageReference)
+        .addValue("transcriptText", transcriptText)
         .addValue("registrationIdempotencyKey", registrationIdempotencyKey)
         .addValue("createdAt", Timestamp.from(createdAt))
         .addValue("updatedAt", Timestamp.from(updatedAt))
@@ -205,6 +210,7 @@ private fun ResultSet.toRegisteredAttachment(): RegisteredConversationAttachment
         heightPx = getObject("height_px") as Int?,
         storageStatus = AttachmentStorageStatus.valueOf(getString("storage_status")),
         storageReference = getString("storage_reference"),
+        transcriptText = getString("transcript_text"),
         registrationIdempotencyKey = getString("registration_idempotency_key"),
         createdAt = getTimestamp("created_at").toInstant(),
         updatedAt = getTimestamp("updated_at").toInstant()

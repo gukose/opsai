@@ -1,4 +1,6 @@
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system/legacy";
+import * as ImageManipulator from "expo-image-manipulator";
 
 import { createLocalAttachmentMetadata } from "./attachmentMetadata";
 import type { LocalAttachmentMetadata } from "./types";
@@ -18,7 +20,7 @@ export async function selectImageFromGallery(
 ): Promise<LocalAttachmentMetadata | null> {
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ["images"],
-    quality: 1,
+    quality: 0.82,
     allowsMultipleSelection: false,
     exif: false,
     base64: false
@@ -41,7 +43,7 @@ export async function selectImageFromCamera(
 
   const result = await ImagePicker.launchCameraAsync({
     mediaTypes: ["images"],
-    quality: 1,
+    quality: 0.82,
     exif: false,
     base64: false
   });
@@ -53,42 +55,78 @@ export async function selectImageFromCamera(
   return createAttachmentFromPickedAsset(result.assets[0], existing, "camera");
 }
 
-export function createAttachmentFromPickedAsset(
+export async function createAttachmentFromPickedAsset(
   asset: PickedImageAsset,
   existing: LocalAttachmentMetadata[],
   source: "camera" | "gallery" | "web" = "gallery"
-): LocalAttachmentMetadata {
+): Promise<LocalAttachmentMetadata> {
   const uri = asset.uri?.trim();
   if (!uri) {
     throw new Error("Selected image did not include a local preview reference.");
   }
 
-  const mimeType = asset.mimeType?.trim().toLowerCase();
-  if (!mimeType) {
-    throw new Error("Selected image did not include a declared MIME type.");
-  }
-
-  if (!Number.isFinite(asset.fileSize) || !asset.fileSize || asset.fileSize < 1) {
-    throw new Error("Selected image did not include a declared file size.");
-  }
-
-  const widthPx = typeof asset.width === "number" ? asset.width : undefined;
-  const heightPx = typeof asset.height === "number" ? asset.height : undefined;
-  const originalFileName = normalizeFileName(asset.fileName, mimeType, source);
+  const inspected = await normalizeCameraAsset(uri, asset, source);
 
   return createLocalAttachmentMetadata(
     {
       id: localImageId(asset, uri, source),
-      originalFileName,
-      mimeType,
-      sizeBytes: asset.fileSize,
-      widthPx,
-      heightPx,
-      localReference: uri,
-      localUri: uri
+      originalFileName: inspected.fileName,
+      mimeType: inspected.mimeType,
+      sizeBytes: inspected.sizeBytes,
+      widthPx: inspected.widthPx,
+      heightPx: inspected.heightPx,
+      localReference: inspected.uri,
+      localUri: inspected.uri
     },
     existing
   );
+}
+
+async function normalizeCameraAsset(
+  uri: string,
+  asset: PickedImageAsset,
+  source: "camera" | "gallery" | "web"
+): Promise<{ uri: string; mimeType: string; fileName: string; sizeBytes: number; widthPx?: number; heightPx?: number }> {
+  const info = await FileSystem.getInfoAsync(uri);
+  const sizeBytes = info.exists && typeof info.size === "number" ? info.size : asset.fileSize ?? 0;
+  const declaredMime = asset.mimeType?.trim().toLowerCase() || "image/jpeg";
+  const needsJpeg = declaredMime === "image/heic" || declaredMime === "image/heif" || !["image/jpeg", "image/png", "image/webp"].includes(declaredMime);
+  if (sizeBytes < 1) {
+    throw new Error("Selected image is empty or unavailable on this device.");
+  }
+
+  if (sizeBytes <= 10_000_000 && !needsJpeg) {
+    return {
+      uri,
+      mimeType: declaredMime,
+      fileName: normalizeFileName(asset.fileName, declaredMime, source),
+      sizeBytes,
+      widthPx: typeof asset.width === "number" ? asset.width : undefined,
+      heightPx: typeof asset.height === "number" ? asset.height : undefined
+    };
+  }
+
+  const maxDimension = Math.max(asset.width ?? 0, asset.height ?? 0);
+  const actions = maxDimension > 2048
+    ? [{ resize: asset.width && asset.width >= (asset.height ?? 0) ? { width: 2048 } : { height: 2048 } }]
+    : [];
+  const compressed = await ImageManipulator.manipulateAsync(uri, actions, {
+    compress: 0.82,
+    format: ImageManipulator.SaveFormat.JPEG
+  });
+  const compressedInfo = await FileSystem.getInfoAsync(compressed.uri);
+  const compressedSize = compressedInfo.exists && typeof compressedInfo.size === "number" ? compressedInfo.size : 0;
+  if (compressedSize < 1 || compressedSize > 10_000_000) {
+    throw new Error("Selected image is larger than 10 MB after safe compression.");
+  }
+  return {
+    uri: compressed.uri,
+    mimeType: "image/jpeg",
+    fileName: `${source}-image.jpg`,
+    sizeBytes: compressedSize,
+    widthPx: compressed.width,
+    heightPx: compressed.height
+  };
 }
 
 function localImageId(asset: PickedImageAsset, uri: string, source: string): string {

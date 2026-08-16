@@ -49,6 +49,7 @@ test("task attachment response maps metadata and provenance without unsafe media
     originalFileName: "sink.jpg",
     declaredMimeType: "image/jpeg",
     declaredSizeBytes: 100,
+    transcript: "Room 302 air conditioning is not working",
     widthPx: 80,
     heightPx: 60,
     storageStatus: "REGISTERED",
@@ -63,6 +64,7 @@ test("task attachment response maps metadata and provenance without unsafe media
   assert.equal(mapped.sourceType, "VISION_ANALYSIS");
   assert.equal(mapped.analysisId, "analysis-1");
   assert.equal(mapped.analysisImportId, "import-1");
+  assert.equal(mapped.transcript, "Room 302 air conditioning is not working");
   assert.equal(JSON.stringify(mapped).includes("storageReference"), false);
   assert.equal(JSON.stringify(mapped).includes("downloadUrl"), false);
   assert.equal(JSON.stringify(mapped).includes("base64"), false);
@@ -76,6 +78,7 @@ test("assistant message provenance maps without vision fields", () => {
     originalFileName: "sink.jpg",
     declaredMimeType: "image/jpeg",
     declaredSizeBytes: 100,
+    transcript: null,
     widthPx: null,
     heightPx: null,
     storageStatus: "REGISTERED",

@@ -756,6 +756,7 @@ export interface components {
             declaredMimeType: string;
             /** Format: int64 */
             declaredSizeBytes: number;
+            transcript?: string | null;
             /** Format: int32 */
             widthPx?: number | null;
             /** Format: int32 */

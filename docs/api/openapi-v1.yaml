@@ -3953,6 +3953,10 @@ components:
         declaredSizeBytes:
           type: integer
           format: int64
+        transcript:
+          type:
+          - string
+          - "null"
         widthPx:
           type:
           - integer

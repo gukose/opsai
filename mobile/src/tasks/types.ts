@@ -58,6 +58,7 @@ export type TaskAttachmentMetadata = {
   originalFileName: string;
   declaredMimeType: string;
   declaredSizeBytes: number;
+  transcript: string | null;
   widthPx: number | null;
   heightPx: number | null;
   storageStatus: "REGISTERED";
@@ -75,7 +76,7 @@ export function taskSummaryFromResponse(task: TaskResponseDto): TaskSummary {
     status: task.status,
     priority: task.priority,
     slaDeadline: task.slaDeadline,
-    roomOrLocation: extractRoomOrLocation(task.title, task.description),
+    roomOrLocation: task.roomNumber?.trim() || extractRoomOrLocation(task.title, task.description),
     assignmentLabel: task.assignment?.displayName ?? null,
     updatedAt: task.updatedAt,
     intentType: task.intentType,
@@ -111,6 +112,7 @@ export function taskAttachmentFromResponse(attachment: TaskAttachmentResponseDto
     originalFileName: attachment.originalFileName,
     declaredMimeType: attachment.declaredMimeType,
     declaredSizeBytes: attachment.declaredSizeBytes,
+    transcript: attachment.transcript ?? null,
     widthPx: attachment.widthPx ?? null,
     heightPx: attachment.heightPx ?? null,
     storageStatus: registeredStorageStatus(attachment.storageStatus),

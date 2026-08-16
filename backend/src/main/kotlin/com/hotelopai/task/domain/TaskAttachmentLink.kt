@@ -42,6 +42,7 @@ data class TaskAttachmentLinkView(
     val originalFileName: String,
     val declaredMimeType: String,
     val declaredSizeBytes: Long,
+    val transcriptText: String?,
     val widthPx: Int?,
     val heightPx: Int?,
     val storageStatus: String,

@@ -1,6 +1,6 @@
 import { ComponentType } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { CalendarDays, Clock3, Flag, MapPin, Play, Pause, RotateCcw, Ban, CheckCheck, Image as ImageIcon } from "lucide-react-native";
+import { CalendarDays, Clock3, Flag, MapPin, Play, Pause, RotateCcw, Ban, CheckCheck, Image as ImageIcon, FileText } from "lucide-react-native";
 import { LucideProps } from "lucide-react-native";
 
 import { colors, radius, shadow, spacing, typography } from "../../theme/tokens";
@@ -46,13 +46,13 @@ export function TaskDetailCard({
         <TaskStatusChip status={task.status} />
       </View>
 
-      <Text style={styles.description}>{task.description}</Text>
+      <Text style={styles.description}>{`Problem: ${task.description}`}</Text>
 
       <View style={styles.metaGrid}>
         <DetailRow icon={Flag} label="Priority" value={task.priority} />
         <DetailRow icon={Clock3} label="SLA" value={formatSlaCountdown(task.slaDeadline)} />
         {task.roomOrLocation ? (
-          <DetailRow icon={MapPin} label="Location" value={task.roomOrLocation} />
+          <DetailRow icon={MapPin} label="Lokasyon" value={formatLocation(task.roomOrLocation)} />
         ) : null}
         <DetailRow icon={CalendarDays} label="Updated" value={formatDateTime(task.updatedAt)} />
       </View>
@@ -156,7 +156,7 @@ function TaskAttachmentSection({ task }: { task: TaskDetail }) {
         attachments.map((attachment) => (
           <View key={`${attachment.attachmentId}-${attachment.sourceType}`} style={styles.attachmentRow}>
             <View style={styles.detailIcon}>
-              <ImageIcon color={colors.blue} size={12} strokeWidth={2.2} />
+              {attachment.transcript ? <FileText color={colors.blue} size={12} strokeWidth={2.2} /> : <ImageIcon color={colors.blue} size={12} strokeWidth={2.2} />}
             </View>
             <View style={styles.attachmentBody}>
               <Text style={styles.attachmentName} numberOfLines={1}>{attachment.originalFileName}</Text>
@@ -164,6 +164,11 @@ function TaskAttachmentSection({ task }: { task: TaskDetail }) {
                 {attachment.type} · {attachment.declaredMimeType} · {formatAttachmentSize(attachment.declaredSizeBytes)}
                 {attachment.widthPx && attachment.heightPx ? ` · ${attachment.widthPx}x${attachment.heightPx}` : ""}
               </Text>
+              {attachment.transcript ? (
+                <Text style={styles.attachmentTranscript} numberOfLines={4}>
+                  {attachment.transcript}
+                </Text>
+              ) : null}
               <Text style={styles.attachmentMeta} numberOfLines={1}>
                 Registered metadata · {attachment.sourceType === "VISION_ANALYSIS" ? "Vision provenance" : "Assistant message"}
               </Text>
@@ -195,6 +200,11 @@ function DetailRow({ icon: Icon, label, value }: DetailRowProps) {
       </View>
     </View>
   );
+}
+
+function formatLocation(value: string): string {
+  const room = value.match(/^Room\s+(.+)$/i);
+  return room ? `${room[1]} numaralı oda` : value;
 }
 
 type InfoChipProps = {
@@ -406,6 +416,13 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: typography.tiny,
     fontWeight: "700"
+  },
+  attachmentTranscript: {
+    marginTop: 4,
+    color: colors.text,
+    fontSize: typography.caption,
+    lineHeight: 17,
+    fontWeight: "600"
   },
   assignmentPanel: {
     marginTop: 10,

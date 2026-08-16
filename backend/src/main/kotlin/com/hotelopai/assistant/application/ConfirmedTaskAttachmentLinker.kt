@@ -1,6 +1,7 @@
 package com.hotelopai.assistant.application
 
 import com.hotelopai.assistant.domain.AttachmentStorageStatus
+import com.hotelopai.assistant.domain.AttachmentType
 import com.hotelopai.assistant.domain.Conversation
 import com.hotelopai.assistant.domain.ImageObservationSource
 import com.hotelopai.observability.OperationalObservability
@@ -57,7 +58,7 @@ class ConfirmedTaskAttachmentLinkService(
         )
         val assistantMessageLinks = sourceMessages
             .flatMap { message ->
-                message.attachments
+                val registeredAttachments = message.attachments
                     .filter { it.storageStatus == AttachmentStorageStatus.REGISTERED }
                     .map { attachment ->
                         val attachmentId = parseUuid(attachment.id, "attachmentId")
@@ -83,6 +84,34 @@ class ConfirmedTaskAttachmentLinkService(
                             createdAt = now
                         )
                     }
+                val transcript = message.voiceTranscriptMetadata?.transcript?.takeIf { it.isNotBlank() }
+                    ?: message.voiceTranscript?.takeIf { it.isNotBlank() }
+                val transcriptAttachment = transcript?.let { text ->
+                    assistantAttachmentRepository.save(
+                        com.hotelopai.assistant.domain.RegisteredConversationAttachment(
+                            id = UUID.randomUUID(),
+                            conversationId = conversation.id,
+                            hotelId = conversation.hotelId,
+                            userId = conversation.userId,
+                            type = AttachmentType.DOCUMENT,
+                            originalFileName = "voice-transcript-${message.id}.txt".take(180),
+                            declaredMimeType = "text/plain",
+                            declaredSizeBytes = text.toByteArray(Charsets.UTF_8).size.toLong().coerceAtLeast(1),
+                            transcriptText = text,
+                            registrationIdempotencyKey = "voice-transcript:${conversation.id}:${message.id}",
+                            createdAt = now,
+                            updatedAt = now
+                        )
+                    ).let { registered ->
+                        TaskAttachmentLink(
+                            id = UUID.randomUUID(), taskId = taskId, attachmentId = registered.id,
+                            conversationId = conversation.id, hotelId = conversation.hotelId,
+                            userId = conversation.userId, sourceType = TaskAttachmentSourceType.ASSISTANT_MESSAGE,
+                            createdAt = now
+                        )
+                    }
+                }
+                registeredAttachments + listOfNotNull(transcriptAttachment)
             }
 
         val visionLinks = sourceMessages
