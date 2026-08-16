@@ -1,7 +1,8 @@
+import { AppState, type AppStateStatus } from "react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { assistantStaticMockEnabled } from "../config/assistantConfig";
-import { getAppApiErrorMessage } from "../api/client/AppApiError";
+import { getAppApiErrorMessage, isConnectivityFailure } from "../api/client/AppApiError";
 import { nextAssignedTask } from "../assistant/sampleConversation";
 import { CurrentUserSnapshot } from "../session/sessionTypes";
 import { defaultOfflineCache, taskListCacheKey } from "../offline/offlineCache";
@@ -10,7 +11,6 @@ import { AppApiError } from "../api/client/AppApiError";
 import { TaskService } from "./TaskService";
 import {
   emptyTaskFilters,
-  shouldClearVisibleTasksBeforeLoad,
   TaskDetail,
   AssignmentCandidate,
   TaskFilterState,
@@ -107,11 +107,6 @@ export function useTaskBoardState(
 
       if (!silent) {
         setIsLoading(true);
-        if (!useMockTasks && shouldClearVisibleTasksBeforeLoad(filtersRef.current)) {
-          setTasks([]);
-          setSelectedTask(null);
-          setSelectedTaskId(null);
-        }
       } else {
         setIsRefreshing(true);
       }
@@ -164,6 +159,11 @@ export function useTaskBoardState(
       } catch (error) {
         const message = getAppApiErrorMessage(error);
         setErrorMessage(message);
+        if (!isConnectivityFailure(error)) {
+          setStaleReason(null);
+          setCachedAt(null);
+          return;
+        }
         const key = scopedTaskCacheKey(currentUser, filtersRef.current);
         if (tasks.length === 0 && key) {
           const cached = await defaultOfflineCache.load<TaskSummary[]>(key);
@@ -195,6 +195,18 @@ export function useTaskBoardState(
   useEffect(() => {
     void loadTasks();
   }, [loadTasks, filters]);
+
+  useEffect(() => {
+    let previousState: AppStateStatus = AppState.currentState;
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      const becameActive = previousState !== "active" && nextState === "active";
+      previousState = nextState;
+      if (becameActive) {
+        void loadTasks(true);
+      }
+    });
+    return () => subscription.remove();
+  }, [loadTasks]);
 
   const selectTask = useCallback(
     async (taskId: string) => {
@@ -251,10 +263,10 @@ export function useTaskBoardState(
           await defaultOfflineMutationQueue.enqueue(scope,operation,taskId);
           setErrorMessage("Saved offline. This operation will sync when connectivity returns.");
         } else setErrorMessage(getAppApiErrorMessage(error));
+        return false;
       } finally {
         inFlightRef.current = false;
         setIsRefreshing(false);
-        return false;
       }
     },
     [selectedTaskId,currentUser]

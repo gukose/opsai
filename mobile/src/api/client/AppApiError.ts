@@ -73,3 +73,8 @@ export function getAppApiErrorMessage(error: unknown): string {
 
   return "Something went wrong. Please try again.";
 }
+
+/** Only transport failures mean the server could not be reached. HTTP/business/auth errors do not. */
+export function isConnectivityFailure(error: unknown): boolean {
+  return error instanceof AppApiError && (error.kind === "network" || error.kind === "timeout");
+}

@@ -1,3 +1,4 @@
+import { AppState, type AppStateStatus } from "react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { assistantDataSourceMode } from "../config/assistantConfig";
@@ -5,6 +6,7 @@ import { CurrentUserSnapshot } from "../session/sessionTypes";
 import { dashboardCacheKey, defaultOfflineCache } from "../offline/offlineCache";
 import { DashboardService } from "./DashboardService";
 import { DashboardSummary } from "./types";
+import { isConnectivityFailure } from "../api/client/AppApiError";
 
 type DashboardSummaryState = {
   summary: DashboardSummary | null;
@@ -52,7 +54,12 @@ export function useDashboardSummaryState(
       if (key) {
         void defaultOfflineCache.save(key, nextSummary);
       }
-    } catch {
+    } catch (error) {
+      if (!isConnectivityFailure(error)) {
+        setStaleReason(null);
+        setCachedAt(null);
+        return;
+      }
       const key = scopedDashboardCacheKey(currentUser);
       if (!summaryRef.current && key) {
         const cached = await defaultOfflineCache.load<DashboardSummary>(key);
@@ -69,6 +76,16 @@ export function useDashboardSummaryState(
 
   useEffect(() => {
     void refreshDashboard();
+  }, [refreshDashboard]);
+
+  useEffect(() => {
+    let previousState: AppStateStatus = AppState.currentState;
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      const becameActive = previousState !== "active" && nextState === "active";
+      previousState = nextState;
+      if (becameActive) void refreshDashboard();
+    });
+    return () => subscription.remove();
   }, [refreshDashboard]);
 
   return {
