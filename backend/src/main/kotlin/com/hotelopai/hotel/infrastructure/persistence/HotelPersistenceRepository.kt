@@ -13,7 +13,7 @@ class HotelPersistenceRepository(
 ) : HotelRepository {
     override fun save(hotel: Hotel): Hotel =
         HotelPersistenceMapper.toDomain(
-            hotelJpaRepository.saveAndFlush(HotelPersistenceMapper.toEntity(hotel))
+            hotelJpaRepository.save(HotelPersistenceMapper.toEntity(hotel))
         )
 
     override fun findById(id: UUID): Hotel? =

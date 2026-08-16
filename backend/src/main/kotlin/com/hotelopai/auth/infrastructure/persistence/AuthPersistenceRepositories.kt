@@ -20,7 +20,7 @@ class JpaPermissionRepositoryAdapter(
 ) : PermissionRepository {
     override fun save(permission: Permission): Permission =
         PermissionPersistenceMapper.toDomain(
-            permissionJpaRepository.saveAndFlush(PermissionPersistenceMapper.toEntity(permission))
+            permissionJpaRepository.save(PermissionPersistenceMapper.toEntity(permission))
         )
 
     override fun findById(id: UUID): Permission? =
@@ -40,7 +40,7 @@ class JpaRoleRepositoryAdapter(
 ) : RoleRepository {
     override fun save(role: Role): Role =
         RolePersistenceMapper.toDomain(
-            roleJpaRepository.saveAndFlush(
+            roleJpaRepository.save(
                 roleJpaRepository.findById(role.id).orElse(null)?.apply {
                     hotelId = role.hotelId
                     code = role.code
@@ -76,7 +76,7 @@ class JpaUserRepositoryAdapter(
             }
             UserPersistenceMapper.updateEntity(user, it)
         } ?: UserPersistenceMapper.toEntity(user)
-        return UserPersistenceMapper.toDomain(userJpaRepository.saveAndFlush(entity))
+        return UserPersistenceMapper.toDomain(userJpaRepository.save(entity))
     }
 
     override fun findById(id: UUID): User? =

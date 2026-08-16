@@ -17,7 +17,7 @@ class JpaDepartmentRepositoryAdapter(
 ) : DepartmentRepository {
     override fun save(department: Department): Department =
         DepartmentPersistenceMapper.toDomain(
-            departmentJpaRepository.saveAndFlush(DepartmentPersistenceMapper.toEntity(department))
+            departmentJpaRepository.save(DepartmentPersistenceMapper.toEntity(department))
         )
 
     @Transactional(readOnly = true)
@@ -40,7 +40,7 @@ class JpaSkillRepositoryAdapter(
 ) : SkillRepository {
     override fun save(skill: Skill): Skill =
         SkillPersistenceMapper.toDomain(
-            skillJpaRepository.saveAndFlush(SkillPersistenceMapper.toEntity(skill))
+            skillJpaRepository.save(SkillPersistenceMapper.toEntity(skill))
         )
 
     @Transactional(readOnly = true)
@@ -68,7 +68,7 @@ class JpaEmployeeRepositoryAdapter(
             }
             EmployeePersistenceMapper.updateEntity(employee, it)
         } ?: EmployeePersistenceMapper.toEntity(employee)
-        return EmployeePersistenceMapper.toDomain(employeeJpaRepository.saveAndFlush(entity))
+        return EmployeePersistenceMapper.toDomain(employeeJpaRepository.save(entity))
     }
 
     @Transactional(readOnly = true)

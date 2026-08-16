@@ -26,15 +26,20 @@ import com.hotelopai.task.domain.TaskIntentType
 import com.hotelopai.task.domain.TaskPriority
 import com.hotelopai.task.domain.TaskSource
 import org.springframework.boot.ApplicationRunner
+import org.springframework.boot.availability.AvailabilityChangeEvent
+import org.springframework.boot.availability.ReadinessState
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Profile
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.PlatformTransactionManager
+import org.springframework.transaction.support.TransactionTemplate
+import org.slf4j.LoggerFactory
 import java.sql.Timestamp
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -69,7 +74,24 @@ data class DemoBootstrapProperties(
 class DemoBootstrapConfiguration {
     @Bean
     @ConditionalOnProperty(prefix = "ops.ai.demo.bootstrap", name = ["enabled"], havingValue = "true")
-    fun demoBootstrapRunner(service: DemoBootstrapService): ApplicationRunner = ApplicationRunner { service.bootstrap() }
+    fun demoBootstrapRunner(service: DemoBootstrapService, publisher: ApplicationEventPublisher): ApplicationRunner = ApplicationRunner {
+        publisher.publishEvent(AvailabilityChangeEvent(this, ReadinessState.REFUSING_TRAFFIC))
+        try {
+            service.bootstrap()
+            publisher.publishEvent(AvailabilityChangeEvent(this, ReadinessState.ACCEPTING_TRAFFIC))
+        } catch (failure: Throwable) {
+            publisher.publishEvent(AvailabilityChangeEvent(this, ReadinessState.REFUSING_TRAFFIC))
+            throw failure
+        }
+    }
+}
+
+@Service
+@Profile("demo")
+class DemoBootstrapTransactionRunner(transactionManager: PlatformTransactionManager) {
+    private val template = TransactionTemplate(transactionManager)
+
+    fun <T> run(block: () -> T): T = template.execute { block() }!!
 }
 
 @Service
@@ -85,75 +107,114 @@ class DemoBootstrapService(
     private val skills: SkillRepository,
     private val passwordHasher: PasswordHasher,
     private val tasks: TaskLifecycleService,
-    private val jdbc: NamedParameterJdbcTemplate
+    private val jdbc: NamedParameterJdbcTemplate,
+    private val transactions: DemoBootstrapTransactionRunner
 ) {
-    @Transactional
     fun bootstrap() {
         if (!properties.enabled) return
-        val hotel = hotels.findByCode(HOTEL_CODE) ?: hotels.save(Hotel(code = HOTEL_CODE, name = "Hotel OpAI Demo"))
-        REQUIRED_PERMISSIONS.forEach { code ->
-            if (permissions.findByCode(code) == null) permissions.save(Permission(code = code, name = code.replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase)))
+        val started = System.nanoTime()
+        val hotel = phase("hotel") { hotels.findByCode(HOTEL_CODE) ?: hotels.save(Hotel(code = HOTEL_CODE, name = "Hotel OpAI Demo")) }
+        val allPermissionIds = phase("permissions") {
+            val existing = permissions.findAll().associateBy { it.code }.toMutableMap()
+            REQUIRED_PERMISSIONS.forEach { code ->
+                if (code !in existing) {
+                    val created = permissions.save(Permission(code = code, name = code.replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase)))
+                    existing[code] = created
+                }
+            }
+            existing.mapValues { it.value.id }
         }
-        val allPermissionIds = permissions.findAll().associate { it.code to it.id }
         val missingPermissions = REQUIRED_PERMISSIONS - allPermissionIds.keys
         require(missingPermissions.isEmpty()) { "MVP permission migrations must run before DEMO bootstrap; missing permission codes: ${missingPermissions.sorted().joinToString()}" }
 
-        val departmentByCode = listOf("MANAGEMENT", "SALES_MARKETING", "FINANCE", "HOUSEKEEPING", "MAINTENANCE", "FRONT_OFFICE", "GUEST_RELATIONS", "FOOD_BEVERAGE", "SECURITY", "IT_SYSTEMS")
-            .associateWith { ensureDepartment(hotel.id, it) }
-        val skillByCode = listOf("ROOM_CLEANING", "HOUSEKEEPING_INSPECTION", "MINIBAR", "HVAC_REPAIR", "ELECTRICAL", "PLUMBING", "CARPENTRY", "GUEST_RECOVERY", "DEEP_CLEANING", "AMENITIES", "IT_NETWORK", "QUALITY_INSPECTION")
-            .associateWith { ensureSkill(hotel.id, it) }
+        val departmentByCode = phase("department") { ensureDepartments(hotel.id) }
+        val skillByCode = phase("skill") { ensureSkills(hotel.id) }
 
-        val staff = CANONICAL_EMPLOYEES.map { definition ->
-            val role = ensureRole(hotel.id, definition, allPermissionIds)
-            ensureUserAndEmployee(hotel.id, definition, role.id, departmentByCode.getValue(definition.department),
-                definition.skills.map(skillByCode::getValue).map(Skill::id).toSet())
+        val roleByCode = phase("role") {
+            val existing = roles.findByHotelId(hotel.id).associateBy { it.code }.toMutableMap()
+            CANONICAL_EMPLOYEES.map { it.appRole }.distinct().associateWith { code ->
+                ensureRole(hotel.id, CANONICAL_EMPLOYEES.first { it.appRole == code }, allPermissionIds, existing)
+            }
         }
-        reconcileLegacyDemoAccounts(hotel.id)
-        ensureLegacyAliases(hotel.id, staff)
+        // BCrypt is intentionally expensive.  Hash each configured demo-role
+        // password once per bootstrap, rather than once per employee/alias.
+        val passwordHashByPassword = mutableMapOf<String, String>()
+        val staff = phase("employee") {
+            val existingEmployees = employees.findByHotelId(hotel.id).associateBy { it.employeeNumber }.toMutableMap()
+            val existingUsers = users.findByHotelId(hotel.id).associateBy { it.email.value }.toMutableMap()
+            CANONICAL_EMPLOYEES.map { definition ->
+                ensureUserAndEmployee(hotel.id, definition, roleByCode.getValue(definition.appRole).id, departmentByCode.getValue(definition.department),
+                    definition.skills.map(skillByCode::getValue).map(Skill::id).toSet(),
+                    passwordHashByPassword.getOrPut(properties.passwordFor(definition.appRole)) { passwordHasher.hash(properties.passwordFor(definition.appRole)) },
+                    existingEmployees, existingUsers)
+            }
+        }
+        phase("legacyReconciliation") { reconcileLegacyDemoAccounts(hotel.id) }
+        phase("alias") { ensureLegacyAliases(hotel.id, staff, passwordHashByPassword) }
         val employeeByNumber = staff.associateBy { it.employeeNumber }
-        CANONICAL_EMPLOYEES.forEach { definition ->
-            val supervisor = definition.supervisorEmployeeNumber?.let(employeeByNumber::getValue)?.id
-            val current = employeeByNumber.getValue(definition.employeeNumber)
-            if (current.supervisorEmployeeId != supervisor) employees.save(current.copy(supervisorEmployeeId = supervisor))
+        phase("employeeRole") {
+            CANONICAL_EMPLOYEES.forEach { definition ->
+                val supervisor = definition.supervisorEmployeeNumber?.let(employeeByNumber::getValue)?.id
+                val current = employeeByNumber.getValue(definition.employeeNumber)
+                if (current.supervisorEmployeeId != supervisor) employees.save(current.copy(supervisorEmployeeId = supervisor))
+            }
         }
-        staff.forEach { ensureActiveShift(hotel.id, it.id) }
+        phase("shift") { staff.forEach { ensureActiveShift(hotel.id, it.id) } }
         // Master operational data is idempotent and is also repaired for an
         // already bootstrapped demo (the marker only governs sample tasks).
-        seedInventory(hotel.id, Instant.now())
-        seedDatasetOnce(hotel.id)
+        phase("inventory") { seedInventory(hotel.id, Instant.now()) }
+        phase("dataset") { seedDatasetOnce(hotel.id) }
+        logger.info("event=demo_bootstrap phase=complete totalMs={} transactionCount={} employeeCount={}", elapsedMs(started), 11, staff.size)
     }
 
-    private fun ensureDepartment(hotelId: UUID, code: String) =
-        departments.findByHotelIdAndCode(hotelId, code)
-            ?: departments.save(Department(hotelId = hotelId, code = code, name = code.replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase)))
+    private fun <T> phase(name: String, block: () -> T): T {
+        val started = System.nanoTime()
+        val result = transactions.run(block)
+        logger.info("event=demo_bootstrap phase={} durationMs={} transactionCount=1", name, elapsedMs(started))
+        return result
+    }
 
-    private fun ensureSkill(hotelId: UUID, code: String) =
-        skills.findByHotelIdAndCode(hotelId, code)
-            ?: skills.save(Skill(hotelId = hotelId, code = code, name = code.replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase)))
+    private fun elapsedMs(started: Long): Long = (System.nanoTime() - started) / 1_000_000
 
-    private fun ensureRole(hotelId: UUID, definition: DemoUser, permissionIds: Map<String, UUID>): Role {
+    private fun ensureDepartments(hotelId: UUID): Map<String, Department> {
+        val existing = departments.findByHotelId(hotelId).associateBy { it.code }
+        return listOf("MANAGEMENT", "SALES_MARKETING", "FINANCE", "HOUSEKEEPING", "MAINTENANCE", "FRONT_OFFICE", "GUEST_RELATIONS", "FOOD_BEVERAGE", "SECURITY", "IT_SYSTEMS")
+            .associateWith { code -> existing[code] ?: departments.save(Department(hotelId = hotelId, code = code, name = code.replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase))) }
+    }
+
+    private fun ensureSkills(hotelId: UUID): Map<String, Skill> {
+        val existing = skills.findByHotelId(hotelId).associateBy { it.code }
+        return listOf("ROOM_CLEANING", "HOUSEKEEPING_INSPECTION", "MINIBAR", "HVAC_REPAIR", "ELECTRICAL", "PLUMBING", "CARPENTRY", "GUEST_RECOVERY", "DEEP_CLEANING", "AMENITIES", "IT_NETWORK", "QUALITY_INSPECTION")
+            .associateWith { code -> existing[code] ?: skills.save(Skill(hotelId = hotelId, code = code, name = code.replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase))) }
+    }
+
+    private fun ensureRole(hotelId: UUID, definition: DemoUser, permissionIds: Map<String, UUID>, existingByCode: MutableMap<String, Role>): Role {
         val desiredIds = definition.permissions.map(permissionIds::getValue).toSet()
-        val existing = roles.findByHotelIdAndCode(hotelId, definition.appRole)
-        return when {
+        val existing = existingByCode[definition.appRole]
+        val result = when {
             existing == null -> roles.save(Role(hotelId = hotelId, code = definition.appRole, name = definition.sourceRole, permissionIds = desiredIds))
             existing.permissionIds != desiredIds -> roles.save(existing.copy(permissionIds = desiredIds))
             else -> existing
         }
+        existingByCode[definition.appRole] = result
+        return result
     }
 
-    private fun ensureUserAndEmployee(hotelId: UUID, definition: DemoUser, roleId: UUID, department: Department, skillIds: Set<UUID>): Employee {
-        val existingEmployee = employees.findByHotelIdAndEmployeeNumber(hotelId, definition.employeeNumber)
+    private fun ensureUserAndEmployee(hotelId: UUID, definition: DemoUser, roleId: UUID, department: Department, skillIds: Set<UUID>, passwordHash: String,
+                                      existingEmployees: MutableMap<String, Employee>, existingUsers: MutableMap<String, User>): Employee {
+        val existingEmployee = existingEmployees[definition.employeeNumber]
         val employeeId = existingEmployee?.id ?: UuidV7Generator.generate()
-        val password = properties.passwordFor(definition.appRole)
         val email = emailFor(definition.displayName)
-        val existingUser = users.findByHotelIdAndEmail(hotelId, email)
+        val existingUser = existingUsers[email]
         val user = if (existingUser == null) users.save(User(
             hotelId = hotelId, employeeId = employeeId, email = EmailAddress.of(email),
-            displayName = definition.displayName, passwordHash = passwordHasher.hash(password), roleIds = setOf(roleId), status = UserStatus.ACTIVE
+            displayName = definition.displayName, passwordHash = passwordHash, roleIds = setOf(roleId), status = UserStatus.ACTIVE
         )) else users.save(existingUser.copy(
-            employeeId = employeeId, displayName = definition.displayName, roleIds = setOf(roleId), status = UserStatus.ACTIVE
+            employeeId = employeeId, displayName = definition.displayName, passwordHash = passwordHash,
+            roleIds = setOf(roleId), status = UserStatus.ACTIVE
         ))
-        return employees.save((existingEmployee ?: Employee(
+        existingUsers[email] = user
+        val saved = employees.save((existingEmployee ?: Employee(
             id = employeeId, hotelId = hotelId, employeeNumber = definition.employeeNumber, displayName = definition.displayName
         )).copy(
             userId = user.id, displayName = definition.displayName, departmentId = department.id,
@@ -162,6 +223,8 @@ class DemoBootstrapService(
             status = com.hotelopai.employee.domain.EmployeeStatus.ACTIVE,
             operationalStatus = EmployeeOperationalStatus.AVAILABLE
         ))
+        existingEmployees[definition.employeeNumber] = saved
+        return saved
     }
 
     private fun emailFor(displayName: String): String = displayName
@@ -182,8 +245,9 @@ class DemoBootstrapService(
         jdbc.update("update employee set status='INACTIVE' where hotel_id=:hotel and employee_number in ('EMP-ADMIN','EMP-TECH-001','EMP-HK-001')", mapOf("hotel" to hotelId))
     }
 
-    private fun ensureLegacyAliases(hotelId: UUID, staff: List<Employee>) {
+    private fun ensureLegacyAliases(hotelId: UUID, staff: List<Employee>, passwordHashByPassword: MutableMap<String, String>) {
         val employeeByNumber = staff.associateBy { it.employeeNumber }
+        val existingUsers = users.findByHotelId(hotelId).associateBy { it.email.value }.toMutableMap()
         val aliases = listOf(
             "reviewer.admin@demo.hotelopai.app" to "EMP0001",
             "gm@demo.hotelopai.app" to "EMP0001",
@@ -197,12 +261,14 @@ class DemoBootstrapService(
             val employee = employeeByNumber.getValue(employeeNumber)
             val roleId = employee.roleIds.firstOrNull()
                 ?: error("Canonical employee $employeeNumber has no role")
-            val existing = users.findByHotelIdAndEmail(hotelId, email)
-            val password = properties.passwordFor(employee.primaryRoleCode ?: "")
+            val existing = existingUsers[email]
+            val roleCode = employee.primaryRoleCode ?: ""
+            val rawPassword = properties.passwordFor(roleCode)
+            val passwordHash = passwordHashByPassword.getOrPut(rawPassword) { passwordHasher.hash(rawPassword) }
             val alias = existing?.copy(
                 employeeId = employee.id,
                 displayName = employee.displayName,
-                passwordHash = passwordHasher.hash(password),
+                passwordHash = passwordHash,
                 roleIds = setOf(roleId),
                 status = UserStatus.ACTIVE
             ) ?: User(
@@ -210,11 +276,11 @@ class DemoBootstrapService(
                 employeeId = employee.id,
                 email = EmailAddress.of(email),
                 displayName = employee.displayName,
-                passwordHash = passwordHasher.hash(password),
+                passwordHash = passwordHash,
                 roleIds = setOf(roleId),
                 status = UserStatus.ACTIVE
             )
-            users.save(alias)
+            existingUsers[email] = users.save(alias)
         }
     }
 
@@ -322,6 +388,7 @@ class DemoBootstrapService(
     )
 
     companion object {
+        private val logger = LoggerFactory.getLogger(DemoBootstrapService::class.java)
         const val HOTEL_CODE = "hotel-opai-demo"
         const val DATASET_VERSION = "mvp-demo-v1"
         private val FIELD = setOf(PermissionCodes.AUTH_LOGIN, PermissionCodes.AUTH_VIEW, PermissionCodes.TASK_READ,
