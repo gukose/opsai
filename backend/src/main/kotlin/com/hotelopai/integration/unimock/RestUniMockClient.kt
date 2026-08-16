@@ -32,16 +32,20 @@ import com.hotelopai.shared.kernel.CorrelationIdContextHolder
 import org.springframework.http.MediaType
 import java.io.IOException
 import java.net.URI
+import java.net.UnknownHostException
+import java.net.http.HttpConnectTimeoutException
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 import kotlin.math.min
+import org.slf4j.LoggerFactory
 
 class RestUniMockClient(
     private val properties: UniMockClientProperties,
     private val objectMapper: ObjectMapper
 ) : UniMockClient {
+    private val logger = LoggerFactory.getLogger(RestUniMockClient::class.java)
     private val httpClient: HttpClient = HttpClient.newBuilder()
         .connectTimeout(properties.connectTimeout)
         .build()
@@ -181,17 +185,22 @@ class RestUniMockClient(
         var lastFailure: UniMockClientException? = null
 
         while (attempt <= maxAttempts) {
+            val startedAt = System.nanoTime()
+            val correlationId = CorrelationIdContextHolder.currentOrCreate()
             try {
+                logRequest(correlationId, method, path)
                 val response = httpClient.send(
                     buildRequest(method, path, requestBody),
                     HttpResponse.BodyHandlers.ofString()
                 )
 
                 if (response.statusCode() in 200..299) {
+                    logResponse(correlationId, method, path, response.statusCode(), startedAt, "success")
                     return response
                 }
 
                 if (allowNotFound && response.statusCode() == 404) {
+                    logResponse(correlationId, method, path, response.statusCode(), startedAt, "not_found")
                     return response
                 }
 
@@ -202,6 +211,7 @@ class RestUniMockClient(
                 )
 
                 if (!shouldRetry(failure, attempt, maxAttempts)) {
+                    logResponse(correlationId, method, path, response.statusCode(), startedAt, failureCategory(failure))
                     throw failure
                 }
 
@@ -224,6 +234,7 @@ class RestUniMockClient(
                 }
 
                 if (!shouldRetry(failure, attempt, maxAttempts)) {
+                    logException(correlationId, method, path, startedAt, failure)
                     throw failure
                 }
 
@@ -236,6 +247,85 @@ class RestUniMockClient(
 
         throw lastFailure ?: UniMockClientUnavailableException("UniMock request failed")
     }
+
+    fun probeHealth(): UniMockHealthProbe {
+        val path = "/actuator/health"
+        val correlationId = CorrelationIdContextHolder.currentOrCreate()
+        val startedAt = System.nanoTime()
+        logRequest(correlationId, "GET", path)
+        return try {
+            val response = httpClient.send(
+                buildRequest("GET", path, null),
+                HttpResponse.BodyHandlers.ofString()
+            )
+            val elapsed = elapsedMillis(startedAt)
+            val category = if (response.statusCode() in 200..299) null else "HTTP_ERROR"
+            logResponse(correlationId, "GET", path, response.statusCode(), startedAt, category ?: "success")
+            UniMockHealthProbe(response.statusCode() in 200..299, response.statusCode(), elapsed, category)
+        } catch (exception: Exception) {
+            val elapsed = elapsedMillis(startedAt)
+            val category = diagnosticFailureCategory(exception)
+            logger.warn(
+                "event=unimock_health_request outcome=failure correlationId={} method=GET path={} failureCategory={} exceptionClass={} rootCauseClass={} rootCauseMessage={} elapsedMs={}",
+                correlationId, path, category, exception::class.simpleName,
+                rootCause(exception)::class.simpleName, sanitize(rootCause(exception).message), elapsed
+            )
+            UniMockHealthProbe(false, null, elapsed, category)
+        }
+    }
+
+    private fun logRequest(correlationId: String, method: String, path: String) {
+        val uri = URI.create(resolveUrl(path))
+        logger.info(
+            "event=unimock_request outcome=start correlationId={} provider=internal-demo host={} port={} method={} path={} connectTimeoutMs={} requestTimeoutMs={}",
+            correlationId, uri.host, resolvedPort(uri), method, path,
+            properties.connectTimeout.toMillis(), properties.requestTimeout.toMillis()
+        )
+    }
+
+    private fun logResponse(correlationId: String, method: String, path: String, status: Int, startedAt: Long, category: String) {
+        logger.info(
+            "event=unimock_request outcome=response correlationId={} method={} path={} status={} elapsedMs={} failureCategory={}",
+            correlationId, method, path, status, elapsedMillis(startedAt), if (category == "success") "none" else category
+        )
+    }
+
+    private fun logException(correlationId: String, method: String, path: String, startedAt: Long, exception: Throwable) {
+        val root = rootCause(exception)
+        logger.warn(
+            "event=unimock_request outcome=failure correlationId={} method={} path={} failureCategory={} exceptionClass={} rootCauseClass={} rootCauseMessage={} elapsedMs={}",
+            correlationId, method, path, failureCategory(exception), exception::class.simpleName,
+            root::class.simpleName, sanitize(root.message), elapsedMillis(startedAt)
+        )
+    }
+
+    private fun failureCategory(exception: Throwable): String = when (exception) {
+        is UniMockClientTimeoutException -> "TIMEOUT"
+        is UniMockClientUnavailableException -> "UNAVAILABLE"
+        is UniMockClientUnauthorizedException -> "HTTP_401"
+        is UniMockClientForbiddenException -> "HTTP_403"
+        is UniMockClientNotFoundException -> "HTTP_404"
+        is UniMockClientValidationException -> "HTTP_4XX"
+        is UniMockClientRateLimitedException -> "HTTP_429"
+        else -> "CLIENT_ERROR"
+    }
+
+    private fun diagnosticFailureCategory(exception: Throwable): String = when (rootCause(exception)) {
+        is UnknownHostException -> "DNS"
+        is HttpConnectTimeoutException -> "CONNECT_TIMEOUT"
+        is java.net.http.HttpTimeoutException -> "READ_TIMEOUT"
+        else -> "HTTP_ERROR"
+    }
+
+    private fun rootCause(exception: Throwable): Throwable {
+        var current = exception
+        while (current.cause != null && current.cause !== current) current = current.cause!!
+        return current
+    }
+
+    private fun sanitize(message: String?): String = message.orEmpty().replace(Regex("[\\r\\n]+"), " ").take(200)
+    private fun elapsedMillis(startedAt: Long): Long = (System.nanoTime() - startedAt) / 1_000_000
+    private fun resolvedPort(uri: URI): Int = if (uri.port > 0) uri.port else if (uri.scheme.equals("https", true)) 443 else 80
 
     private fun buildRequest(
         method: String,
