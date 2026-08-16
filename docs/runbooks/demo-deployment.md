@@ -14,7 +14,7 @@ This is a manual runbook. Repository preparation creates no cloud resources or b
 1. Create a Supabase project/database. Never configure schema reset.
 2. In Supabase **Connect**, obtain Shared Pooler session-mode values (port `5432`). Prefer it when Railway cannot reach direct IPv6; require SSL.
 3. Create a Railway backend service. Configure variables from [demo-environment-variables.md](demo-environment-variables.md). It uses `railway.json` and `backend/Dockerfile`.
-4. Create a second Railway service named `unimock`. Set config path `/railway.unimock.json`, do not create a public domain, provide DB variables, use `SPRING_PROFILES_ACTIVE=prod`, and set its `PORT` to `8090`. Pinning this private port keeps the backend URL stable; Railway private DNS does not infer a service's listening port.
+4. Create a second Railway service named `unimock`. Set config path `/railway.unimock.json`, do not create a public domain, provide DB variables, and use `SPRING_PROFILES_ACTIVE=prod`. Leave `PORT` managed by Railway; UniMock binds the injected value and defaults to `8090` only outside Railway.
 5. Set backend `OPS_AI_UNIMOCK_BASE_URL` to `http://${{unimock.RAILWAY_PRIVATE_DOMAIN}}:${{unimock.PORT}}`. If the service has a different Railway name, update both reference-variable names to match it. Deploy UniMock, verify its readiness health check, and only then deploy the backend manually. Flyway applies forward-only migrations, then DEMO bootstrap runs idempotently. Verify successful Flyway logs without credential values.
 6. Verify `/actuator/health` and `/actuator/health/readiness` return `UP`; application APIs remain authenticated.
 7. Add `OPENAI_API_KEY` only to the Railway backend and explicitly enable desired providers.

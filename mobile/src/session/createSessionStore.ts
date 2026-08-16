@@ -1,9 +1,18 @@
 import { Platform } from "react-native";
 
-import { AppSessionSnapshot } from "./sessionTypes";
-import { SessionStore } from "./SessionStore";
+import type { AppSessionSnapshot } from "./sessionTypes";
+import type { SessionStore } from "./SessionStore";
 
 const SESSION_STORAGE_KEY = "hotel-opai.session.v1";
+const ACCESS_TOKEN_STORAGE_KEY = "hotel-opai.session.access-token.v1";
+const REFRESH_TOKEN_STORAGE_KEY = "hotel-opai.session.refresh-token.v1";
+const SESSION_METADATA_STORAGE_KEY = "hotel-opai.session.metadata.v1";
+
+type SecureStoreModule = {
+  getItemAsync(key: string): Promise<string | null>;
+  setItemAsync(key: string, value: string): Promise<void>;
+  deleteItemAsync(key: string): Promise<void>;
+};
 
 class WebSessionStore implements SessionStore {
   async load(): Promise<AppSessionSnapshot | null> {
@@ -21,49 +30,61 @@ class WebSessionStore implements SessionStore {
 }
 
 class NativeSessionStore implements SessionStore {
-  private readonly fallback = new Map<string, string>();
+  private readonly loadSecureStore: () => Promise<SecureStoreModule>;
+
+  constructor(loadSecureStore: () => Promise<SecureStoreModule>) {
+    this.loadSecureStore = loadSecureStore;
+  }
 
   async load(): Promise<AppSessionSnapshot | null> {
-    const raw = await this.readRaw();
-    return raw ? parseSnapshot(raw) : null;
+    const secureStore = await this.loadSecureStore();
+    const [accessToken, refreshToken, metadataRaw] = await Promise.all([
+      secureStore.getItemAsync(ACCESS_TOKEN_STORAGE_KEY),
+      secureStore.getItemAsync(REFRESH_TOKEN_STORAGE_KEY),
+      secureStore.getItemAsync(SESSION_METADATA_STORAGE_KEY)
+    ]);
+
+    if (accessToken || refreshToken) {
+      const metadata = parseSessionMetadata(metadataRaw);
+      return {
+        accessToken,
+        accessTokenExpiresAt: metadata.accessTokenExpiresAt,
+        refreshToken,
+        refreshTokenExpiresAt: metadata.refreshTokenExpiresAt,
+        tokenType: metadata.tokenType,
+        // User details are server-derived and refreshed through /auth/me.
+        currentUser: null
+      };
+    }
+
+    const legacyRaw = await secureStore.getItemAsync(SESSION_STORAGE_KEY);
+    return legacyRaw ? parseSnapshot(legacyRaw) : null;
   }
 
   async save(session: AppSessionSnapshot): Promise<void> {
-    const raw = JSON.stringify(session);
-    await this.writeRaw(raw);
+    const secureStore = await this.loadSecureStore();
+    const metadata = JSON.stringify({
+      accessTokenExpiresAt: session.accessTokenExpiresAt ?? null,
+      refreshTokenExpiresAt: session.refreshTokenExpiresAt ?? null,
+      tokenType: session.tokenType ?? null
+    });
+
+    await Promise.all([
+      writeOptionalSecureValue(secureStore, ACCESS_TOKEN_STORAGE_KEY, session.accessToken),
+      writeOptionalSecureValue(secureStore, REFRESH_TOKEN_STORAGE_KEY, session.refreshToken),
+      secureStore.setItemAsync(SESSION_METADATA_STORAGE_KEY, metadata)
+    ]);
+    await secureStore.deleteItemAsync(SESSION_STORAGE_KEY);
   }
 
   async clear(): Promise<void> {
-    await this.deleteRaw();
-  }
-
-  private async readRaw(): Promise<string | null> {
-    if (Platform.OS !== "web") {
-      const SecureStore = await import("expo-secure-store");
-      return SecureStore.getItemAsync(SESSION_STORAGE_KEY);
-    }
-
-    return this.fallback.get(SESSION_STORAGE_KEY) ?? null;
-  }
-
-  private async writeRaw(value: string): Promise<void> {
-    if (Platform.OS !== "web") {
-      const SecureStore = await import("expo-secure-store");
-      await SecureStore.setItemAsync(SESSION_STORAGE_KEY, value);
-      return;
-    }
-
-    this.fallback.set(SESSION_STORAGE_KEY, value);
-  }
-
-  private async deleteRaw(): Promise<void> {
-    if (Platform.OS !== "web") {
-      const SecureStore = await import("expo-secure-store");
-      await SecureStore.deleteItemAsync(SESSION_STORAGE_KEY);
-      return;
-    }
-
-    this.fallback.delete(SESSION_STORAGE_KEY);
+    const secureStore = await this.loadSecureStore();
+    await Promise.all([
+      secureStore.deleteItemAsync(ACCESS_TOKEN_STORAGE_KEY),
+      secureStore.deleteItemAsync(REFRESH_TOKEN_STORAGE_KEY),
+      secureStore.deleteItemAsync(SESSION_METADATA_STORAGE_KEY),
+      secureStore.deleteItemAsync(SESSION_STORAGE_KEY)
+    ]);
   }
 }
 
@@ -72,7 +93,43 @@ export function createSessionStore(): SessionStore {
     return new WebSessionStore();
   }
 
-  return new NativeSessionStore();
+  return createNativeSessionStore();
+}
+
+export function createNativeSessionStore(
+  loadSecureStore: () => Promise<SecureStoreModule> = () => import("expo-secure-store")
+): SessionStore {
+  return new NativeSessionStore(loadSecureStore);
+}
+
+async function writeOptionalSecureValue(
+  secureStore: SecureStoreModule,
+  key: string,
+  value: string | null
+): Promise<void> {
+  if (value) {
+    await secureStore.setItemAsync(key, value);
+    return;
+  }
+  await secureStore.deleteItemAsync(key);
+}
+
+function parseSessionMetadata(raw: string | null): Pick<
+  AppSessionSnapshot,
+  "accessTokenExpiresAt" | "refreshTokenExpiresAt" | "tokenType"
+> {
+  try {
+    const parsed = raw ? JSON.parse(raw) as Record<string, unknown> : {};
+    return {
+      accessTokenExpiresAt:
+        typeof parsed.accessTokenExpiresAt === "string" ? parsed.accessTokenExpiresAt : null,
+      refreshTokenExpiresAt:
+        typeof parsed.refreshTokenExpiresAt === "string" ? parsed.refreshTokenExpiresAt : null,
+      tokenType: typeof parsed.tokenType === "string" ? parsed.tokenType : null
+    };
+  } catch {
+    return { accessTokenExpiresAt: null, refreshTokenExpiresAt: null, tokenType: null };
+  }
 }
 
 function parseSnapshot(raw: string): AppSessionSnapshot | null {

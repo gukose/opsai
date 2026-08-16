@@ -60,6 +60,7 @@ export function Composer({
   disabled
 }: ComposerProps) {
   const [localText, setLocalText] = useState("");
+  const [isFocused, setIsFocused] = useState(false);
   const text = controlledText ?? localText;
   const setText = (nextText: string) => {
     if (controlledText === undefined) {
@@ -81,19 +82,50 @@ export function Composer({
   };
 
   return (
-    <View style={styles.container}>
-      <TextInput
-        accessibilityLabel="Assistant message"
-        placeholder="Type a message or tap Record voice..."
-        placeholderTextColor={colors.textSubtle}
-        onChangeText={setText}
-        onSubmitEditing={handleSend}
-        blurOnSubmit={false}
-        returnKeyType="send"
-        value={text}
-        editable={!disabled}
-        style={styles.input}
-      />
+    <View style={[styles.container, isFocused ? styles.containerFocused : null]}>
+      <View style={styles.composerRow}>
+        <View style={styles.opaiControl}>
+          <Text style={styles.opaiLabel}>OpAI</Text>
+        </View>
+        <TextInput
+          accessibilityLabel="Assistant message"
+          placeholder="Ask or give a command..."
+          placeholderTextColor={colors.textSubtle}
+          onBlur={() => setIsFocused(false)}
+          onChangeText={setText}
+          onFocus={() => setIsFocused(true)}
+          onSubmitEditing={handleSend}
+          blurOnSubmit={false}
+          returnKeyType="send"
+          value={text}
+          editable={!disabled}
+          style={styles.input}
+        />
+        {!voiceRecorderActive ? (
+          <Pressable
+            accessibilityLabel="Record voice"
+            accessibilityRole="button"
+            disabled={disabled}
+            onPress={onAddVoiceTranscript}
+            style={({ pressed }) => [
+              styles.composerAction,
+              pressed && !disabled ? styles.actionPressed : null,
+              disabled ? styles.actionDisabled : null
+            ]}
+          >
+            <Mic color={colors.red} size={17} strokeWidth={2.4} />
+          </Pressable>
+        ) : null}
+        <IconButton
+          icon={SendHorizontal}
+          label="Send message"
+          style={styles.sendButton}
+          disabled={disabled}
+          color={colors.nav}
+          size={17}
+          onPress={handleSend}
+        />
+      </View>
       {voiceRecorder}
       {attachments.length > 0 || voiceTranscript || imageObservations.length > 0 || attachmentError ? (
         <View style={styles.attachmentTray}>
@@ -189,12 +221,6 @@ export function Composer({
           <IconButton icon={Grid2X2} label="Open templates" style={styles.flatIcon} size={14} />
           <IconButton icon={Paperclip} label="Attach local reference" style={styles.flatIcon} size={14} onPress={onAddAttachment} disabled={disabled} />
         </View>
-        {!voiceRecorderActive ? (
-          <Pressable accessibilityRole="button" style={styles.voiceButton} onPress={onAddVoiceTranscript} disabled={disabled}>
-            <Mic color={colors.red} size={12} strokeWidth={2.4} />
-            <Text style={styles.voiceText}>Record voice</Text>
-          </Pressable>
-        ) : null}
         <IconButton
           icon={MessageSquareText}
           label="Add image note"
@@ -202,15 +228,6 @@ export function Composer({
           size={14}
           onPress={onAddImageObservation}
           disabled={disabled || attachments.every((attachment) => attachment.type !== "IMAGE")}
-        />
-        <IconButton
-          icon={SendHorizontal}
-          label="Send message"
-          style={styles.sendButton}
-          disabled={disabled}
-          color={colors.nav}
-          size={16}
-          onPress={handleSend}
         />
       </View>
     </View>
@@ -238,15 +255,38 @@ function attachmentStatusLabel(attachment: LocalAttachmentMetadata): string {
 const styles = StyleSheet.create({
   container: {
     minHeight: 62,
-    marginHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    borderRadius: 14,
+    marginHorizontal: 5,
+    borderWidth: 1.5,
+    borderColor: "#cbd5e1",
+    borderRadius: 15,
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
     paddingTop: 5,
     paddingBottom: 5,
     ...shadow.card
+  },
+  containerFocused: {
+    borderColor: colors.blue,
+    shadowOpacity: 0.08,
+    elevation: 3
+  },
+  composerRow: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center"
+  },
+  opaiControl: {
+    minWidth: 58,
+    height: 40,
+    alignItems: "flex-start",
+    justifyContent: "center",
+    borderRightWidth: 1,
+    borderRightColor: colors.divider,
+    paddingHorizontal: spacing.md
+  },
+  opaiLabel: {
+    color: colors.nav,
+    fontSize: typography.body,
+    fontWeight: "900"
   },
   attachmentTray: {
     gap: 5,
@@ -306,18 +346,22 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   },
   input: {
-    height: 19,
+    flex: 1,
+    minWidth: 0,
+    minHeight: 40,
     color: colors.text,
-    fontSize: typography.caption,
+    fontSize: typography.body,
     fontWeight: "700",
-    padding: 0
+    paddingHorizontal: spacing.md,
+    paddingVertical: 0
   },
   controls: {
     minHeight: 34,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: spacing.sm
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md
   },
   leftActions: {
     flexDirection: "row",
@@ -326,28 +370,27 @@ const styles = StyleSheet.create({
   flatIcon: {
     width: 28,
     height: 28,
-    backgroundColor: colors.surface
+    borderRadius: 0,
+    backgroundColor: "transparent"
   },
-  voiceButton: {
-    minWidth: 132,
-    height: 32,
-    flexDirection: "row",
+  composerAction: {
+    width: 34,
+    height: 40,
     alignItems: "center",
     justifyContent: "center",
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: "#ffd4d8",
-    borderRadius: radius.pill,
-    backgroundColor: colors.redSoft
+    borderLeftWidth: 1,
+    borderLeftColor: colors.divider
   },
-  voiceText: {
-    color: colors.red,
-    fontSize: 11,
-    fontWeight: "900"
+  actionPressed: {
+    opacity: 0.65
+  },
+  actionDisabled: {
+    opacity: 0.45
   },
   sendButton: {
-    width: 32,
-    height: 32,
-    backgroundColor: "#f2f5fa"
+    width: 34,
+    height: 40,
+    borderRadius: 0,
+    backgroundColor: "transparent"
   }
 });

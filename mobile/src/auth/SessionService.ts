@@ -147,8 +147,8 @@ export class SessionService {
   }
 
   private async saveSession(session: AppSessionSnapshot): Promise<void> {
-    this.currentSession = session;
     await this.sessionStore.save(session);
+    this.currentSession = session;
   }
 }
 

@@ -9,6 +9,7 @@ import { appApiBaseUrl } from "../config/appConfig";
 import { AppApiError } from "./client/AppApiError";
 import type { ProblemDetails } from "./client/AppApiError";
 import { createCorrelationId } from "./client/correlationId";
+import { isAbortError } from "./client/isAbortError";
 import { defaultGetRetryPolicy, retryDelayMs, shouldRetryRequest, sleep } from "./client/retryPolicy";
 import type { HttpMethod, RetryPolicy } from "./client/retryPolicy";
 
@@ -104,7 +105,7 @@ export class MobileHotelOpAiClient {
     try {
       return await operation(this.createSdkClient(correlationId, accessTokenOverride, authenticated), controller.signal);
     } catch (error) {
-      if (error instanceof DOMException && error.name === "AbortError") {
+      if (isAbortError(error)) {
         throw new AppApiError("Request timed out", {
           kind: "timeout",
           correlationId,
@@ -153,7 +154,7 @@ export class MobileHotelOpAiClient {
       });
     }
 
-    if (error instanceof DOMException && error.name === "AbortError") {
+    if (isAbortError(error)) {
       return new AppApiError("Request timed out", {
         kind: "timeout",
         correlationId,

@@ -29,7 +29,7 @@ const sessionStore = createSessionStore();
 const sessionService = new SessionService(sessionStore);
 
 export function AppBootstrapProvider({ children }: { children: ReactNode }) {
-  const [status, setStatus] = useState<AppLaunchState>("unauthenticated");
+  const [status, setStatus] = useState<AppLaunchState>("loading");
   const [session, setSession] = useState<AppSessionSnapshot | null>(null);
 
   useEffect(() => {
@@ -111,8 +111,6 @@ export function AppBootstrapProvider({ children }: { children: ReactNode }) {
       session,
       currentUser: session?.currentUser ?? null,
       login: async (credentials: LoginCredentials) => {
-        setStatus("loading");
-
         try {
           const nextSession = await sessionService.login(credentials);
           setSession(nextSession);

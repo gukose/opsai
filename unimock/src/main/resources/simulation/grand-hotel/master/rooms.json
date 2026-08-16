@@ -4,6 +4,9 @@
     { "roomNumber": "102", "roomTypeCode": "STANDARD", "floorCode": "F1", "status": "OCCUPIED", "isOutOfOrder": false },
     { "roomNumber": "201", "roomTypeCode": "DELUXE", "floorCode": "F2", "status": "VACANT", "isOutOfOrder": false },
     { "roomNumber": "202", "roomTypeCode": "DELUXE", "floorCode": "F2", "status": "VACANT", "isOutOfOrder": false },
+    { "roomNumber": "204", "roomTypeCode": "DELUXE", "floorCode": "F2", "status": "OCCUPIED", "isOutOfOrder": false },
+    { "roomNumber": "302", "roomTypeCode": "DELUXE", "floorCode": "F3", "status": "OCCUPIED", "isOutOfOrder": false },
+    { "roomNumber": "402", "roomTypeCode": "DELUXE", "floorCode": "F4", "status": "OCCUPIED", "isOutOfOrder": false },
     { "roomNumber": "605", "roomTypeCode": "SUITE", "floorCode": "F6", "status": "VACANT", "isOutOfOrder": false },
     { "roomNumber": "805", "roomTypeCode": "SUITE", "floorCode": "F8", "status": "VACANT", "isOutOfOrder": false }
   ]

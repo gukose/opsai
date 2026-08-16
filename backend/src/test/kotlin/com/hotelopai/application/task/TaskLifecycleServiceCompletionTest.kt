@@ -44,6 +44,31 @@ class TaskLifecycleServiceCompletionTest {
     }
 
     @Test
+    fun `duplicate completion is idempotent and does not repeat PMS verification`() {
+        val taskRepository = InMemoryTaskStore()
+        var verificationCalls = 0
+        val service = TaskLifecycleService(
+            taskRepository = taskRepository,
+            completionPolicy = object : CompletionPolicy {
+                override fun evaluate(task: com.hotelopai.task.domain.Task, now: Instant): CompletionDecision {
+                    verificationCalls += 1
+                    return CompletionDecision(requiresPmsUpdate = true, verificationLogId = UUID.randomUUID())
+                }
+            }
+        )
+        val now = Instant.parse("2026-07-08T10:00:00Z")
+        val task = service.createTask(newCreateCommand(now), now = now)
+        service.startTask(task.id.toString(), task.hotelId, now.plusSeconds(60))
+
+        val first = service.completeTask(task.id.toString(), task.hotelId, now.plusSeconds(120))
+        val second = service.completeTask(task.id.toString(), task.hotelId, now.plusSeconds(180))
+
+        assertEquals(TaskStatus.COMPLETED, first.status)
+        assertEquals(first, second)
+        assertEquals(1, verificationCalls)
+    }
+
+    @Test
     fun `complete task failure keeps task recoverable and records failure log`() {
         val taskRepository = InMemoryTaskStore()
         val historyRepository = RecordingTaskStateHistoryRepository()

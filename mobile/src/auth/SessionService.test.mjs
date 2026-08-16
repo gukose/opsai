@@ -74,6 +74,79 @@ test("session restore clears stale stored session when auth and refresh are reje
   }
 });
 
+test("valid login persists tokens, authenticates me, survives reload, and logout clears session", async () => {
+  const originalFetch = globalThis.fetch;
+  const store = createMemorySessionStore(null);
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    const path = new URL(String(url)).pathname;
+    const authorization = new Headers(init?.headers).get("Authorization");
+    calls.push({ path, authorization });
+
+    if (path === "/api/v1/auth/login") {
+      return jsonResponse(authSessionResponse());
+    }
+    if (path === "/api/v1/auth/me") {
+      return authorization === "Bearer access-token"
+        ? jsonResponse(currentUserResponse())
+        : jsonResponse({ title: "Unauthorized", status: 401 }, 401);
+    }
+    if (path === "/api/v1/auth/logout") {
+      return authorization === "Bearer access-token"
+        ? jsonResponse({ status: "logged_out" })
+        : jsonResponse({ title: "Unauthorized", status: 401 }, 401);
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  };
+
+  try {
+    const service = new SessionService(store);
+    const loggedIn = await service.login({
+      hotelCode: "hotel-opai-demo",
+      email: "admin@hotelopai.local",
+      password: "valid-password"
+    });
+
+    assert.equal(loggedIn.accessToken, "access-token");
+    assert.equal(loggedIn.refreshToken, "refresh-token");
+    assert.equal(loggedIn.currentUser?.userId, "user-1");
+    assert.equal(
+      calls.find((call) => call.path === "/api/v1/auth/me")?.authorization,
+      "Bearer access-token"
+    );
+
+    const restored = await new SessionService(store).restoreSession();
+    assert.equal(restored?.accessToken, "access-token");
+    assert.equal(restored?.currentUser?.userId, "user-1");
+
+    await service.logout();
+    assert.equal(store.value, null);
+    assert.equal(store.cleared, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("invalid login is rejected without persisting a session", async () => {
+  const originalFetch = globalThis.fetch;
+  const store = createMemorySessionStore(null);
+  globalThis.fetch = async () =>
+    jsonResponse({ title: "Invalid credentials", status: 401 }, 401);
+
+  try {
+    const service = new SessionService(store);
+    await assert.rejects(() => service.login({
+      hotelCode: "hotel-opai-demo",
+      email: "admin@hotelopai.local",
+      password: "invalid-password"
+    }));
+    assert.equal(service.getSession(), null);
+    assert.equal(store.value, null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 function createMemorySessionStore(initialSession) {
   return {
     value: initialSession,
@@ -105,4 +178,35 @@ function sessionSnapshot() {
       displayName: "Stored User"
     }
   };
+}
+
+function authSessionResponse() {
+  return {
+    tokenType: "Bearer",
+    accessToken: "access-token",
+    accessTokenExpiresAt: "2026-08-16T12:00:00Z",
+    refreshToken: "refresh-token",
+    refreshTokenExpiresAt: "2026-09-15T12:00:00Z",
+    user: currentUserResponse()
+  };
+}
+
+function currentUserResponse() {
+  return {
+    userId: "user-1",
+    hotelId: "hotel-1",
+    employeeId: null,
+    email: "admin@hotelopai.local",
+    displayName: "Demo Admin",
+    hotelName: "Hotel OpAI Demo",
+    roles: [],
+    permissions: []
+  };
+}
+
+function jsonResponse(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", "X-API-Version": "v1" }
+  });
 }

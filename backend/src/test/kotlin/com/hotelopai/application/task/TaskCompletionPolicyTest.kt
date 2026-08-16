@@ -44,6 +44,21 @@ class TaskCompletionPolicyTest {
     }
 
     @Test
+    fun `housekeeping task marks room ready and returns verification id`() {
+        val provider = RecordingPmsProvider()
+        val policy = TaskCompletionPolicy(registry(provider))
+        val task = housekeepingTask()
+
+        val decision = policy.evaluate(task, Instant.parse("2026-07-08T10:30:00Z"))
+
+        assertEquals(true, decision.requiresPmsUpdate)
+        assertEquals(provider.result.verificationLogId, decision.verificationLogId)
+        assertEquals("204", provider.roomReadyRequest)
+        assertEquals(1, provider.roomReadyCalls)
+        assertEquals(0, provider.maintenanceCalls)
+    }
+
+    @Test
     fun `maintenance task uses structured room number when available`() {
         val provider = RecordingPmsProvider()
         val policy = TaskCompletionPolicy(registry(provider))
@@ -89,7 +104,8 @@ class TaskCompletionPolicyTest {
 
     @Test
     fun `maintenance task without a room number fails validation`() {
-        val policy = TaskCompletionPolicy(registry(RecordingPmsProvider()))
+        val provider = RecordingPmsProvider()
+        val policy = TaskCompletionPolicy(registry(provider))
         val task = Task.create(
             hotelId = UUID.fromString("018f6b7a-4f22-7caa-8f60-9e4b0f7f1003"),
             intentType = TaskIntentType.MAINTENANCE,
@@ -110,7 +126,8 @@ class TaskCompletionPolicyTest {
 
     @Test
     fun `non maintenance tasks do not require PMS verification`() {
-        val policy = TaskCompletionPolicy(registry(RecordingPmsProvider()))
+        val provider = RecordingPmsProvider()
+        val policy = TaskCompletionPolicy(registry(provider))
         val task = Task.create(
             hotelId = UUID.fromString("018f6b7a-4f22-7caa-8f60-9e4b0f7f1003"),
             intentType = TaskIntentType.GUEST_REQUEST,
@@ -127,6 +144,8 @@ class TaskCompletionPolicyTest {
 
         assertEquals(false, decision.requiresPmsUpdate)
         assertEquals(null, decision.verificationLogId)
+        assertEquals(0, provider.maintenanceCalls)
+        assertEquals(0, provider.roomReadyCalls)
     }
 
     private fun maintenanceTask(): Task =
@@ -142,6 +161,19 @@ class TaskCompletionPolicyTest {
             createdAt = Instant.parse("2026-07-08T10:00:00Z")
         )
 
+    private fun housekeepingTask(): Task =
+        Task.create(
+            hotelId = UUID.fromString("018f6b7a-4f22-7caa-8f60-9e4b0f7f1004"),
+            intentType = TaskIntentType.HOUSEKEEPING,
+            source = TaskSource.ASSISTANT,
+            title = "Prepare room 204",
+            description = "Housekeeping service is complete",
+            roomNumber = "204",
+            priority = TaskPriority.MEDIUM,
+            slaDeadline = Instant.parse("2026-07-08T11:30:00Z"),
+            createdAt = Instant.parse("2026-07-08T10:00:00Z")
+        )
+
     private fun registry(provider: PmsProvider): PmsProviderRegistry =
         PmsProviderRegistry(listOf(provider), PmsProviderProperties(activeProvider = provider.id.value))
 
@@ -150,9 +182,19 @@ class TaskCompletionPolicyTest {
         override val displayName = "Internal Demo PMS"
         override val capabilities = PmsCapabilities(
             roomListing = true,
+            roomStatusLookup = true,
+            roomStatusUpdate = true,
+            roomReadyUpdate = true,
             issueTypeLookup = true,
             maintenanceUpdate = true
         )
+
+        var maintenanceCalls = 0
+            private set
+        var roomReadyCalls = 0
+            private set
+        var roomReadyRequest: String? = null
+            private set
 
         val request: MaintenanceUpdate
             get() = lastRequest ?: error("no request recorded")
@@ -165,7 +207,14 @@ class TaskCompletionPolicyTest {
         private var lastRequest: MaintenanceUpdate? = null
 
         override fun updateMaintenance(request: MaintenanceUpdate): PmsUpdateResult {
+            maintenanceCalls += 1
             lastRequest = request
+            return result
+        }
+
+        override fun markRoomReady(roomNumber: String, idempotencyKey: String): PmsUpdateResult {
+            roomReadyCalls += 1
+            roomReadyRequest = roomNumber
             return result
         }
 

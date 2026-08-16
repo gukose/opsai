@@ -27,5 +27,7 @@ ops:
         path: ${OPS_AI_UNIMOCK_SEED_PATH:classpath:/simulation/grand-hotel}
 
 server:
-  address: 0.0.0.0
+  # Railway private networking is IPv6. The IPv6 wildcard also accepts the
+  # platform health check and keeps local IPv4 access on dual-stack hosts.
+  address: "${SERVER_ADDRESS:::}"
   port: ${PORT:${SERVER_PORT:8090}}

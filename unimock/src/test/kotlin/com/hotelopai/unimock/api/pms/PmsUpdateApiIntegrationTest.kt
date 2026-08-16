@@ -52,6 +52,18 @@ class PmsUpdateApiIntegrationTest : UnimockPostgresIntegrationTestSupport() {
     }
 
     @Test
+    fun `demo housekeeping room can be marked clean`() {
+        mockMvc.perform(
+            post("/api/pms/rooms/204/status")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("""{"status":"CLEAN"}""")
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.entityId").value("204"))
+            .andExpect(jsonPath("$.status").value("CLEAN"))
+    }
+
+    @Test
     fun `guest request creation writes verification log`() {
         val response = mockMvc.perform(
             post("/api/pms/guest-requests")
@@ -143,6 +155,48 @@ class PmsUpdateApiIntegrationTest : UnimockPostgresIntegrationTestSupport() {
 
         assertThat(jdbcTemplate.queryForObject("select count(*) from unimock.pms_mock_verification_log", Long::class.java))
             .isEqualTo(1L)
+    }
+
+    @Test
+    fun `demo room 302 accepts completed air conditioning maintenance`() {
+        mockMvc.perform(
+            post("/api/pms/maintenance/updates")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "roomNumber":"302",
+                      "issueTypeCode":"MAINTENANCE_AC",
+                      "description":"Air conditioner repaired",
+                      "status":"RESOLVED"
+                    }
+                    """.trimIndent()
+                )
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.entityId").value("302"))
+            .andExpect(jsonPath("$.status").value("RESOLVED"))
+    }
+
+    @Test
+    fun `assistant-created demo room 402 accepts completed maintenance`() {
+        mockMvc.perform(
+            post("/api/pms/maintenance/updates")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {
+                      "roomNumber":"402",
+                      "issueTypeCode":"MAINTENANCE_AC",
+                      "description":"Maintenance completed",
+                      "status":"RESOLVED"
+                    }
+                    """.trimIndent()
+                )
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.entityId").value("402"))
+            .andExpect(jsonPath("$.status").value("RESOLVED"))
     }
 
     @Test

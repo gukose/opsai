@@ -28,7 +28,8 @@
         {
           "microphonePermission": "Allow Hotel OpAI to record operational voice requests."
         }
-      ]
+      ],
+      "expo-asset"
     ]
   }
 }

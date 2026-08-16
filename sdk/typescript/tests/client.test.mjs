@@ -43,6 +43,31 @@ test("login sends JSON without Authorization", async () => {
   });
 });
 
+test("login transport does not require a DOMException global", async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "DOMException");
+  Object.defineProperty(globalThis, "DOMException", { configurable: true, value: undefined });
+  try {
+    const client = createHotelOpAiClient({
+      baseUrl: "https://api.example.test",
+      fetchImpl: async () => jsonResponse({
+        accessToken: "access-1",
+        accessTokenExpiresAt: "2026-07-17T00:00:00Z",
+        refreshToken: "refresh-1",
+        refreshTokenExpiresAt: "2026-07-18T00:00:00Z",
+        tokenType: "Bearer"
+      })
+    });
+
+    const response = await AuthController_login(client, {
+      body: { hotelCode: "demo", email: "admin@example.test", password: "valid-password" }
+    });
+    assert.equal(response.data.accessToken, "access-1");
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, "DOMException", descriptor);
+    else delete globalThis.DOMException;
+  }
+});
+
 test("protected request uses current bearer token and clearing removes Authorization", async () => {
   let token = "token-a";
   const authorizations = [];

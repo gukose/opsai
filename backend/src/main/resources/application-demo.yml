@@ -18,7 +18,7 @@ ops:
       minimum-idle: ${OPS_AI_DB_MINIMUM_IDLE:1}
       connection-timeout: ${OPS_AI_DB_CONNECTION_TIMEOUT_MS:20000}
     unimock:
-      base-url: ${OPS_AI_UNIMOCK_BASE_URL:http://unimock.railway.internal:8090}
+      base-url: ${OPS_AI_UNIMOCK_BASE_URL}
     auth:
       jwt:
         secret: ${OPS_AI_AUTH_JWT_SECRET}

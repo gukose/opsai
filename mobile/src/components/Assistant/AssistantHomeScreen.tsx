@@ -285,6 +285,8 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
                 if (createdTaskId) {
                   await refreshTasks();
                   await refreshDashboard();
+                  setActiveSection("tasks");
+                  await selectTask(createdTaskId);
                 }
               }}
               isActionDisabled={assistantActionDisabled}
@@ -502,7 +504,7 @@ const styles = StyleSheet.create({
     paddingBottom: 18
   },
   footer: {
-    paddingTop: 5,
+    paddingTop: 2,
     backgroundColor: colors.background
   },
   footerDesktop: {

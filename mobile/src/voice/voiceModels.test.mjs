@@ -25,3 +25,16 @@ test("voice failures are actionable without exposing payload text", () => {
   assert.match(voiceErrorMessage(new Error("Speech service could not transcribe this audio recording.")),/at least one second/i);
   assert.match(voiceErrorMessage(new Error("Voice transcription provider is not configured or available on this backend.")),/not enabled/i);
 });
+
+test("abort errors remain actionable when DOMException is unavailable", () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "DOMException");
+  Object.defineProperty(globalThis, "DOMException", { configurable: true, value: undefined });
+  try {
+    const error = new Error("Aborted");
+    error.name = "AbortError";
+    assert.match(voiceErrorMessage(error), /timed out/i);
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, "DOMException", descriptor);
+    else delete globalThis.DOMException;
+  }
+});

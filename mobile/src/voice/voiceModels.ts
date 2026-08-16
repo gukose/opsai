@@ -1,3 +1,5 @@
+import { isAbortError } from "../api/client/isAbortError";
+
 export type MicrophonePermissionState = "unknown" | "granted" | "denied" | "blocked";
 export type VoiceFlowPhase = "idle" | "requesting_permission" | "recording" | "transcribing" | "ready" | "error";
 export type VoiceFlowEvent = "REQUEST_PERMISSION" | "START" | "STOP" | "TRANSCRIBED" | "FAIL" | "CANCEL" | "RETRY";
@@ -35,7 +37,7 @@ export function mapPermissionResponse(response: { granted: boolean; canAskAgain?
 }
 
 export function voiceErrorMessage(error: unknown): string {
-  if (error instanceof DOMException && error.name === "AbortError") return "Transcription timed out. Try again.";
+  if (isAbortError(error)) return "Transcription timed out. Try again.";
   const message = error instanceof Error ? error.message : "Voice recording failed.";
   if (/not configured or available/i.test(message)) return "Voice transcription is not enabled on the connected backend.";
   if (/could not transcribe this audio recording/i.test(message)) return "The speech service could not read this recording. Record for at least one second, speak clearly, and try again.";

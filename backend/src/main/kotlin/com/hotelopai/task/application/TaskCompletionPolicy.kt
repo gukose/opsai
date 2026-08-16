@@ -19,6 +19,24 @@ class TaskCompletionPolicy(
 ) : CompletionPolicy {
     override fun evaluate(task: Task, now: Instant): CompletionDecision =
         when (task.intentType) {
+            TaskIntentType.HOUSEKEEPING -> {
+                val roomNumber = extractRoomNumber(task)
+                    ?: throw TaskCompletionValidationException(
+                        "Housekeeping task requires a room number before completion"
+                    )
+
+                val result = try {
+                    pmsProviderRegistry.activeProviderRequiring(PmsCapability.ROOM_READY_UPDATE)
+                        .markRoomReady(roomNumber, task.id.toString())
+                } catch (exception: UnsupportedPmsCapabilityException) {
+                    throw TaskCompletionPolicyException("Active PMS provider does not support room-ready updates", exception)
+                } catch (exception: PmsProviderException) {
+                    throw TaskCompletionPolicyException("UniMock failed during task completion", exception)
+                }
+
+                validateVerification(result)
+            }
+
             TaskIntentType.MAINTENANCE -> {
                 val roomNumber = extractRoomNumber(task)
                     ?: throw TaskCompletionValidationException(

@@ -15,7 +15,7 @@ registerHooks({
   }
 });
 
-const { DashboardController_summary } = await import("@hotelopai/api-client");
+const { AuthController_login, DashboardController_summary } = await import("@hotelopai/api-client");
 const { AppApiError } = await import("./client/AppApiError.ts");
 const { MobileHotelOpAiClient } = await import("./hotelOpAiClient.ts");
 
@@ -167,3 +167,80 @@ test("connection refusal is classified as network transport failure", async () =
     globalThis.fetch = originalFetch;
   }
 });
+
+test("timeout maps to AppApiError when DOMException is unavailable", async () => {
+  await withoutDomException(async () => {
+    const client = new MobileHotelOpAiClient({
+      baseUrl: "http://localhost:8080",
+      timeoutMs: 1,
+      delay: async () => undefined
+    });
+
+    await assert.rejects(
+      () => client.call(
+        "GET",
+        async (_sdk, signal) => new Promise((_resolve, reject) => {
+          signal.addEventListener("abort", () => {
+            const error = new Error("Request aborted");
+            error.name = "AbortError";
+            reject(error);
+          }, { once: true });
+        }),
+        { retry: { maxRetries: 0, delaysMs: [] } }
+      ),
+      (error) => error instanceof AppApiError && error.kind === "timeout"
+    );
+  });
+});
+
+test("login transport works in a React Native environment without DOMException", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    tokenType: "Bearer",
+    accessToken: "access-token",
+    accessTokenExpiresAt: "2026-08-16T12:00:00Z",
+    refreshToken: "refresh-token",
+    refreshTokenExpiresAt: "2026-09-15T12:00:00Z",
+    user: {
+      userId: "user-1",
+      hotelId: "hotel-1",
+      email: "admin@example.test",
+      displayName: "Admin",
+      hotelName: "Demo Hotel",
+      roles: [],
+      permissions: []
+    }
+  }), { status: 200, headers: { "Content-Type": "application/json" } });
+
+  try {
+    await withoutDomException(async () => {
+      const client = new MobileHotelOpAiClient({ baseUrl: "http://localhost:8080" });
+      const response = await client.call("POST", (sdk, signal) => AuthController_login(sdk, {
+        body: { hotelCode: "demo", email: "admin@example.test", password: "valid-password" },
+        signal
+      }), { authenticated: false });
+
+      assert.equal(response.accessToken, "access-token");
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+async function withoutDomException(operation) {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "DOMException");
+  Object.defineProperty(globalThis, "DOMException", {
+    configurable: true,
+    writable: true,
+    value: undefined
+  });
+  try {
+    return await operation();
+  } finally {
+    if (descriptor) {
+      Object.defineProperty(globalThis, "DOMException", descriptor);
+    } else {
+      delete globalThis.DOMException;
+    }
+  }
+}

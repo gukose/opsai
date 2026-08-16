@@ -11,18 +11,19 @@ import {
 } from "react-native";
 
 import { getAppApiErrorMessage } from "../../api/client/AppApiError";
+import { appEnvironment, isDemoEnvironment } from "../../config/appConfig";
 import { colors, radius, spacing, shadow, typography } from "../../theme/tokens";
 import { useAppBootstrap } from "../../app/AppBootstrap";
+import { loginDefaults } from "./loginDefaults";
 
 const DEFAULT_HOTEL_CODE = "hotel-opai-demo";
-const DEFAULT_EMAIL = "admin@hotelopai.local";
-const DEFAULT_PASSWORD = "admin123";
 
 export function LoginScreen() {
   const { login } = useAppBootstrap();
+  const defaults = loginDefaults(appEnvironment);
   const [hotelCode, setHotelCode] = useState(DEFAULT_HOTEL_CODE);
-  const [email, setEmail] = useState(DEFAULT_EMAIL);
-  const [password, setPassword] = useState(DEFAULT_PASSWORD);
+  const [email, setEmail] = useState(defaults.email);
+  const [password, setPassword] = useState(defaults.password);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -74,7 +75,7 @@ export function LoginScreen() {
               autoCorrect={false}
               keyboardType="email-address"
               onChangeText={setEmail}
-              placeholder="admin@hotelopai.local"
+              placeholder="Email address"
               placeholderTextColor={colors.textSubtle}
               style={styles.input}
               value={email}
@@ -87,7 +88,7 @@ export function LoginScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               onChangeText={setPassword}
-              placeholder="admin123"
+              placeholder="Password"
               placeholderTextColor={colors.textSubtle}
               secureTextEntry
               style={styles.input}
@@ -114,7 +115,9 @@ export function LoginScreen() {
           </Pressable>
 
           <Text style={styles.help}>
-            Use the local dev account to verify backend auth and session restore.
+            {isDemoEnvironment
+              ? "Demo reviewer account is prefilled for physical-device testing."
+              : "Sign in with an account configured for this environment."}
           </Text>
         </View>
       </ScrollView>

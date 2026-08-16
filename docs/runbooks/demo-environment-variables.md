@@ -25,7 +25,7 @@ Use the free Supavisor **session pooler** for a persistent Railway JVM when dire
 ## UniMock runtime
 
 - `SPRING_PROFILES_ACTIVE`: `prod`.
-- `PORT`: `8090`; set this explicitly because the backend's private URL must include UniMock's listening port.
+- `PORT`: leave this managed by Railway. UniMock listens on the injected value, and the backend private URL references the same `${{unimock.PORT}}`. Outside Railway, UniMock defaults to `8090`.
 - `OPS_AI_UNIMOCK_DB_URL`: JDBC URL with `sslmode=require`.
 - `OPS_AI_UNIMOCK_DB_USERNAME`
 - `OPS_AI_UNIMOCK_DB_PASSWORD`

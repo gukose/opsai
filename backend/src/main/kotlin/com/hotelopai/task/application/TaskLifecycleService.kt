@@ -159,6 +159,10 @@ class TaskLifecycleService @Autowired constructor(
 
     fun completeTask(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task =
         run {
+            taskRepository.findByIdAndHotelId(taskId.toTaskId(), hotelId)
+                ?.takeIf { it.status == TaskStatus.COMPLETED }
+                ?.let { return@run it }
+
             var verificationLogId: UUID? = null
             mutate(
                 taskId = taskId,
