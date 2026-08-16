@@ -38,14 +38,19 @@ class DemoProfileStartupIntegrationTest : PostgresIntegrationTestSupport() {
         bootstrap.bootstrap()
 
         val hotelId = jdbc.queryForObject("select id from hotel where code=:code", mapOf("code" to DemoBootstrapService.HOTEL_CODE), java.util.UUID::class.java)!!
-        assertThat(users.findByHotelId(hotelId).map { it.email.value }).contains(
-            "gm@demo.hotelopai.app", "housekeeping.supervisor@demo.hotelopai.app", "housekeeper@demo.hotelopai.app",
-            "technician@demo.hotelopai.app", "reception@demo.hotelopai.app", "guest.relations@demo.hotelopai.app",
-            "reviewer.admin@demo.hotelopai.app"
+        val seededEmails = users.findByHotelId(hotelId).filter { it.status == com.hotelopai.auth.domain.UserStatus.ACTIVE }.map { it.email.value }
+        assertThat(seededEmails).hasSize(35)
+        assertThat(seededEmails).contains(
+            "kemal.yilmaz@demo.hotelopai.app", "bekzod.abdullayev@demo.hotelopai.app",
+            "ayse.yilmaz@demo.hotelopai.app", "anna.muller@demo.hotelopai.app"
         )
+        assertThat(jdbc.queryForObject("select count(*) from employee where hotel_id=:hotel and status='ACTIVE'", mapOf("hotel" to hotelId), Long::class.java)).isEqualTo(35L)
+        val employeeNumbers = jdbc.query("select employee_number from employee where hotel_id=:hotel and status='ACTIVE' order by employee_number", mapOf("hotel" to hotelId)) { rs, _ -> rs.getString(1) }
+        assertThat(employeeNumbers).containsExactlyElementsOf((1..35).map { "EMP%04d".format(it) })
+        assertThat(jdbc.queryForObject("select count(distinct email) from app_user where hotel_id=:hotel and status='ACTIVE'", mapOf("hotel" to hotelId), Long::class.java)).isEqualTo(35L)
         assertThat(jdbc.queryForObject("select count(*) from demo_bootstrap_marker where hotel_id=:hotel", mapOf("hotel" to hotelId), Long::class.java)).isEqualTo(1L)
         assertThat(jdbc.queryForObject("select count(*) from workforce_shift where hotel_id=:hotel and status='WORKING'", mapOf("hotel" to hotelId), Long::class.java)).isGreaterThanOrEqualTo(7L)
         assertThat(jdbc.queryForObject("""select count(*) from task where hotel_id=:hotel and title='HVAC maintenance'
-            and status='ASSIGNED' and assignee_display_name='HVAC Technician'""", mapOf("hotel" to hotelId), Long::class.java)).isEqualTo(1L)
+            and status='ASSIGNED' and assignee_display_name='Bekzod Abdullayev'""", mapOf("hotel" to hotelId), Long::class.java)).isEqualTo(1L)
     }
 }

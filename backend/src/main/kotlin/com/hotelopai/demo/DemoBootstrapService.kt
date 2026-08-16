@@ -43,6 +43,7 @@ import java.util.UUID
 @ConfigurationProperties("ops.ai.demo.bootstrap")
 data class DemoBootstrapProperties(
     val enabled: Boolean = false,
+    val defaultPassword: String = "",
     val gmPassword: String = "",
     val housekeepingSupervisorPassword: String = "",
     val housekeeperPassword: String = "",
@@ -51,18 +52,15 @@ data class DemoBootstrapProperties(
     val guestRelationsPassword: String = "",
     val adminPassword: String = ""
 ) {
-    fun passwordFor(code: String): String = when (code) {
+    fun passwordFor(code: String): String = (defaultPassword.takeIf { it.isNotBlank() } ?: when (code) {
         "GM" -> gmPassword
-        "HOUSEKEEPING_SUPERVISOR" -> housekeepingSupervisorPassword
-        "HOUSEKEEPER" -> housekeeperPassword
-        "HOUSEKEEPER_2", "HOUSEKEEPER_3" -> housekeeperPassword
-        "TECHNICIAN" -> technicianPassword
-        "TECHNICIAN_PLUMBING", "TECHNICIAN_CARPENTRY" -> technicianPassword
-        "RECEPTION" -> receptionPassword
+        "HOUSEKEEPING_MANAGER", "HOUSEKEEPING_SUPERVISOR", "TECHNICAL_MANAGER" -> housekeepingSupervisorPassword
+        "HOUSEKEEPER", "PUBLIC_AREA_ATTENDANT", "LAUNDRY_COORDINATOR" -> housekeeperPassword
+        "CHIEF_ENGINEER", "TECHNICIAN" -> technicianPassword
+        "RECEPTIONIST", "FRONT_OFFICE_MANAGER", "FRONT_OFFICE_SUPERVISOR", "NIGHT_AUDITOR", "BELL_SERVICE" -> receptionPassword
         "GUEST_RELATIONS" -> guestRelationsPassword
-        "ADMIN" -> adminPassword
-        else -> error("Unsupported demo role")
-    }.also { require(it.length >= 12) { "Every DEMO user password must be supplied through an environment variable and contain at least 12 characters" } }
+        else -> adminPassword
+    }).also { require(it.length >= 12) { "Every DEMO user password must be supplied through an environment variable and contain at least 12 characters" } }
 }
 
 @Configuration
@@ -100,15 +98,22 @@ class DemoBootstrapService(
         val missingPermissions = REQUIRED_PERMISSIONS - allPermissionIds.keys
         require(missingPermissions.isEmpty()) { "MVP permission migrations must run before DEMO bootstrap; missing permission codes: ${missingPermissions.sorted().joinToString()}" }
 
-        val departmentByCode = listOf("MANAGEMENT", "HOUSEKEEPING", "MAINTENANCE", "FRONT_OFFICE", "GUEST_RELATIONS")
+        val departmentByCode = listOf("MANAGEMENT", "SALES_MARKETING", "FINANCE", "HOUSEKEEPING", "MAINTENANCE", "FRONT_OFFICE", "GUEST_RELATIONS", "FOOD_BEVERAGE", "SECURITY", "IT_SYSTEMS")
             .associateWith { ensureDepartment(hotel.id, it) }
-        val skillByCode = listOf("ROOM_CLEANING", "HOUSEKEEPING_INSPECTION", "MINIBAR", "HVAC_REPAIR", "ELECTRICAL", "PLUMBING", "CARPENTRY", "GUEST_RECOVERY")
+        val skillByCode = listOf("ROOM_CLEANING", "HOUSEKEEPING_INSPECTION", "MINIBAR", "HVAC_REPAIR", "ELECTRICAL", "PLUMBING", "CARPENTRY", "GUEST_RECOVERY", "DEEP_CLEANING", "AMENITIES", "IT_NETWORK", "QUALITY_INSPECTION")
             .associateWith { ensureSkill(hotel.id, it) }
 
-        val staff = DEMO_USERS.map { definition ->
+        val staff = CANONICAL_EMPLOYEES.map { definition ->
             val role = ensureRole(hotel.id, definition, allPermissionIds)
             ensureUserAndEmployee(hotel.id, definition, role.id, departmentByCode.getValue(definition.department),
                 definition.skills.map(skillByCode::getValue).map(Skill::id).toSet())
+        }
+        reconcileLegacyDemoAccounts(hotel.id)
+        val employeeByNumber = staff.associateBy { it.employeeNumber }
+        CANONICAL_EMPLOYEES.forEach { definition ->
+            val supervisor = definition.supervisorEmployeeNumber?.let(employeeByNumber::getValue)?.id
+            val current = employeeByNumber.getValue(definition.employeeNumber)
+            if (current.supervisorEmployeeId != supervisor) employees.save(current.copy(supervisorEmployeeId = supervisor))
         }
         staff.forEach { ensureActiveShift(hotel.id, it.id) }
         // Master operational data is idempotent and is also repaired for an
@@ -127,28 +132,55 @@ class DemoBootstrapService(
 
     private fun ensureRole(hotelId: UUID, definition: DemoUser, permissionIds: Map<String, UUID>): Role {
         val desiredIds = definition.permissions.map(permissionIds::getValue).toSet()
-        val existing = roles.findByHotelIdAndCode(hotelId, definition.roleCode)
+        val existing = roles.findByHotelIdAndCode(hotelId, definition.appRole)
         return when {
-            existing == null -> roles.save(Role(hotelId = hotelId, code = definition.roleCode, name = definition.displayName, permissionIds = desiredIds))
+            existing == null -> roles.save(Role(hotelId = hotelId, code = definition.appRole, name = definition.sourceRole, permissionIds = desiredIds))
             existing.permissionIds != desiredIds -> roles.save(existing.copy(permissionIds = desiredIds))
             else -> existing
         }
     }
 
     private fun ensureUserAndEmployee(hotelId: UUID, definition: DemoUser, roleId: UUID, department: Department, skillIds: Set<UUID>): Employee {
-        employees.findByHotelIdAndEmployeeNumber(hotelId, definition.employeeNumber)?.let { return it }
-        val password = properties.passwordFor(definition.roleCode)
-        val employeeId = UuidV7Generator.generate()
-        val user = users.findByHotelIdAndEmail(hotelId, definition.email) ?: users.save(User(
-            hotelId = hotelId, employeeId = employeeId, email = EmailAddress.of(definition.email),
+        val existingEmployee = employees.findByHotelIdAndEmployeeNumber(hotelId, definition.employeeNumber)
+        val employeeId = existingEmployee?.id ?: UuidV7Generator.generate()
+        val password = properties.passwordFor(definition.appRole)
+        val email = emailFor(definition.displayName)
+        val existingUser = users.findByHotelIdAndEmail(hotelId, email)
+        val user = if (existingUser == null) users.save(User(
+            hotelId = hotelId, employeeId = employeeId, email = EmailAddress.of(email),
             displayName = definition.displayName, passwordHash = passwordHasher.hash(password), roleIds = setOf(roleId), status = UserStatus.ACTIVE
+        )) else users.save(existingUser.copy(
+            employeeId = employeeId, displayName = definition.displayName, roleIds = setOf(roleId), status = UserStatus.ACTIVE
         ))
-        return employees.save(Employee(
-            id = employeeId, hotelId = hotelId, userId = user.id, employeeNumber = definition.employeeNumber,
-            displayName = definition.displayName, departmentId = department.id, roleIds = setOf(roleId), skillIds = skillIds,
-            primaryRoleCode = definition.roleCode, homeArea = definition.homeArea, languages = setOf("en", "tr"),
+        return employees.save((existingEmployee ?: Employee(
+            id = employeeId, hotelId = hotelId, employeeNumber = definition.employeeNumber, displayName = definition.displayName
+        )).copy(
+            userId = user.id, displayName = definition.displayName, departmentId = department.id,
+            roleIds = setOf(roleId), skillIds = skillIds, primaryRoleCode = definition.appRole,
+            homeArea = definition.homeArea, languages = definition.languages,
+            status = com.hotelopai.employee.domain.EmployeeStatus.ACTIVE,
             operationalStatus = EmployeeOperationalStatus.AVAILABLE
         ))
+    }
+
+    private fun emailFor(displayName: String): String = displayName
+        .lowercase()
+        .replace("ğ", "g").replace("ü", "u").replace("ş", "s").replace("ı", "i")
+        .replace("ö", "o").replace("ç", "c").replace("ä", "a").replace("é", "e")
+        .replace("[^a-z0-9]+".toRegex(), ".")
+        .trim('.') + "@demo.hotelopai.app"
+
+    private fun reconcileLegacyDemoAccounts(hotelId: UUID) {
+        val legacyEmails = listOf(
+            "reviewer.admin@demo.hotelopai.app", "gm@demo.hotelopai.app", "technician@demo.hotelopai.app",
+            "murat.technician@demo.hotelopai.app", "burak.technician@demo.hotelopai.app", "housekeeper@demo.hotelopai.app",
+            "ayse.housekeeper@demo.hotelopai.app", "burcu.housekeeper@demo.hotelopai.app",
+            "housekeeping.supervisor@demo.hotelopai.app", "reception@demo.hotelopai.app", "guest.relations@demo.hotelopai.app",
+            "admin@hotelopai.local", "technician@hotelopai.local", "housekeeper@hotelopai.local"
+        )
+        jdbc.update("update app_user set status='DISABLED' where hotel_id=:hotel and email in (:emails)", mapOf("hotel" to hotelId, "emails" to legacyEmails))
+        jdbc.update("update employee set status='INACTIVE' where hotel_id=:hotel and employee_number like 'DEMO-%'", mapOf("hotel" to hotelId))
+        jdbc.update("update employee set status='INACTIVE' where hotel_id=:hotel and employee_number in ('EMP-ADMIN','EMP-TECH-001','EMP-HK-001')", mapOf("hotel" to hotelId))
     }
 
     private fun ensureActiveShift(hotelId: UUID, employeeId: UUID) {
@@ -249,8 +281,9 @@ class DemoBootstrapService(
     }
 
     private data class DemoUser(
-        val roleCode: String, val email: String, val employeeNumber: String, val displayName: String,
-        val department: String, val skills: Set<String>, val homeArea: String?, val permissions: Set<String>
+        val employeeNumber: String, val displayName: String, val sourceRole: String, val appRole: String,
+        val department: String, val skills: Set<String>, val homeArea: String?, val languages: Set<String>,
+        val shiftCode: String, val permissions: Set<String>, val supervisorEmployeeNumber: String? = null
     )
 
     companion object {
@@ -262,23 +295,44 @@ class DemoBootstrapService(
             PermissionCodes.ASSISTANT_ATTACHMENT_REGISTER, PermissionCodes.ASSISTANT_VISION_IMPORT,
             PermissionCodes.NOTIFICATION_READ, PermissionCodes.NOTIFICATION_MARK_READ)
         private val REQUIRED_PERMISSIONS = PermissionCodes::class.java.declaredFields.filter { it.type == String::class.java }.map { it.get(null) as String }.toSet()
-        private val DEMO_USERS = listOf(
-            DemoUser("GM", "gm@demo.hotelopai.app", "DEMO-GM", "General Manager", "MANAGEMENT", emptySet(), null,
-                REQUIRED_PERMISSIONS - PermissionCodes.DEV_PMS_ACCESS),
-            DemoUser("HOUSEKEEPING_SUPERVISOR", "housekeeping.supervisor@demo.hotelopai.app", "DEMO-HKS", "Housekeeping Supervisor", "HOUSEKEEPING", setOf("ROOM_CLEANING", "HOUSEKEEPING_INSPECTION"), "3",
-                FIELD + setOf(PermissionCodes.TASK_ASSIGN, PermissionCodes.HOUSEKEEPING_OPERATIONS, PermissionCodes.HOUSEKEEPING_INSPECTION, PermissionCodes.SHIFT_OPERATIONS)),
-            DemoUser("HOUSEKEEPER", "housekeeper@demo.hotelopai.app", "DEMO-HK", "Housekeeper", "HOUSEKEEPING", setOf("ROOM_CLEANING", "MINIBAR"), "3",
-                FIELD + setOf(PermissionCodes.HOUSEKEEPING_OPERATIONS, PermissionCodes.MINIBAR_OPERATIONS, PermissionCodes.SHIFT_OPERATIONS, PermissionCodes.GAMIFICATION_VIEW)),
-            DemoUser("HOUSEKEEPER_2", "ayse.housekeeper@demo.hotelopai.app", "DEMO-HK-2", "Ayşe Kaya", "HOUSEKEEPING", setOf("ROOM_CLEANING"), "1", FIELD + setOf(PermissionCodes.HOUSEKEEPING_OPERATIONS, PermissionCodes.SHIFT_OPERATIONS)),
-            DemoUser("HOUSEKEEPER_3", "burcu.housekeeper@demo.hotelopai.app", "DEMO-HK-3", "Burcu Çetin", "HOUSEKEEPING", setOf("ROOM_CLEANING", "MINIBAR"), "4", FIELD + setOf(PermissionCodes.HOUSEKEEPING_OPERATIONS, PermissionCodes.MINIBAR_OPERATIONS, PermissionCodes.SHIFT_OPERATIONS)),
-            DemoUser("TECHNICIAN", "technician@demo.hotelopai.app", "DEMO-TECH", "HVAC Technician", "MAINTENANCE", setOf("HVAC_REPAIR", "ELECTRICAL", "PLUMBING"), "3", FIELD),
-            DemoUser("TECHNICIAN_PLUMBING", "murat.technician@demo.hotelopai.app", "DEMO-TECH-2", "Murat Yıldız", "MAINTENANCE", setOf("PLUMBING", "ELECTRICAL"), "2", FIELD),
-            DemoUser("TECHNICIAN_CARPENTRY", "burak.technician@demo.hotelopai.app", "DEMO-TECH-3", "Burak Çetin", "MAINTENANCE", setOf("CARPENTRY", "ELECTRICAL"), "4", FIELD),
-            DemoUser("RECEPTION", "reception@demo.hotelopai.app", "DEMO-FO", "Front Office", "FRONT_OFFICE", emptySet(), null,
-                FIELD + setOf(PermissionCodes.MINIBAR_OPERATIONS, PermissionCodes.DAMAGE_REVIEW, PermissionCodes.SERVICE_RECOVERY_OPERATIONS, PermissionCodes.GUEST_MESSAGING_OPERATIONS)),
-            DemoUser("GUEST_RELATIONS", "guest.relations@demo.hotelopai.app", "DEMO-GR", "Guest Relations", "GUEST_RELATIONS", setOf("GUEST_RECOVERY"), null,
-                FIELD + setOf(PermissionCodes.SERVICE_RECOVERY_OPERATIONS, PermissionCodes.GUEST_MESSAGING_OPERATIONS, PermissionCodes.DASHBOARD_READ)),
-            DemoUser("ADMIN", "reviewer.admin@demo.hotelopai.app", "DEMO-ADMIN", "Admin Reviewer", "MANAGEMENT", emptySet(), null, REQUIRED_PERMISSIONS)
+        private val SUPERVISOR = FIELD + setOf(PermissionCodes.TASK_ASSIGN, PermissionCodes.SHIFT_OPERATIONS, PermissionCodes.DASHBOARD_READ)
+        private val HOUSEKEEPING = FIELD + setOf(PermissionCodes.HOUSEKEEPING_OPERATIONS, PermissionCodes.SHIFT_OPERATIONS)
+        private val CANONICAL_EMPLOYEES = listOf(
+            DemoUser("EMP0001", "Kemal Yılmaz", "General Manager", "GM", "MANAGEMENT", emptySet(), null, setOf("Turkish", "English"), "N", REQUIRED_PERMISSIONS - PermissionCodes.DEV_PMS_ACCESS),
+            DemoUser("EMP0002", "Selin Kaya", "Sales & Marketing Manager", "SALES_MANAGER", "SALES_MARKETING", setOf("GUEST_RECOVERY"), null, setOf("Turkish", "English"), "N", FIELD + setOf(PermissionCodes.DASHBOARD_READ, PermissionCodes.REPORT_READ), "EMP0001"),
+            DemoUser("EMP0003", "Ahmet Demir", "Finance Manager", "FINANCE_MANAGER", "FINANCE", emptySet(), null, setOf("Turkish", "English"), "N", FIELD + setOf(PermissionCodes.DASHBOARD_READ, PermissionCodes.REPORT_READ), "EMP0001"),
+            DemoUser("EMP0004", "Murat Yıldız", "Front Office Manager", "FRONT_OFFICE_MANAGER", "FRONT_OFFICE", setOf("GUEST_RECOVERY"), null, setOf("Turkish", "English"), "N", SUPERVISOR, "EMP0001"),
+            DemoUser("EMP0005", "Burak Çetin", "Front Office Supervisor", "FRONT_OFFICE_SUPERVISOR", "FRONT_OFFICE", setOf("GUEST_RECOVERY"), null, setOf("Turkish", "English"), "V1", SUPERVISOR, "EMP0004"),
+            DemoUser("EMP0006", "Eser Aydın", "Receptionist", "RECEPTIONIST", "FRONT_OFFICE", emptySet(), null, setOf("Turkish", "English"), "V1", FIELD, "EMP0005"),
+            DemoUser("EMP0007", "Canan Öz", "Receptionist", "RECEPTIONIST", "FRONT_OFFICE", emptySet(), null, setOf("Turkish", "English"), "V2", FIELD, "EMP0005"),
+            DemoUser("EMP0008", "Aibek Tursunov", "Night Auditor", "NIGHT_AUDITOR", "FRONT_OFFICE", emptySet(), null, setOf("Kyrgyz", "Russian", "English"), "V3", FIELD, "EMP0004"),
+            DemoUser("EMP0009", "Mert Can", "Bell Service", "BELL_SERVICE", "FRONT_OFFICE", emptySet(), null, setOf("Turkish", "English"), "V1", FIELD, "EMP0004"),
+            DemoUser("EMP0010", "Azamat Nurpeisov", "Bell Service", "BELL_SERVICE", "FRONT_OFFICE", emptySet(), null, setOf("Kazakh", "Russian", "English"), "V2", FIELD, "EMP0004"),
+            DemoUser("EMP0011", "Anna Müller", "Guest Relations Officer", "GUEST_RELATIONS", "GUEST_RELATIONS", setOf("GUEST_RECOVERY"), null, setOf("German", "English", "Turkish"), "N", FIELD + setOf(PermissionCodes.SERVICE_RECOVERY_OPERATIONS, PermissionCodes.GUEST_MESSAGING_OPERATIONS), "EMP0001"),
+            DemoUser("EMP0012", "Fatma Şahin", "Executive Housekeeper", "HOUSEKEEPING_MANAGER", "HOUSEKEEPING", setOf("ROOM_CLEANING", "HOUSEKEEPING_INSPECTION", "MINIBAR", "DEEP_CLEANING"), null, setOf("Turkish", "English"), "N", SUPERVISOR + setOf(PermissionCodes.HOUSEKEEPING_OPERATIONS, PermissionCodes.HOUSEKEEPING_INSPECTION), "EMP0001"),
+            DemoUser("EMP0013", "Ayşe Yılmaz", "Floor Supervisor", "HOUSEKEEPING_SUPERVISOR", "HOUSEKEEPING", setOf("ROOM_CLEANING", "HOUSEKEEPING_INSPECTION", "QUALITY_INSPECTION"), null, setOf("Turkish", "English"), "V1", SUPERVISOR + setOf(PermissionCodes.HOUSEKEEPING_OPERATIONS, PermissionCodes.HOUSEKEEPING_INSPECTION), "EMP0012"),
+            DemoUser("EMP0014", "Zeynep Çelik", "Housekeeper", "HOUSEKEEPER", "HOUSEKEEPING", setOf("ROOM_CLEANING", "AMENITIES"), "1", setOf("Turkish"), "V1", HOUSEKEEPING, "EMP0013"),
+            DemoUser("EMP0015", "Dilnoza Karimova", "Housekeeper", "HOUSEKEEPER", "HOUSEKEEPING", setOf("ROOM_CLEANING", "AMENITIES"), "2", setOf("Uzbek", "Russian", "English"), "V1", HOUSEKEEPING, "EMP0013"),
+            DemoUser("EMP0016", "Aizada Ismailova", "Housekeeper", "HOUSEKEEPER", "HOUSEKEEPING", setOf("ROOM_CLEANING", "MINIBAR"), "3", setOf("Kyrgyz", "Russian", "English"), "V1", HOUSEKEEPING, "EMP0013"),
+            DemoUser("EMP0017", "Aigerim Sarsenova", "Housekeeper", "HOUSEKEEPER", "HOUSEKEEPING", setOf("ROOM_CLEANING", "AMENITIES"), "4", setOf("Kazakh", "Russian", "English"), "V1", HOUSEKEEPING, "EMP0013"),
+            DemoUser("EMP0018", "Olena Kovalenko", "Housekeeper", "HOUSEKEEPER", "HOUSEKEEPING", setOf("ROOM_CLEANING", "MINIBAR"), "5", setOf("Ukrainian", "Russian", "English"), "V1", HOUSEKEEPING, "EMP0013"),
+            DemoUser("EMP0019", "Yasemin Ak", "Evening Housekeeper", "HOUSEKEEPER", "HOUSEKEEPING", setOf("ROOM_CLEANING", "DEEP_CLEANING"), null, setOf("Turkish"), "V2", HOUSEKEEPING, "EMP0013"),
+            DemoUser("EMP0020", "Hülya Avcı", "Public Area Attendant", "PUBLIC_AREA_ATTENDANT", "HOUSEKEEPING", setOf("ROOM_CLEANING"), null, setOf("Turkish"), "V1", HOUSEKEEPING, "EMP0012"),
+            DemoUser("EMP0021", "Nigora Rakhimova", "Laundry & Linen Coordinator", "LAUNDRY_COORDINATOR", "HOUSEKEEPING", setOf("AMENITIES"), null, setOf("Uzbek", "Russian", "English"), "V1", HOUSEKEEPING, "EMP0012"),
+            DemoUser("EMP0022", "Mustafa Tekin", "Chief Engineer", "TECHNICAL_MANAGER", "MAINTENANCE", setOf("ELECTRICAL", "PLUMBING", "HVAC_REPAIR"), null, setOf("Turkish", "English"), "N", SUPERVISOR, "EMP0001"),
+            DemoUser("EMP0023", "Ali Yılmaz", "Electrical Technician", "TECHNICIAN", "MAINTENANCE", setOf("ELECTRICAL"), null, setOf("Turkish", "English"), "V1", FIELD, "EMP0022"),
+            DemoUser("EMP0024", "Bekzod Abdullayev", "HVAC & Plumbing Technician", "TECHNICIAN", "MAINTENANCE", setOf("HVAC_REPAIR", "PLUMBING"), null, setOf("Uzbek", "Russian", "English"), "V2", FIELD, "EMP0022"),
+            DemoUser("EMP0025", "James Wilson", "IT & Network Technician", "IT_TECHNICIAN", "IT_SYSTEMS", setOf("IT_NETWORK"), null, setOf("English"), "N", FIELD, "EMP0035"),
+            DemoUser("EMP0026", "Serkan Arslan", "F&B Manager", "FB_MANAGER", "FOOD_BEVERAGE", emptySet(), null, setOf("Turkish", "English"), "N", SUPERVISOR, "EMP0001"),
+            DemoUser("EMP0027", "Okan Köse", "Breakfast Chef", "CHEF", "FOOD_BEVERAGE", emptySet(), null, setOf("Turkish"), "V1", FIELD, "EMP0026"),
+            DemoUser("EMP0028", "Gamze Güneş", "Restaurant Waiter", "WAITER", "FOOD_BEVERAGE", emptySet(), null, setOf("Turkish", "English"), "V1", FIELD, "EMP0026"),
+            DemoUser("EMP0029", "Engin Demir", "Barista", "BARISTA", "FOOD_BEVERAGE", emptySet(), null, setOf("Turkish", "English"), "V2", FIELD, "EMP0026"),
+            DemoUser("EMP0030", "Madina Ergasheva", "Room Service Attendant", "ROOM_SERVICE", "FOOD_BEVERAGE", emptySet(), null, setOf("Uzbek", "Russian", "English"), "V2", FIELD, "EMP0026"),
+            DemoUser("EMP0031", "Ivan Petrov", "Steward", "STEWARD", "FOOD_BEVERAGE", emptySet(), null, setOf("Russian", "English"), "V1", FIELD, "EMP0026"),
+            DemoUser("EMP0032", "Hasan Karaca", "Security Supervisor", "SECURITY_SUPERVISOR", "SECURITY", emptySet(), null, setOf("Turkish", "English"), "N", SUPERVISOR, "EMP0001"),
+            DemoUser("EMP0033", "Rustam Sodikov", "Security Officer", "SECURITY_OFFICER", "SECURITY", emptySet(), null, setOf("Tajik", "Russian", "English"), "V1", FIELD, "EMP0032"),
+            DemoUser("EMP0034", "Sergey Ivanov", "Security Officer", "SECURITY_OFFICER", "SECURITY", emptySet(), null, setOf("Russian", "English"), "V2", FIELD, "EMP0032"),
+            DemoUser("EMP0035", "Elif Korkmaz", "Digital Systems Coordinator", "IT_SYSTEM_ADMIN", "IT_SYSTEMS", setOf("IT_NETWORK"), null, setOf("Turkish", "English"), "N", FIELD + setOf(PermissionCodes.DASHBOARD_READ), "EMP0001")
         )
     }
 }

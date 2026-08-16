@@ -27,6 +27,7 @@ ops:
     demo:
       bootstrap:
         enabled: ${OPS_AI_DEMO_BOOTSTRAP_ENABLED:true}
+        default-password: ${DEMO_DEFAULT_PASSWORD:}
         gm-password: ${DEMO_GM_PASSWORD:}
         housekeeping-supervisor-password: ${DEMO_HOUSEKEEPING_SUPERVISOR_PASSWORD:}
         housekeeper-password: ${DEMO_HOUSEKEEPER_PASSWORD:}
