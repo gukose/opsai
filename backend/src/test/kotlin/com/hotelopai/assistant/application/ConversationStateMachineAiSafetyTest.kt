@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test
 
 class ConversationStateMachineAiSafetyTest {
     @Test
-    fun `low confidence output produces clarification and cannot create task`() {
+    fun `low confidence output becomes a general preview without asking for task type`() {
         val stateMachine = ConversationStateMachine(
             interpreter = object : AiInterpreter {
                 override fun interpret(request: AssistantInterpretationRequest): InterpretationResult =
@@ -34,15 +34,15 @@ class ConversationStateMachineAiSafetyTest {
             command = messageCommand()
         )
 
-        assertEquals(ConversationState.WAITING_FOR_USER_ANSWER, result.conversation.state)
+        assertEquals(ConversationState.WAITING_FOR_CONFIRMATION, result.conversation.state)
         assertEquals(1, result.conversation.messages.size)
         assertNull(result.taskCreationCandidate)
         assertNull(result.createdTaskId)
-        assertNull(result.conversation.taskPreview)
+        assertEquals(IntentType.GENERAL_OPERATIONAL_NOTE, result.conversation.taskPreview?.type)
     }
 
     @Test
-    fun `malformed structured output is rejected safely and cannot create task`() {
+    fun `malformed structured output falls back without asking for task type`() {
         val stateMachine = ConversationStateMachine(
             interpreter = object : AiInterpreter {
                 override fun interpret(request: AssistantInterpretationRequest): InterpretationResult {
@@ -56,10 +56,11 @@ class ConversationStateMachineAiSafetyTest {
             command = messageCommand()
         )
 
-        assertEquals(ConversationState.WAITING_FOR_USER_ANSWER, result.conversation.state)
+        assertEquals(ConversationState.WAITING_FOR_CONFIRMATION, result.conversation.state)
         assertEquals(1, result.conversation.messages.size)
         assertNull(result.taskCreationCandidate)
         assertNull(result.createdTaskId)
+        assertEquals(IntentType.GENERAL_OPERATIONAL_NOTE, result.conversation.taskPreview?.type)
     }
 
     @Test

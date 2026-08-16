@@ -13,5 +13,6 @@ enum class TaskIntentType {
     SHIFT_HANDOVER,
     PUBLIC_AREA,
     INVENTORY,
-    DELIVERIES
+    DELIVERIES,
+    GENERAL_OPERATIONAL_NOTE
 }

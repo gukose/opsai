@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Profile
 import org.springframework.security.access.AccessDeniedException
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
+import org.springframework.dao.DataAccessException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -112,6 +113,10 @@ class DemoTaskResetService(
 
         related += delete("delete from task_interruption where hotel_id=:hotel and (paused_task_id in (:taskIds) or interrupting_task_id in (:taskIds))", parameters)
         related += delete("delete from guest_message where hotel_id=:hotel and task_id in (:taskIds)", parameters)
+        related += delete(
+            "delete from shift_handover_ack where handover_id in (select id from shift_handover where hotel_id=:hotel and task_id in (:taskIds))",
+            parameters
+        )
         related += delete("delete from shift_handover where hotel_id=:hotel and task_id in (:taskIds)", parameters)
         related += delete(
             """delete from operational_outbox o using reservation_task_automation_execution e, reservation_snapshot s
@@ -180,7 +185,18 @@ class DemoTaskResetService(
     private fun taskCount(hotelId: UUID): Int =
         jdbc.queryForObject("select count(*) from task where hotel_id=:hotel", mapOf("hotel" to hotelId), Int::class.java) ?: 0
 
-    private fun delete(sql: String, parameters: Map<String, *>): Int = jdbc.update(sql, parameters)
+    private fun delete(sql: String, parameters: Map<String, *>): Int = try {
+        jdbc.update(sql, parameters)
+    } catch (exception: DataAccessException) {
+        val table = Regex("delete\\s+from\\s+([a-zA-Z0-9_]+)", RegexOption.IGNORE_CASE)
+            .find(sql)?.groupValues?.getOrNull(1) ?: "unknown"
+        logger.error(
+            "event=demo_task_reset outcome=failure operation=delete table={} exceptionType={}",
+            table,
+            exception::class.simpleName
+        )
+        throw exception
+    }
 
     private fun audit(tasksDeleted: Int, relatedRecordsDeleted: Int) {
         logger.info(

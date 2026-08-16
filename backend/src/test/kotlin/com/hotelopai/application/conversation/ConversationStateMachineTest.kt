@@ -52,6 +52,39 @@ class ConversationStateMachineTest {
     }
 
     @Test
+    fun `low confidence request becomes a general task instead of asking for task type`() {
+        val result = stateMachine.handleUserMessage(
+            conversation = newConversation(),
+            command = command("msg-1", "Room 402 operational inspection")
+        ).conversation
+
+        assertEquals(ConversationState.WAITING_FOR_CONFIRMATION, result.state)
+        assertEquals(IntentType.GENERAL_OPERATIONAL_NOTE, result.intent)
+        assertEquals(IntentType.GENERAL_OPERATIONAL_NOTE, result.taskPreview?.type)
+        assertEquals("402", result.taskPreview?.roomNumber)
+    }
+
+    @Test
+    fun `general task accepts a textual location when room number is unavailable`() {
+        val firstTurn = stateMachine.handleUserMessage(
+            conversation = newConversation(),
+            command = command("msg-1", "Please inspect the public area")
+        ).conversation
+
+        assertEquals(ConversationState.WAITING_FOR_USER_ANSWER, firstTurn.state)
+        assertEquals(IntentType.GENERAL_OPERATIONAL_NOTE, firstTurn.intent)
+        assertEquals(FieldKeys.ROOM_NUMBER, firstTurn.followUpQuestion?.fieldKey)
+
+        val result = stateMachine.handleUserMessage(
+            conversation = firstTurn,
+            command = command("msg-2", "Lobby entrance")
+        ).conversation
+
+        assertEquals(ConversationState.WAITING_FOR_CONFIRMATION, result.state)
+        assertEquals("Lobby entrance", result.taskPreview?.roomNumber)
+    }
+
+    @Test
     fun `confirmation creates task creation candidate`() {
         val readyForConfirmation = stateMachine.handleUserMessage(
             conversation = newConversation(),

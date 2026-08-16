@@ -14,5 +14,6 @@ enum class IntentType {
     PUBLIC_AREA,
     INVENTORY,
     DELIVERIES,
+    GENERAL_OPERATIONAL_NOTE,
     UNKNOWN
 }

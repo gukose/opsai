@@ -39,6 +39,7 @@ fun IntentType.toTaskIntentType(): TaskIntentType =
         IntentType.PUBLIC_AREA -> TaskIntentType.PUBLIC_AREA
         IntentType.INVENTORY -> TaskIntentType.INVENTORY
         IntentType.DELIVERIES -> TaskIntentType.DELIVERIES
+        IntentType.GENERAL_OPERATIONAL_NOTE -> TaskIntentType.GENERAL_OPERATIONAL_NOTE
         IntentType.UNKNOWN -> throw IllegalArgumentException("Cannot create task for unknown intent")
     }
 

@@ -336,6 +336,14 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
         <View style={[styles.footer, isDesktop ? styles.footerDesktop : null]}>
           {isHomeSurface ? (
             <View style={isTablet && !isDesktop ? styles.composerTablet : null}>
+              <View
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+                style={styles.assistantRelationshipCue}
+              >
+                <View style={[styles.relationshipBracket, styles.relationshipBracketLeft]} />
+                <View style={[styles.relationshipBracket, styles.relationshipBracketRight]} />
+              </View>
               <Composer
               onSend={async (text, attachments, transcript, observations = []) => {
                 if (assistantBackendEnabled && attachments.some((attachment) => attachment.storageStatus !== "REGISTERED")) {
@@ -517,6 +525,30 @@ const styles = StyleSheet.create({
   },
   composerTablet: {
     paddingHorizontal: 12
+  },
+  assistantRelationshipCue: {
+    height: 12,
+    marginHorizontal: 8,
+    marginBottom: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between"
+  },
+  relationshipBracket: {
+    width: 13,
+    height: 11,
+    borderColor: "rgba(148, 163, 184, 0.46)",
+    borderWidth: 1
+  },
+  relationshipBracketLeft: {
+    borderRightWidth: 0,
+    borderTopLeftRadius: 7,
+    borderBottomLeftRadius: 7
+  },
+  relationshipBracketRight: {
+    borderLeftWidth: 0,
+    borderTopRightRadius: 7,
+    borderBottomRightRadius: 7
   },
   errorBanner: {
     marginHorizontal: 13,

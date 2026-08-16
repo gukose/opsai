@@ -18,19 +18,6 @@ class MaintenanceIntentDefinition : ConversationFlowDefinition {
 
     override val validationRules: List<ConversationValidationRule> = listOf(
         ConversationValidationRule { fields ->
-            val roomNumber = fields[FieldKeys.ROOM_NUMBER].orEmpty()
-            if (roomNumber.isNotBlank() && roomNumber.any { !it.isDigit() }) {
-                listOf(
-                    ConversationValidationIssue(
-                        fieldKey = FieldKeys.ROOM_NUMBER,
-                        message = "Room number must contain only digits."
-                    )
-                )
-            } else {
-                emptyList()
-            }
-        },
-        ConversationValidationRule { fields ->
             val description = fields[FieldKeys.DESCRIPTION].orEmpty()
             if (description.isNotBlank() && description.length < 3) {
                 listOf(
@@ -49,7 +36,7 @@ class MaintenanceIntentDefinition : ConversationFlowDefinition {
         val normalized = userText.lowercase()
         return when {
             maintenanceKeywords.any { it in normalized } -> 0.93
-            normalized.any(Char::isDigit) -> 0.75
+            normalized.any(Char::isDigit) -> 0.60
             else -> 0.55
         }
     }

@@ -16,27 +16,13 @@ class GuestRequestIntentDefinition : ConversationFlowDefinition {
 
     override val optionalFields: List<ConversationFieldDefinition> = emptyList()
 
-    override val validationRules: List<ConversationValidationRule> = listOf(
-        ConversationValidationRule { fields ->
-            val roomNumber = fields[FieldKeys.ROOM_NUMBER].orEmpty()
-            if (roomNumber.isNotBlank() && roomNumber.any { !it.isDigit() }) {
-                listOf(
-                    ConversationValidationIssue(
-                        fieldKey = FieldKeys.ROOM_NUMBER,
-                        message = "Room number must contain only digits."
-                    )
-                )
-            } else {
-                emptyList()
-            }
-        }
-    )
+    override val validationRules: List<ConversationValidationRule> = emptyList()
 
     override fun matchScore(conversation: Conversation, userText: String): Double {
         val normalized = userText.lowercase()
         return when {
             guestRequestKeywords.any { it in normalized } -> 0.92
-            normalized.any(Char::isDigit) -> 0.72
+            normalized.any(Char::isDigit) -> 0.60
             else -> 0.56
         }
     }

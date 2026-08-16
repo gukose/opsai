@@ -7,7 +7,8 @@ import com.hotelopai.assistant.domain.IntentType
 class ConversationFlowRegistry(
     definitions: List<ConversationFlowDefinition> = listOf(
         GuestRequestIntentDefinition(),
-        MaintenanceIntentDefinition()
+        MaintenanceIntentDefinition(),
+        GeneralOperationalIntentDefinition()
     )
 ) {
     private val definitionsByIntent = definitions.associateBy { it.intent }

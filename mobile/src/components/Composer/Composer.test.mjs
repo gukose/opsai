@@ -42,3 +42,12 @@ test("composer identifies the same assistant context as the status card", () => 
   assert.match(source, /contextStatusText/);
   assert.doesNotMatch(source, /connector|vertical connector/);
 });
+
+test("assistant relationship cue uses short subtle side braces without a connector line", () => {
+  const homeSource = fs.readFileSync("src/components/Assistant/AssistantHomeScreen.tsx", "utf8");
+  assert.match(homeSource, /assistantRelationshipCue/);
+  assert.match(homeSource, /relationshipBracketLeft/);
+  assert.match(homeSource, /relationshipBracketRight/);
+  assert.match(homeSource, /rgba\(148, 163, 184, 0\.46\)/);
+  assert.doesNotMatch(homeSource, /relationshipCue.*borderTopWidth/);
+});

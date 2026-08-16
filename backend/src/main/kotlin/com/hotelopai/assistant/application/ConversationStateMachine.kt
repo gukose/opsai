@@ -65,7 +65,14 @@ class ConversationStateMachine(
                 AssistantInterpretationRequest.of(withUserMessage, SemanticInputNormalizer.normalize(userMessage))
             )
         }.getOrElse { exception ->
-            return clarificationTurn(withUserMessage, exception.message, now)
+            val fallbackFlow = requireNotNull(flowRegistry.resolve(IntentType.GENERAL_OPERATIONAL_NOTE))
+            InterpretationResult(
+                intent = fallbackFlow.intent,
+                fields = fallbackFlow.extractFields(withUserMessage, transcript.orEmpty()),
+                confidence = 0.0,
+                assistantMessage = "I could not determine a more specific task type, so this will be routed for supervisor assignment.",
+                providerName = "general-fallback"
+            )
         }
 
         val draftId = withUserMessage.activeDraftId ?: newDraftId()
@@ -86,7 +93,11 @@ class ConversationStateMachine(
         } else {
             IntentType.UNKNOWN
         }
-        val selectedFlow = activeFlow ?: flowRegistry.resolve(interpretedFlowIntent)
+        val lowConfidence = interpretation.confidence < confidenceThreshold
+        val generalFlow = flowRegistry.resolve(IntentType.GENERAL_OPERATIONAL_NOTE)
+        val selectedFlow = activeFlow
+            ?: if (lowConfidence) generalFlow else flowRegistry.resolve(interpretedFlowIntent)
+            ?: generalFlow
 
         val collectedFields = withUserMessage.collectedFields + interpretation.fields
 
@@ -99,9 +110,10 @@ class ConversationStateMachine(
             now = now
         )
 
-        val lowConfidence = interpretation.confidence < confidenceThreshold
-
-        if (selectedFlow == null || (activeFlow == null && lowConfidence)) {
+        // An uncertain type is still a valid operational task. Keep the user
+        // moving with a general task and let the assignment engine route it
+        // to a supervisor instead of asking the type question repeatedly.
+        if (selectedFlow == null) {
             return clarificationTurn(
                 conversation = interpreted,
                 aiPrompt = interpretation.followUpQuestion,
