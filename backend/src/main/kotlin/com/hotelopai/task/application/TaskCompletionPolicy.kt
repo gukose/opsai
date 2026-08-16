@@ -10,6 +10,7 @@ import com.hotelopai.task.domain.Task
 import com.hotelopai.task.domain.TaskIntentType
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Service
+import org.slf4j.LoggerFactory
 import java.time.Instant
 
 @Service
@@ -17,6 +18,7 @@ import java.time.Instant
 class TaskCompletionPolicy(
     private val pmsProviderRegistry: PmsProviderRegistry
 ) : CompletionPolicy {
+    private val logger = LoggerFactory.getLogger(TaskCompletionPolicy::class.java)
     override fun evaluate(task: Task, now: Instant): CompletionDecision =
         when (task.intentType) {
             TaskIntentType.HOUSEKEEPING -> {
@@ -31,6 +33,7 @@ class TaskCompletionPolicy(
                 } catch (exception: UnsupportedPmsCapabilityException) {
                     throw TaskCompletionPolicyException("Active PMS provider does not support room-ready updates", exception)
                 } catch (exception: PmsProviderException) {
+                    logProviderFailure(task, exception)
                     throw TaskCompletionPolicyException("UniMock failed during task completion", exception)
                 }
 
@@ -55,6 +58,7 @@ class TaskCompletionPolicy(
                 } catch (exception: UnsupportedPmsCapabilityException) {
                     throw TaskCompletionPolicyException("Active PMS provider does not support maintenance updates", exception)
                 } catch (exception: PmsProviderException) {
+                    logProviderFailure(task, exception)
                     throw TaskCompletionPolicyException("UniMock failed during task completion", exception)
                 }
 
@@ -80,6 +84,18 @@ class TaskCompletionPolicy(
             ?: roomPattern.find("${task.title} ${task.description}")
                 ?.groupValues
                 ?.getOrNull(1)
+
+    private fun logProviderFailure(task: Task, exception: PmsProviderException) {
+        var root: Throwable = exception
+        while (root.cause != null && root.cause !== root) root = root.cause!!
+        logger.warn(
+            "event=task_completion_pms_failure taskId={} provider=internal-demo exceptionClass={} rootCauseClass={} rootCauseMessage={}",
+            task.id,
+            exception::class.simpleName,
+            root::class.simpleName,
+            root.message.orEmpty().replace(Regex("[\\r\\n]+"), " ").take(200)
+        )
+    }
 
     private companion object {
         const val MAINTENANCE_ISSUE_TYPE_CODE = "MAINTENANCE_AC"
