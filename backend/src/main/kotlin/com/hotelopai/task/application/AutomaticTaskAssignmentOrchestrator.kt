@@ -66,6 +66,7 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         val decision = assignmentService.evaluate(
             AssignmentCriteria(
                 hotelId = task.hotelId,
+                employees = employees,
                 requiredSkillId = requirement.requiredSkillId,
                 departmentId = requirement.departmentId,
                 strictRequiredSkill = requirement.requiredSkillId != null,
@@ -80,7 +81,7 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
             ),
             now
         )
-        val skillCodeById = skillRepository.findByHotelId(task.hotelId).associate { it.id to it.code }
+        val skillCodeById = requirement.skillCodeById
         val rankedScore = decision.candidates.associate { it.employeeId to it.score }
         val rankedIds = decision.candidates.map { it.employeeId }
         val manualChoices = employees
@@ -205,6 +206,7 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         }
         val departments = departmentRepository.findByHotelId(task.hotelId)
         val skills = skillRepository.findByHotelId(task.hotelId)
+        val skillCodeById = skills.associate { it.id to it.code }
         val department = departmentCode?.let { code -> departments.firstOrNull { it.code.equals(code, true) } }
         val skill = skillCode?.let { code ->
             skills.firstOrNull { it.code.equals(code, true) } ?:
@@ -216,7 +218,8 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
             skillCode,
             requiredSkillKnown = skillCode == null || skill != null,
             departmentKnown = departmentCode != null && department != null,
-            skillResolutionRequired = task.intentType in setOf(TaskIntentType.MAINTENANCE, TaskIntentType.DAMAGE_REPORT)
+            skillResolutionRequired = task.intentType in setOf(TaskIntentType.MAINTENANCE, TaskIntentType.DAMAGE_REPORT),
+            skillCodeById = skillCodeById
         )
     }
 
@@ -295,7 +298,7 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
 
     private data class Requirement(
         val departmentId: UUID?, val requiredSkillId: UUID?, val requiredSkillCode: String?, val requiredSkillKnown: Boolean,
-        val departmentKnown: Boolean, val skillResolutionRequired: Boolean
+        val departmentKnown: Boolean, val skillResolutionRequired: Boolean, val skillCodeById: Map<UUID, String>
     )
 
     private fun isSupervisoryRole(roleCode: String): Boolean =

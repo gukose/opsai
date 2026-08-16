@@ -17,6 +17,7 @@ interface DeterministicAssignmentService {
 
 data class AssignmentCriteria(
     val hotelId: UUID,
+    val employees: List<Employee>? = null,
     val requiredSkillId: UUID? = null,
     val departmentId: UUID? = null,
     val requiredRoleId: UUID? = null,
@@ -46,7 +47,7 @@ class DefaultDeterministicAssignmentService(
     }
 
     override fun evaluate(criteria: AssignmentCriteria, now: Instant): AssignmentDecision {
-        val baseCandidates = employeeRepository.findByHotelId(criteria.hotelId)
+        val baseCandidates = (criteria.employees ?: employeeRepository.findByHotelId(criteria.hotelId))
             .asSequence()
             .filter { it.status == EmployeeStatus.ACTIVE }
             .filter { it.operationalStatus.acceptsNormalWork() }

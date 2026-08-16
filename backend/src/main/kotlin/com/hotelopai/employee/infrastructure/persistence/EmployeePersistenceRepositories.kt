@@ -20,12 +20,15 @@ class JpaDepartmentRepositoryAdapter(
             departmentJpaRepository.saveAndFlush(DepartmentPersistenceMapper.toEntity(department))
         )
 
+    @Transactional(readOnly = true)
     override fun findById(id: UUID): Department? =
         departmentJpaRepository.findById(id).orElse(null)?.let(DepartmentPersistenceMapper::toDomain)
 
+    @Transactional(readOnly = true)
     override fun findByHotelId(hotelId: UUID): List<Department> =
         departmentJpaRepository.findAllByHotelIdOrderByCodeAsc(hotelId).map(DepartmentPersistenceMapper::toDomain)
 
+    @Transactional(readOnly = true)
     override fun findByHotelIdAndCode(hotelId: UUID, code: String): Department? =
         departmentJpaRepository.findByHotelIdAndCode(hotelId, code)?.let(DepartmentPersistenceMapper::toDomain)
 }
@@ -40,12 +43,15 @@ class JpaSkillRepositoryAdapter(
             skillJpaRepository.saveAndFlush(SkillPersistenceMapper.toEntity(skill))
         )
 
+    @Transactional(readOnly = true)
     override fun findById(id: UUID): Skill? =
         skillJpaRepository.findById(id).orElse(null)?.let(SkillPersistenceMapper::toDomain)
 
+    @Transactional(readOnly = true)
     override fun findByHotelId(hotelId: UUID): List<Skill> =
         skillJpaRepository.findAllByHotelIdOrderByCodeAsc(hotelId).map(SkillPersistenceMapper::toDomain)
 
+    @Transactional(readOnly = true)
     override fun findByHotelIdAndCode(hotelId: UUID, code: String): Skill? =
         skillJpaRepository.findByHotelIdAndCode(hotelId, code)?.let(SkillPersistenceMapper::toDomain)
 }
@@ -65,15 +71,19 @@ class JpaEmployeeRepositoryAdapter(
         return EmployeePersistenceMapper.toDomain(employeeJpaRepository.saveAndFlush(entity))
     }
 
+    @Transactional(readOnly = true)
     override fun findById(id: UUID): Employee? =
         employeeJpaRepository.findById(id).orElse(null)?.let(EmployeePersistenceMapper::toDomain)
 
+    @Transactional(readOnly = true)
     override fun findByHotelId(hotelId: UUID): List<Employee> =
         employeeJpaRepository.findAllByHotelIdOrderByEmployeeNumberAsc(hotelId).map(EmployeePersistenceMapper::toDomain)
 
+    @Transactional(readOnly = true)
     override fun findByHotelIdAndEmployeeNumber(hotelId: UUID, employeeNumber: String): Employee? =
         employeeJpaRepository.findByHotelIdAndEmployeeNumber(hotelId, employeeNumber)?.let(EmployeePersistenceMapper::toDomain)
 
+    @Transactional(readOnly = true)
     override fun findByUserId(userId: UUID): Employee? =
         employeeJpaRepository.findByUserId(userId)?.let(EmployeePersistenceMapper::toDomain)
 }

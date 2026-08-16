@@ -56,8 +56,8 @@ export function TaskDetailCard({
     setAssignmentOpen(true);
     try {
       await onAssignmentOpen?.();
-    } catch (error) {
-      setAssignmentError(error instanceof Error ? error.message : "Unable to load assignment candidates.");
+    } catch {
+      setAssignmentError("Unable to load employees. Please try again.");
     }
   };
 
@@ -250,7 +250,7 @@ function AssignmentModal({
                 </Pressable>
               );
             }}
-            ListEmptyComponent={<Text style={styles.attachmentEmpty}>No eligible employees are currently available.</Text>}
+            ListEmptyComponent={error ? null : <Text style={styles.attachmentEmpty}>No eligible employees are currently available.</Text>}
           />
           {error ? <Text style={styles.modalError}>{error}</Text> : null}
           <View style={styles.sheetActions}>

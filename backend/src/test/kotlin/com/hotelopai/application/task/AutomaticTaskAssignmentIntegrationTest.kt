@@ -17,6 +17,7 @@ import com.hotelopai.task.application.AssignmentCommand
 import com.hotelopai.task.application.CreateTaskCommand
 import com.hotelopai.task.application.TaskLifecycleService
 import com.hotelopai.task.application.TaskCreationAssignmentOrchestrator
+import com.hotelopai.task.application.TaskAssignmentCandidateQuery
 import com.hotelopai.task.domain.TaskAssigneeType
 import com.hotelopai.task.domain.TaskIntentType
 import com.hotelopai.task.domain.TaskPriority
@@ -47,6 +48,7 @@ class AutomaticTaskAssignmentIntegrationTest : PostgresIntegrationTestSupport() 
     @Autowired lateinit var outbox: OperationalOutboxProcessor
     @Autowired lateinit var notifications: NotificationRepository
     @Autowired lateinit var assignmentOrchestrator: TaskCreationAssignmentOrchestrator
+    @Autowired lateinit var candidateQuery: TaskAssignmentCandidateQuery
 
     @Test
     fun `voice HVAC task selects persisted on-shift technician and notifies assignee`() {
@@ -193,6 +195,21 @@ class AutomaticTaskAssignmentIntegrationTest : PostgresIntegrationTestSupport() 
         assertThat(repeated.assignment).isEqualTo(task.assignment)
         assertThat(jdbc.queryForObject("select count(*) from task_assignment_orchestration where task_id=:task",
             mapOf("task" to task.id), Long::class.java)).isEqualTo(1L)
+    }
+
+    @Test
+    fun `reassign candidate query keeps alternatives when task already has an assignee`() {
+        val f = fixture("reassign-candidates", "HOUSEKEEPING", "ROOM_CLEANING")
+        val current = employee(f, "HK-CURRENT", setOf(f.skill.id))
+        val replacement = employee(f, "HK-REPLACEMENT", setOf(f.skill.id))
+        activeShift(f.hotel.id, current.id)
+        activeShift(f.hotel.id, replacement.id)
+        val task = create(f.hotel.id, TaskIntentType.HOUSEKEEPING, "Room 305 cleaning", TaskSource.MANUAL,
+            AssignmentCommand(TaskAssigneeType.USER, current.id.toString(), current.displayName))
+
+        val candidates = candidateQuery.candidates(task, Instant.now())
+
+        assertThat(candidates.map { it.displayName }).contains("HK-CURRENT", "HK-REPLACEMENT")
     }
 
     private fun fixture(suffix: String, departmentCode: String, skillCode: String): Fixture {

@@ -16,6 +16,7 @@ data class OutboxProperties(
     val completedRetention: Duration = Duration.ofDays(14),
     val failedRetention: Duration = Duration.ofDays(30),
     val cleanupBatchSize: Int = 100,
+    val cleanupExecutionInterval: Duration = Duration.ofMinutes(1),
     val processorId: String = "backend"
 ) {
     fun normalizedBatchSize(): Int = batchSize.coerceIn(1, 100)
@@ -31,4 +32,7 @@ data class OutboxProperties(
 
     fun normalizedFailedRetention(): Duration =
         failedRetention.takeIf { !it.isNegative && !it.isZero } ?: Duration.ofDays(30)
+
+    fun normalizedCleanupExecutionInterval(): Duration =
+        cleanupExecutionInterval.takeIf { !it.isNegative && !it.isZero } ?: Duration.ofMinutes(1)
 }

@@ -10,5 +10,6 @@ data class DatabaseProperties(
     val driverClassName: String = "org.postgresql.Driver",
     val maximumPoolSize: Int = 5,
     val minimumIdle: Int = 1,
-    val connectionTimeout: Long = 20_000
+    val connectionTimeout: Long = 20_000,
+    val leakDetectionThreshold: Long = 0
 )

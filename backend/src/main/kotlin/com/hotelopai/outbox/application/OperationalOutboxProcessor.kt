@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.pow
 import kotlin.math.min
 
@@ -26,6 +27,8 @@ class OperationalOutboxProcessor(
     private val scheduledJobRunner: DistributedScheduledJobRunner,
     private val observability: OperationalObservability = OperationalObservability.noop()
 ) {
+    private val lastCleanupAt = AtomicReference(Instant.MIN)
+
     @Scheduled(fixedDelayString = "\${ops.ai.outbox.poll-interval:PT5S}")
     fun scheduledProcess() {
         if (properties.enabled) {
@@ -36,6 +39,7 @@ class OperationalOutboxProcessor(
     }
 
     fun processBatch(): Int {
+        val startedAt = System.nanoTime()
         val now = PersistenceInstant.now(clock)
         recoverStale(now)
         val claimed = outboxRepository.claimDue(
@@ -43,11 +47,33 @@ class OperationalOutboxProcessor(
             batchSize = properties.normalizedBatchSize(),
             processorId = properties.processorId
         )
-        claimed.forEach(::processClaimedEvent)
-        cleanup(now)
-        refreshStateMetrics()
+        var processed = 0
+        var failed = 0
+        claimed.forEach { event ->
+            if (processClaimedEvent(event)) processed++ else failed++
+        }
+        val removed = if (shouldRunCleanup(now)) cleanup(now) else 0
+        if (claimed.isNotEmpty() || removed > 0) refreshStateMetrics()
+        val dbPhaseMs = elapsedMillis(startedAt)
+        val totalMs = elapsedMillis(startedAt)
+        val message = "event=outbox_poll operation=poll outcome=success eventCount={} claimedCount={} processedCount={} failedCount={} totalMs={} dbMs={} externalMs={}"
+        val values = arrayOf<Any>(claimed.size, claimed.size, processed, failed, totalMs, dbPhaseMs, 0L)
+        if (claimed.isEmpty() && removed == 0 && failed == 0) logger.debug(message, *values)
+        else logger.info(message, *values)
         return claimed.size
     }
+
+    private fun shouldRunCleanup(now: Instant): Boolean {
+        val interval = properties.normalizedCleanupExecutionInterval()
+        while (true) {
+            val previous = lastCleanupAt.get()
+            if (previous != Instant.MIN && now.isBefore(previous.plus(interval))) return false
+            if (lastCleanupAt.compareAndSet(previous, now)) return true
+        }
+    }
+
+    private fun elapsedMillis(startedAt: Long): Long =
+        (System.nanoTime() - startedAt).coerceAtLeast(0L) / 1_000_000L
 
     fun recoverStale(now: Instant = PersistenceInstant.now(clock)): Int {
         val persistedNow = PersistenceInstant.toPersistencePrecision(now)
@@ -79,7 +105,7 @@ class OperationalOutboxProcessor(
         return removed
     }
 
-    private fun processClaimedEvent(event: OperationalOutboxEvent) {
+    private fun processClaimedEvent(event: OperationalOutboxEvent): Boolean {
         val timer = observability.startTimer()
         var timerOutcome = "failure"
         try {
@@ -95,6 +121,7 @@ class OperationalOutboxProcessor(
             }
             recordOutbox(operation = "process", outcome = metricOutcome, reasonCode = "none")
             logger.info("event=outbox_process operation=process outcome={} reasonCode=none", metricOutcome)
+            return true
         } catch (exception: RuntimeException) {
             val reasonCode = exception.toReasonCode()
             val now = PersistenceInstant.now(clock)
@@ -121,6 +148,7 @@ class OperationalOutboxProcessor(
                 recordOutbox(operation = "process", outcome = "retry", reasonCode = reasonCode)
                 logger.warn("event=outbox_process operation=process outcome=retry reasonCode={} attempt={}", reasonCode, nextAttemptCount)
             }
+            return false
         } finally {
             observability.stopTimer(
                 timer,

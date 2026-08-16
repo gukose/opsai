@@ -20,6 +20,9 @@ class DatabaseConfiguration {
             maximumPoolSize = properties.maximumPoolSize
             minimumIdle = properties.minimumIdle.coerceAtMost(properties.maximumPoolSize)
             connectionTimeout = properties.connectionTimeout
+            if (properties.leakDetectionThreshold > 0) {
+                leakDetectionThreshold = properties.leakDetectionThreshold
+            }
             poolName = "hotelopai-db"
         }
 

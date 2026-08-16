@@ -75,11 +75,11 @@ class DistributedScheduledJobRunner(
             leaseRenewal = startLeaseRenewal(jobName, ownerId, timeout)
 
             record(jobName, "started", "none")
-            logger.info("event=scheduler_job operation=run outcome=started jobName={} reasonCode=none", jobName)
+            logger.debug("event=scheduler_job operation=run outcome=started jobName={} reasonCode=none", jobName)
             action()
             outcome = "success"
             record(jobName, "success", "none")
-            logger.info("event=scheduler_job operation=run outcome=success jobName={} reasonCode=none", jobName)
+            logger.debug("event=scheduler_job operation=run outcome=success jobName={} reasonCode=none", jobName)
             return true
         } catch (exception: Exception) {
             outcome = "failure"

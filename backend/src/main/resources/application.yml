@@ -387,7 +387,7 @@ ops:
           cleanup-execution-interval: PT24H
     outbox:
       enabled: true
-      poll-interval: PT5S
+      poll-interval: ${OPS_AI_OUTBOX_POLL_INTERVAL:PT10S}
       batch-size: 25
       max-attempts: 5
       initial-retry-delay: PT10S
@@ -397,6 +397,7 @@ ops:
       completed-retention: P14D
       failed-retention: P30D
       cleanup-batch-size: 100
+      cleanup-execution-interval: ${OPS_AI_OUTBOX_CLEANUP_INTERVAL:PT1M}
       processor-id: backend
 
 assistant:
@@ -416,7 +417,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics
   endpoint:
     health:
       probes:

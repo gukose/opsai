@@ -17,6 +17,7 @@ ops:
       maximum-pool-size: ${OPS_AI_DB_MAXIMUM_POOL_SIZE:5}
       minimum-idle: ${OPS_AI_DB_MINIMUM_IDLE:1}
       connection-timeout: ${OPS_AI_DB_CONNECTION_TIMEOUT_MS:20000}
+      leak-detection-threshold: ${OPS_AI_DB_LEAK_DETECTION_THRESHOLD_MS:0}
     unimock:
       base-url: ${OPS_AI_UNIMOCK_BASE_URL}
     auth:
@@ -132,7 +133,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics
   endpoint:
     health:
       show-details: never
