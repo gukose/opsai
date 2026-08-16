@@ -19,6 +19,7 @@ type TaskDetailCardProps = {
   onCancel?: () => void;
   disabled?: boolean;
   assignmentCandidates?: AssignmentCandidate[];
+  onAssignmentOpen?: () => void | Promise<void>;
   onAssign?: (candidate: AssignmentCandidate) => void | Promise<void>;
 };
 
@@ -31,6 +32,7 @@ export function TaskDetailCard({
   onCancel,
   disabled,
   assignmentCandidates = [],
+  onAssignmentOpen,
   onAssign
 }: TaskDetailCardProps) {
   const actions = getAvailableActions(task.status);
@@ -47,11 +49,16 @@ export function TaskDetailCard({
     );
   }, [assignmentCandidates, candidateQuery]);
 
-  const openAssignment = () => {
+  const openAssignment = async () => {
     setAssignmentError(null);
     setCandidateQuery("");
     setSelectedCandidate(null);
     setAssignmentOpen(true);
+    try {
+      await onAssignmentOpen?.();
+    } catch (error) {
+      setAssignmentError(error instanceof Error ? error.message : "Unable to load assignment candidates.");
+    }
   };
 
   const confirmAssignment = async () => {
@@ -104,7 +111,7 @@ export function TaskDetailCard({
               accessibilityRole="button"
               accessibilityLabel={task.assignmentLabel ? "Reassign task" : "Assign task"}
               disabled={disabled}
-              onPress={openAssignment}
+              onPress={() => { void openAssignment(); }}
               style={({ pressed }) => [styles.assignButton, pressed && styles.actionPressed, disabled && styles.actionDisabled]}
             >
               <Text style={styles.assignButtonLabel}>{task.assignmentLabel ? "Reassign" : "Assign"}</Text>

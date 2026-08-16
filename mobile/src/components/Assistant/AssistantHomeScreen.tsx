@@ -93,6 +93,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
     startHomeTask,
     resumeHomeTask,
     assignmentCandidates,
+    refreshAssignmentCandidates,
     assignSelectedTask
   } = useTaskBoardState(accessToken, currentUser, refreshAccessToken);
   const {
@@ -316,6 +317,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
             onCompleteTask={completeSelectedTask}
             onCancelTask={cancelSelectedTask}
             assignmentCandidates={assignmentCandidates}
+            onAssignmentOpen={refreshAssignmentCandidates}
             onAssignTask={assignSelectedTask}
           />
         ) : activeSection === "knowledge" && canUseKnowledgeAssistant ? (

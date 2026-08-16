@@ -30,6 +30,7 @@ type TasksScreenProps = {
   onCompleteTask: () => Promise<void>;
   onCancelTask: () => Promise<void>;
   assignmentCandidates: AssignmentCandidate[];
+  onAssignmentOpen: () => Promise<void>;
   onAssignTask: (candidate: AssignmentCandidate) => Promise<void>;
 };
 
@@ -54,6 +55,7 @@ export function TasksScreen({
   onCompleteTask,
   onCancelTask,
   assignmentCandidates,
+  onAssignmentOpen,
   onAssignTask
 }: TasksScreenProps) {
   const taskCount = tasks.length;
@@ -144,6 +146,7 @@ export function TasksScreen({
               }}
               disabled={isRefreshing}
               assignmentCandidates={assignmentCandidates}
+              onAssignmentOpen={onAssignmentOpen}
               onAssign={canAssignTasks ? onAssignTask : undefined}
             />
           ) : null}

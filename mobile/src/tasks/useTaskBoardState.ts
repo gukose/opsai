@@ -43,6 +43,7 @@ type TaskBoardState = {
   startHomeTask: () => Promise<void>;
   resumeHomeTask: () => Promise<void>;
   assignmentCandidates: AssignmentCandidate[];
+  refreshAssignmentCandidates: () => Promise<void>;
   assignSelectedTask: (candidate: AssignmentCandidate) => Promise<void>;
 };
 
@@ -80,6 +81,18 @@ export function useTaskBoardState(
   const homeTaskRef = useRef<TaskSummary | null>(useMockTasks ? mockTaskFromSample() : null);
   const inFlightRef = useRef(false);
   const filtersRef = useRef<TaskFilterState>(filters);
+
+  const refreshAssignmentCandidates = useCallback(async (taskId: string | null = selectedTaskIdRef.current) => {
+    if (!taskId || !currentUser?.permissions?.some((permission) => permission.code === "TASK_ASSIGN")) {
+      setAssignmentCandidates([]);
+      return;
+    }
+    setAssignmentCandidates([]);
+    const candidates = await service.assignmentCandidates(taskId);
+    if (selectedTaskIdRef.current === taskId) {
+      setAssignmentCandidates(candidates);
+    }
+  }, [currentUser?.permissions, service]);
 
   useEffect(() => {
     selectedTaskIdRef.current = selectedTaskId;
@@ -156,6 +169,7 @@ export function useTaskBoardState(
         setSelectedTaskId(resolvedId);
         const detail = await service.getTask(resolvedId);
         setSelectedTask(detail);
+        await refreshAssignmentCandidates(resolvedId);
       } catch (error) {
         const message = getAppApiErrorMessage(error);
         setErrorMessage(message);
@@ -189,7 +203,7 @@ export function useTaskBoardState(
         }
       }
     },
-    [accessToken, service, useMockTasks,currentUser]
+    [accessToken, service, useMockTasks,currentUser,refreshAssignmentCandidates]
   );
 
   useEffect(() => {
@@ -223,18 +237,14 @@ export function useTaskBoardState(
         setIsRefreshing(true);
         const detail = await service.getTask(taskId);
         setSelectedTask(detail);
-        if (currentUser?.permissions?.some((permission) => permission.code === "TASK_ASSIGN")) {
-          setAssignmentCandidates(await service.assignmentCandidates(taskId));
-        } else {
-          setAssignmentCandidates([]);
-        }
+        await refreshAssignmentCandidates(taskId);
       } catch (error) {
         setErrorMessage(getAppApiErrorMessage(error));
       } finally {
         setIsRefreshing(false);
       }
     },
-    [accessToken, currentUser?.permissions, service, useMockTasks]
+    [accessToken, service, useMockTasks, refreshAssignmentCandidates]
   );
 
   const runCommand = useCallback(
@@ -253,6 +263,12 @@ export function useTaskBoardState(
         setIsRefreshing(true);
         const updatedTask = await command(taskId);
         setSelectedTask(updatedTask);
+        try {
+          await refreshAssignmentCandidates(updatedTask.id);
+        } catch {
+          // A successful assignment must not be reported as failed if the
+          // follow-up candidate refresh is temporarily unavailable.
+        }
         setTasks((current) =>
           current.map((task) => (task.id === updatedTask.id ? taskSummaryFromDetail(updatedTask) : task))
         );
@@ -269,7 +285,7 @@ export function useTaskBoardState(
         setIsRefreshing(false);
       }
     },
-    [selectedTaskId,currentUser]
+    [selectedTaskId,currentUser,refreshAssignmentCandidates]
   );
 
   const runHomeCommand = useCallback(
@@ -339,6 +355,9 @@ export function useTaskBoardState(
     startHomeTask: async () => runHomeCommand((taskId) => service.startTask(taskId)),
     resumeHomeTask: async () => runHomeCommand((taskId) => service.resumeTask(taskId)),
     assignmentCandidates,
+    refreshAssignmentCandidates: async () => {
+      await refreshAssignmentCandidates();
+    },
     assignSelectedTask: async (candidate) => {
       const succeeded = await runCommand(null, (taskId) => service.assignTask(taskId, candidate));
       if (!succeeded) throw new Error("Assignment failed. Try again.");
