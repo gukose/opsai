@@ -1,7 +1,7 @@
 package com.hotelopai.task.application
 
-import com.hotelopai.employee.application.EmployeeRepository
 import com.hotelopai.employee.domain.EmployeeStatus
+import com.hotelopai.employee.application.EmployeeRepository
 import com.hotelopai.notification.application.NotificationRepository
 import com.hotelopai.notification.domain.Notification
 import com.hotelopai.notification.domain.NotificationRecipient
@@ -60,9 +60,23 @@ class SupervisorTaskAssignmentService(
         val now = clock.instant()
         val employee = if (request.assignment.assigneeType == TaskAssigneeType.USER) {
             val requestedId = UUID.fromString(request.assignment.assigneeId)
-            employees.findByHotelId(hotelId).firstOrNull {
-                it.id == requestedId || it.userId == requestedId
-            }?.takeIf { it.status == EmployeeStatus.ACTIVE }
+            jdbc.query(
+                """select id,hotel_id,user_id,display_name,status,primary_role_code,department_id
+                     from employee where hotel_id=:hotel and (id=:requested or user_id=:requested)""",
+                mapOf("hotel" to hotelId, "requested" to requestedId)
+            ) { rs, _ ->
+                AssignableEmployee(
+                    id = rs.getObject("id", UUID::class.java),
+                    hotelId = rs.getObject("hotel_id", UUID::class.java),
+                    userId = rs.getObject("user_id", UUID::class.java),
+                    displayName = rs.getString("display_name"),
+                    status = EmployeeStatus.valueOf(rs.getString("status")),
+                    primaryRoleCode = rs.getString("primary_role_code"),
+                    departmentId = rs.getObject("department_id", UUID::class.java)
+                )
+            }.firstOrNull { it.status == EmployeeStatus.ACTIVE }
+                ?: employees.findByHotelId(hotelId).firstOrNull { (it.id == requestedId || it.userId == requestedId) && it.status == EmployeeStatus.ACTIVE }
+                    ?.let { AssignableEmployee(it.id, it.hotelId, it.userId, it.displayName, it.status, it.primaryRoleCode, it.departmentId) }
                 ?: throw IllegalArgumentException("Assignee must be an active employee in the authenticated hotel")
         } else {
             null
@@ -159,6 +173,16 @@ class SupervisorTaskAssignmentService(
     }
 
     private data class PoolSnapshot(val active: Int, val idle: Int, val pending: Int, val max: Int)
+
+    private data class AssignableEmployee(
+        val id: UUID,
+        val hotelId: UUID,
+        val userId: UUID?,
+        val displayName: String,
+        val status: EmployeeStatus,
+        val primaryRoleCode: String?,
+        val departmentId: UUID?
+    )
 
     companion object {
         private val logger = LoggerFactory.getLogger(SupervisorTaskAssignmentService::class.java)

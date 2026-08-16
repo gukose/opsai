@@ -1,11 +1,9 @@
 package com.hotelopai.task.application
 
 import com.hotelopai.employee.application.DepartmentRepository
-import com.hotelopai.employee.application.EmployeeRepository
 import com.hotelopai.employee.application.SkillRepository
 import com.hotelopai.employee.domain.Employee
 import com.hotelopai.employee.domain.EmployeeOperationalStatus
-import com.hotelopai.employee.domain.EmployeeStatus
 import com.hotelopai.observability.OperationalObservability
 import com.hotelopai.task.domain.Task
 import com.hotelopai.task.domain.TaskAssigneeType
@@ -21,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.sql.Timestamp
 import java.util.UUID
+import java.sql.ResultSet
 
 data class AutomaticAssignmentResult(
     val assignment: TaskAssignment?,
@@ -55,7 +54,6 @@ object NoOpTaskCreationAssignmentOrchestrator : TaskCreationAssignmentOrchestrat
 @Service
 class PersistedWorkforceTaskAssignmentOrchestrator(
     private val assignmentService: DeterministicAssignmentService,
-    private val employeeRepository: EmployeeRepository,
     private val departmentRepository: DepartmentRepository,
     private val skillRepository: SkillRepository,
     private val jdbc: NamedParameterJdbcTemplate,
@@ -69,22 +67,15 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         val requirementStarted = System.nanoTime()
         val requirement = resolveRequirement(task)
         val departmentMs = elapsedMs(requirementStarted)
-        val employeeStarted = System.nanoTime()
-        val employees = employeeRepository.findByHotelId(task.hotelId).filter { it.status == EmployeeStatus.ACTIVE }
-        val employeeQueryMs = elapsedMs(employeeStarted)
+        val loadedEmployees = loadCandidateEmployees(task.hotelId, now, requirement.requiredSkillId)
+        val employees = loadedEmployees.employees
+        val employeeQueryMs = loadedEmployees.queryMs
+        val employeeMappingMs = loadedEmployees.mappingMs
         val excluded = employees.filter { it.primaryRoleCode?.let(::isSupervisoryRole) == true }.map(Employee::id).toSet()
-        val shiftStarted = System.nanoTime()
-        val shifts = activeShiftEmployeeIds(task.hotelId, now)
-        val shiftMs = elapsedMs(shiftStarted)
-        val workloadStarted = System.nanoTime()
-        val workloads = workload(task.hotelId)
-        val workloadMs = elapsedMs(workloadStarted)
-        val skillStarted = System.nanoTime()
-        val skillLevels = skillLevels(task.hotelId)
-        val skillLevelMs = elapsedMs(skillStarted)
-        val activeStarted = System.nanoTime()
-        val activeTaskIds = activeTaskEmployeeIds(task.hotelId)
-        val activeTaskMs = elapsedMs(activeStarted)
+        val shifts = loadedEmployees.activeShiftEmployeeIds
+        val workloads = loadedEmployees.workloadByEmployeeId
+        val skillLevels = loadedEmployees.employeeSkillLevels
+        val activeTaskIds = loadedEmployees.activeTaskEmployeeIds
         val decision = assignmentService.evaluate(
             AssignmentCriteria(
                 hotelId = task.hotelId,
@@ -129,9 +120,9 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
                 )
         }
         logger.info(
-            "event=assignment_candidates correlationId={} taskId={} departmentMs={} employeeQueryMs={} shiftMs={} workloadMs={} skillLevelMs={} activeTaskMs={} mappingMs={} dbMs={} externalMs={} totalMs={} candidateCount={} poolActive={} poolIdle={} poolPending={} poolMax={}",
-            MDC.get("correlationId") ?: "unknown", task.id, departmentMs, employeeQueryMs, shiftMs, workloadMs,
-            skillLevelMs, activeTaskMs, elapsedMs(started) - departmentMs - employeeQueryMs - shiftMs - workloadMs - skillLevelMs - activeTaskMs,
+            "event=assignment_candidates correlationId={} taskId={} departmentMs={} employeeQueryMs={} employeeMappingMs={} shiftMs={} workloadMs={} skillLevelMs={} activeTaskMs={} mappingMs={} dbMs={} externalMs={} totalMs={} candidateCount={} poolActive={} poolIdle={} poolPending={} poolMax={}",
+            MDC.get("correlationId") ?: "unknown", task.id, departmentMs, employeeQueryMs, employeeMappingMs, 0,
+            0, 0, 0, elapsedMs(started) - departmentMs - employeeQueryMs - employeeMappingMs,
             elapsedMs(started), 0, elapsedMs(started), candidates.size, pool().active, pool().idle, pool().pending, pool().max
         )
         return candidates
@@ -143,17 +134,17 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         }
 
         val requirement = resolveRequirement(task)
-        val employees = employeeRepository.findByHotelId(task.hotelId)
-            .filter { it.status == EmployeeStatus.ACTIVE }
+        val loadedEmployees = loadCandidateEmployees(task.hotelId, now, requirement.requiredSkillId)
+        val employees = loadedEmployees.employees
         val supervisorEmployeeIds = employees
             .filter { employee -> employee.primaryRoleCode?.let(::isSupervisoryRole) == true }
             .map(Employee::id)
             .toSet()
         val assignableEmployees = employees.filterNot { it.id in supervisorEmployeeIds }
-        val activeShiftIds = activeShiftEmployeeIds(task.hotelId, now)
-        val workload = workload(task.hotelId)
-        val activeTaskIds = activeTaskEmployeeIds(task.hotelId)
-        val skillLevels = skillLevels(task.hotelId)
+        val activeShiftIds = loadedEmployees.activeShiftEmployeeIds
+        val workload = loadedEmployees.workloadByEmployeeId
+        val activeTaskIds = loadedEmployees.activeTaskEmployeeIds
+        val skillLevels = loadedEmployees.employeeSkillLevels
 
         val reason = noCandidateReason(
             employees = assignableEmployees,
@@ -188,7 +179,7 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
 
         val selectedEmployee = decision?.assignment?.assigneeId
             ?.let(UUID::fromString)
-            ?.let(employeeRepository::findById)
+            ?.let { selectedId -> employees.firstOrNull { it.id == selectedId } }
             ?.takeIf { it.hotelId == task.hotelId }
         val assignment = selectedEmployee?.let { employee ->
             TaskAssignment(
@@ -270,37 +261,108 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         return null
     }
 
-    private fun activeShiftEmployeeIds(hotelId: UUID, now: Instant): Set<UUID> = jdbc.query(
-        """select distinct employee_id from workforce_shift
-           where hotel_id=:hotel and status in ('STARTED','WORKING')
-             and coalesce(actual_start, planned_start) <= :now
-             and coalesce(actual_end, planned_end) > :now""",
-        mapOf("hotel" to hotelId, "now" to Timestamp.from(now))
-    ) { rs, _ -> rs.getObject(1, UUID::class.java) }.toSet()
+    /**
+     * Candidate reads deliberately avoid EmployeeJpaEntity. Its lazy roleIds
+     * and skillIds are materialized by the domain mapper, turning 35 employees
+     * into dozens of SQL statements while holding the repository transaction.
+     */
+    private fun loadCandidateEmployees(hotelId: UUID, now: Instant, requiredSkillId: UUID?): LoadedEmployees {
+        val queryStarted = System.nanoTime()
+        var mappingMs = 0L
+        val rows = jdbc.query(
+            """select e.id,e.hotel_id,e.user_id,e.employee_number,e.display_name,e.department_id,
+                      e.status,e.primary_role_code,e.supervisor_employee_id,e.home_area,e.languages,
+                      e.operational_status,e.version,e.created_at,e.created_by,e.updated_at,e.updated_by,
+                      coalesce(array_agg(distinct er.role_id) filter (where er.role_id is not null), '{}'::uuid[]) as role_ids,
+                      coalesce(array_agg(distinct es.skill_id) filter (where es.skill_id is not null), '{}'::uuid[]) as skill_ids,
+                      (select es2.skill_level from employee_skill es2 where es2.employee_id=e.id and es2.skill_id=:requiredSkill limit 1) as required_skill_level,
+                      exists (select 1 from workforce_shift ws where ws.employee_id=e.id and ws.hotel_id=e.hotel_id
+                                and ws.status in ('STARTED','WORKING')
+                                and coalesce(ws.actual_start,ws.planned_start) <= :now
+                                and coalesce(ws.actual_end,ws.planned_end) > :now) as on_shift,
+                      (select count(*)::int from task t where t.hotel_id=e.hotel_id
+                         and (t.assignee_id=e.id::text or t.assignee_id=e.user_id::text)
+                         and t.status in ('ASSIGNED','STARTED','IN_PROGRESS','WAITING','OVERDUE')) as workload,
+                      exists (select 1 from task at where at.hotel_id=e.hotel_id
+                         and (at.assignee_id=e.id::text or at.assignee_id=e.user_id::text)
+                         and at.status in ('STARTED','IN_PROGRESS')) as active_task
+                 from employee e
+                 left join employee_role er on er.employee_id=e.id
+                 left join employee_skill es on es.employee_id=e.id
+                where e.hotel_id=:hotel and e.status='ACTIVE'
+                group by e.id,e.hotel_id,e.user_id,e.employee_number,e.display_name,e.department_id,
+                         e.status,e.primary_role_code,e.supervisor_employee_id,e.home_area,e.languages,
+                         e.operational_status,e.version,e.created_at,e.created_by,e.updated_at,e.updated_by
+                order by e.employee_number""",
+            mapOf("hotel" to hotelId, "now" to Timestamp.from(now), "requiredSkill" to requiredSkillId)
+        ) { rs, _ ->
+            val started = System.nanoTime()
+            val employee = rs.toCandidateEmployee()
+            mappingMs += elapsedMs(started)
+            LoadedEmployeeRow(
+                employee = employee,
+                onShift = rs.getBoolean("on_shift"),
+                workload = rs.getInt("workload"),
+                activeTask = rs.getBoolean("active_task"),
+                requiredSkillLevel = (rs.getObject("required_skill_level") as? Number)?.toInt()
+            )
+        }
+        val employees = rows.map { it.employee }
+        val activeShiftIds = rows.filter { it.onShift }.map { it.employee.id }.toSet()
+        val workloads = rows.associate { it.employee.id to it.workload }
+        val activeTasks = rows.filter { it.activeTask }.map { it.employee.id }.toSet()
+        val skillLevels = rows.mapNotNull { row ->
+            val level = row.requiredSkillLevel ?: return@mapNotNull null
+            requiredSkillId?.let { row.employee.id to (it to level) }
+        }.groupBy({ it.first }, { it.second }).mapValues { (_, value) -> value.toMap() }
+        return LoadedEmployees(employees, activeShiftIds, workloads, activeTasks, skillLevels, elapsedMs(queryStarted) - mappingMs, mappingMs)
+    }
 
-    private fun workload(hotelId: UUID): Map<UUID, Int> = jdbc.query(
-        """select e.id, count(t.id)::int
-           from employee e left join task t on t.hotel_id=e.hotel_id
-             and (t.assignee_id=e.id::text or t.assignee_id=e.user_id::text)
-             and t.status in ('ASSIGNED','STARTED','IN_PROGRESS','WAITING','OVERDUE')
-           where e.hotel_id=:hotel group by e.id""",
-        mapOf("hotel" to hotelId)
-    ) { rs, _ -> rs.getObject(1, UUID::class.java) to rs.getInt(2) }.toMap()
+    private fun ResultSet.toCandidateEmployee(): Employee = Employee(
+        id = getObject("id", UUID::class.java),
+        hotelId = getObject("hotel_id", UUID::class.java),
+        userId = getObject("user_id", UUID::class.java),
+        employeeNumber = getString("employee_number"),
+        displayName = getString("display_name"),
+        departmentId = getObject("department_id", UUID::class.java),
+        roleIds = uuidArray("role_ids"),
+        skillIds = uuidArray("skill_ids"),
+        status = com.hotelopai.employee.domain.EmployeeStatus.valueOf(getString("status")),
+        primaryRoleCode = getString("primary_role_code"),
+        supervisorEmployeeId = getObject("supervisor_employee_id", UUID::class.java),
+        homeArea = getString("home_area"),
+        languages = stringArray("languages"),
+        operationalStatus = EmployeeOperationalStatus.valueOf(getString("operational_status")),
+        version = getLong("version"),
+        createdAt = getTimestamp("created_at").toInstant(),
+        createdBy = getString("created_by"),
+        updatedAt = getTimestamp("updated_at").toInstant(),
+        updatedBy = getString("updated_by")
+    )
 
-    private fun activeTaskEmployeeIds(hotelId: UUID): Set<UUID> = jdbc.query(
-        """select distinct e.id from employee e join task t on t.hotel_id=e.hotel_id
-             and (t.assignee_id=e.id::text or t.assignee_id=e.user_id::text)
-           where e.hotel_id=:hotel and t.status in ('STARTED','IN_PROGRESS')""",
-        mapOf("hotel" to hotelId)
-    ) { rs, _ -> rs.getObject(1, UUID::class.java) }.toSet()
+    private fun ResultSet.uuidArray(column: String): Set<UUID> =
+        (getArray(column)?.array as? Array<*>)?.mapNotNull { it as? UUID }?.toSet() ?: emptySet()
 
-    private fun skillLevels(hotelId: UUID): Map<UUID, Map<UUID, Int>> = jdbc.query(
-        """select es.employee_id, es.skill_id, es.skill_level from employee_skill es
-           join employee e on e.id=es.employee_id where e.hotel_id=:hotel""",
-        mapOf("hotel" to hotelId)
-    ) { rs, _ -> Triple(rs.getObject(1, UUID::class.java), rs.getObject(2, UUID::class.java), rs.getInt(3)) }
-        .groupBy({ it.first }, { it.second to it.third })
-        .mapValues { (_, values) -> values.toMap() }
+    private fun ResultSet.stringArray(column: String): Set<String> =
+        (getArray(column)?.array as? Array<*>)?.mapNotNull { it?.toString() }?.toSet() ?: emptySet()
+
+    private data class LoadedEmployees(
+        val employees: List<Employee>,
+        val activeShiftEmployeeIds: Set<UUID>,
+        val workloadByEmployeeId: Map<UUID, Int>,
+        val activeTaskEmployeeIds: Set<UUID>,
+        val employeeSkillLevels: Map<UUID, Map<UUID, Int>>,
+        val queryMs: Long,
+        val mappingMs: Long
+    )
+
+    private data class LoadedEmployeeRow(
+        val employee: Employee,
+        val onShift: Boolean,
+        val workload: Int,
+        val activeTask: Boolean,
+        val requiredSkillLevel: Int?
+    )
 
     private fun persist(task: Task, result: AutomaticAssignmentResult, selectedUserId: UUID?, now: Instant) {
         jdbc.update(
