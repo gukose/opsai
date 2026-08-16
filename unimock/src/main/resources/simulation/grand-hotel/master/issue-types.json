@@ -2,6 +2,17 @@
   "issueTypes": [
     { "code": "MAINTENANCE_AC", "name": "Air Conditioning Issue" },
     { "code": "HOUSEKEEPING_CLEANING", "name": "Cleaning Request" },
-    { "code": "GUEST_REQUEST", "name": "Guest Request" }
+    { "code": "GUEST_REQUEST", "name": "Guest Request" },
+    { "code": "MAINTENANCE_PLUMBING", "name": "Plumbing Issue" },
+    { "code": "MAINTENANCE_ELECTRICAL", "name": "Electrical Issue" },
+    { "code": "MAINTENANCE_CARPENTRY", "name": "Carpentry Issue" },
+    { "code": "HOUSEKEEPING_BATHROOM", "name": "Dirty Bathroom" },
+    { "code": "HOUSEKEEPING_CARPET_STAIN", "name": "Carpet Stain" },
+    { "code": "MISSING_TOWELS", "name": "Missing Towels" },
+    { "code": "DAMAGE_CIGARETTE_BURN", "name": "Cigarette Burn" },
+    { "code": "DAMAGE_FURNITURE", "name": "Damaged Furniture" },
+    { "code": "DAMAGE_WATER_LEAK", "name": "Water Leak" },
+    { "code": "MAINTENANCE_WINDOW_HANDLE", "name": "Broken Window Handle" },
+    { "code": "MAINTENANCE_TV", "name": "Broken TV" }
   ]
 }

@@ -50,6 +50,38 @@ class ResourceSimulationSeedSourceTest {
     }
 
     @Test
+    fun `demo seed contains exactly the canonical five floor room ranges`() {
+        val rooms = seedSource.load("classpath:/simulation/grand-hotel").files["master/rooms.json"]!!
+            .get("rooms")
+            .map { it.get("roomNumber").asText() }
+
+        assertThat(rooms).hasSize(100)
+        assertThat(rooms).contains("101", "204", "302", "305", "402", "409", "520")
+        assertThat(rooms).doesNotContain("999", "605", "805")
+    }
+
+    @Test
+    fun `demo seed contains operational public areas and minibar baseline`() {
+        val seed = seedSource.load("classpath:/simulation/grand-hotel")
+        val areas = seed.files["master/public-areas.json"]!!.get("publicAreas")
+            .map { it.get("code").asText() }
+        assertThat(areas).contains(
+            "LOBBY", "RECEPTION", "HOUSEKEEPING_OFFICE", "LAUNDRY",
+            "TECHNICAL_ROOM", "FLOOR_2_CORRIDOR", "ELEVATOR_LOBBY", "PUBLIC_RESTROOM"
+        )
+        assertThat(areas).doesNotContain("204", "ROOM_204")
+
+        val minibar = seed.files["operations/minibar.json"]!!.get("items")
+        assertThat(minibar).anyMatch { it.get("roomNumber").asText() == "204" }
+        assertThat(minibar).anyMatch { it.get("roomNumber").asText() == "520" }
+
+        val assets = seed.files["master/assets.json"]!!.get("assets")
+        assertThat(assets).anyMatch {
+            it.get("roomNumber").asText() == "204" && it.get("name").asText() == "HVAC Indoor Unit"
+        }
+    }
+
+    @Test
     fun `invalid seed path fails clearly`() {
         assertThatThrownBy {
             seedSource.load("classpath:/simulation/missing-grand-hotel")

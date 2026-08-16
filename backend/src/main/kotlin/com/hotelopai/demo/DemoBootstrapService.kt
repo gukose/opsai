@@ -55,7 +55,9 @@ data class DemoBootstrapProperties(
         "GM" -> gmPassword
         "HOUSEKEEPING_SUPERVISOR" -> housekeepingSupervisorPassword
         "HOUSEKEEPER" -> housekeeperPassword
+        "HOUSEKEEPER_2", "HOUSEKEEPER_3" -> housekeeperPassword
         "TECHNICIAN" -> technicianPassword
+        "TECHNICIAN_PLUMBING", "TECHNICIAN_CARPENTRY" -> technicianPassword
         "RECEPTION" -> receptionPassword
         "GUEST_RELATIONS" -> guestRelationsPassword
         "ADMIN" -> adminPassword
@@ -100,7 +102,7 @@ class DemoBootstrapService(
 
         val departmentByCode = listOf("MANAGEMENT", "HOUSEKEEPING", "MAINTENANCE", "FRONT_OFFICE", "GUEST_RELATIONS")
             .associateWith { ensureDepartment(hotel.id, it) }
-        val skillByCode = listOf("ROOM_CLEANING", "HOUSEKEEPING_INSPECTION", "MINIBAR", "HVAC_REPAIR", "ELECTRICAL", "PLUMBING", "GUEST_RECOVERY")
+        val skillByCode = listOf("ROOM_CLEANING", "HOUSEKEEPING_INSPECTION", "MINIBAR", "HVAC_REPAIR", "ELECTRICAL", "PLUMBING", "CARPENTRY", "GUEST_RECOVERY")
             .associateWith { ensureSkill(hotel.id, it) }
 
         val staff = DEMO_USERS.map { definition ->
@@ -109,6 +111,9 @@ class DemoBootstrapService(
                 definition.skills.map(skillByCode::getValue).map(Skill::id).toSet())
         }
         staff.forEach { ensureActiveShift(hotel.id, it.id) }
+        // Master operational data is idempotent and is also repaired for an
+        // already bootstrapped demo (the marker only governs sample tasks).
+        seedInventory(hotel.id, Instant.now())
         seedDatasetOnce(hotel.id)
     }
 
@@ -167,23 +172,79 @@ class DemoBootstrapService(
             CreateTaskCommand(hotelId, TaskIntentType.MAINTENANCE, TaskSource.IMPORT, "HVAC maintenance", "Room 302 air conditioning is not working", "302", TaskPriority.HIGH, now.plus(1, ChronoUnit.HOURS)),
             CreateTaskCommand(hotelId, TaskIntentType.GUEST_REQUEST, TaskSource.IMPORT, "Guest requests towels", "Room 101 requests two towels", "101", TaskPriority.MEDIUM, now.plus(30, ChronoUnit.MINUTES))
         ).forEach(tasks::createTask)
-        seedInventory(hotelId, now)
         jdbc.update("insert into demo_bootstrap_marker(hotel_id,dataset_version,applied_at) values(:hotel,:version,:now)",
             mapOf("hotel" to hotelId, "version" to DATASET_VERSION, "now" to Timestamp.from(now)))
     }
 
     private fun seedInventory(hotelId: UUID, now: Instant) {
-        val categoryId = UuidV7Generator.generate(now)
-        val locationId = UuidV7Generator.generate(now)
-        jdbc.update("""insert into inventory_category(id,hotel_id,code,name) values(:id,:hotel,'MINIBAR','Minibar')
-            on conflict(hotel_id,code) do nothing""", mapOf("id" to categoryId, "hotel" to hotelId))
-        jdbc.update("""insert into inventory_location(id,hotel_id,code,name,location_type) values(:id,:hotel,'MAIN','Main Store','WAREHOUSE')
-            on conflict(hotel_id,code) do nothing""", mapOf("id" to locationId, "hotel" to hotelId))
-        val actualCategory = jdbc.queryForObject("select id from inventory_category where hotel_id=:hotel and code='MINIBAR'", mapOf("hotel" to hotelId), UUID::class.java)!!
-        listOf("WATER" to "Water", "COLA" to "Cola", "CHOCOLATE" to "Chocolate").forEach { (code, name) ->
-            jdbc.update("""insert into inventory_item(id,hotel_id,category_id,code,name,unit,unit_price,created_at,updated_at)
-                values(:id,:hotel,:category,:code,:name,'EACH',3.50,:now,:now) on conflict(hotel_id,code) do nothing""",
-                mapOf("id" to UuidV7Generator.generate(), "hotel" to hotelId, "category" to actualCategory, "code" to code, "name" to name, "now" to Timestamp.from(now)))
+        val categories = listOf(
+            "MINIBAR" to "Minibar",
+            "HOUSEKEEPING" to "Housekeeping Consumables",
+            "LINEN" to "Linen & Laundry",
+            "TECHNICAL" to "Technical Maintenance Stock"
+        )
+        categories.forEach { (code, name) ->
+            jdbc.update("""insert into inventory_category(id,hotel_id,code,name) values(:id,:hotel,:code,:name)
+                on conflict(hotel_id,code) do update set name=excluded.name""",
+                mapOf("id" to UuidV7Generator.generate(now), "hotel" to hotelId, "code" to code, "name" to name))
+        }
+        val locations = listOf(
+            "MAIN" to ("Main Store" to "WAREHOUSE"),
+            "HOUSEKEEPING_STORE" to ("Housekeeping Store" to "HOUSEKEEPING"),
+            "LAUNDRY" to ("Laundry / Linen Store" to "LAUNDRY"),
+            "TECHNICAL_STORE" to ("Technical Store" to "TECHNICAL")
+        )
+        locations.forEach { (code, descriptor) ->
+            jdbc.update("""insert into inventory_location(id,hotel_id,code,name,location_type) values(:id,:hotel,:code,:name,:type)
+                on conflict(hotel_id,code) do update set name=excluded.name,location_type=excluded.location_type""",
+                mapOf("id" to UuidV7Generator.generate(now), "hotel" to hotelId, "code" to code, "name" to descriptor.first, "type" to descriptor.second))
+        }
+        val categoryIds = jdbc.query("select code,id from inventory_category where hotel_id=:hotel", mapOf("hotel" to hotelId)) { rs, _ -> rs.getString(1) to rs.getObject(2, UUID::class.java) }.toMap()
+        val mainLocation = jdbc.queryForObject("select id from inventory_location where hotel_id=:hotel and code='MAIN'", mapOf("hotel" to hotelId), UUID::class.java)!!
+        data class Stock(val category: String, val code: String, val name: String, val unit: String, val minimum: String, val quantity: String, val price: String)
+        val stock = listOf(
+            Stock("MINIBAR", "WATER", "Still Water", "BOTTLE", "20", "120", "3.50"),
+            Stock("MINIBAR", "SPARKLING_WATER", "Sparkling Water", "BOTTLE", "10", "60", "4.00"),
+            Stock("MINIBAR", "COLA", "Cola", "BOTTLE", "10", "60", "5.00"),
+            Stock("MINIBAR", "JUICE", "Fruit Juice", "BOTTLE", "10", "60", "5.00"),
+            Stock("MINIBAR", "SNACK_CHOCOLATE", "Chocolate Snack", "EACH", "10", "60", "6.00"),
+            Stock("MINIBAR", "SNACK_NUTS", "Mixed Nuts", "PACK", "10", "60", "7.00"),
+            Stock("HOUSEKEEPING", "BATH_TOWEL", "Bath Towel", "EACH", "40", "240", "12.00"),
+            Stock("HOUSEKEEPING", "HAND_TOWEL", "Hand Towel", "EACH", "40", "240", "8.00"),
+            Stock("HOUSEKEEPING", "FACE_TOWEL", "Face Towel", "EACH", "40", "240", "6.00"),
+            Stock("HOUSEKEEPING", "BATH_MAT", "Bath Mat", "EACH", "20", "120", "10.00"),
+            Stock("HOUSEKEEPING", "TOILET_PAPER", "Toilet Paper", "ROLL", "100", "600", "1.50"),
+            Stock("HOUSEKEEPING", "TISSUES", "Tissues", "PACK", "50", "300", "2.00"),
+            Stock("HOUSEKEEPING", "SOAP", "Soap", "EACH", "100", "600", "1.00"),
+            Stock("HOUSEKEEPING", "SHAMPOO", "Shampoo", "BOTTLE", "100", "600", "2.00"),
+            Stock("HOUSEKEEPING", "SHOWER_GEL", "Shower Gel", "BOTTLE", "100", "600", "2.00"),
+            Stock("HOUSEKEEPING", "TRASH_BAGS", "Trash Bags", "PACK", "20", "100", "5.00"),
+            Stock("HOUSEKEEPING", "CLEANING_CLOTHS", "Cleaning Cloths", "PACK", "10", "60", "8.00"),
+            Stock("HOUSEKEEPING", "CLEANING_CHEMICAL", "Cleaning Chemical", "LITER", "20", "100", "9.00"),
+            Stock("LINEN", "BED_SHEET", "Bed Sheet", "EACH", "100", "600", "15.00"),
+            Stock("LINEN", "PILLOWCASE", "Pillowcase", "EACH", "100", "600", "5.00"),
+            Stock("LINEN", "DUVET_COVER", "Duvet Cover", "EACH", "50", "300", "20.00"),
+            Stock("LINEN", "PILLOW", "Pillow", "EACH", "30", "160", "18.00"),
+            Stock("TECHNICAL", "LIGHT_BULB", "LED Light Bulb", "EACH", "20", "100", "4.00"),
+            Stock("TECHNICAL", "BATTERY", "AA Battery", "PACK", "10", "50", "6.00"),
+            Stock("TECHNICAL", "PLUMBING_SEAL", "Plumbing Seal", "EACH", "20", "100", "2.00"),
+            Stock("TECHNICAL", "FAUCET_COMPONENT", "Faucet Component", "SET", "5", "25", "12.00"),
+            Stock("TECHNICAL", "SHOWER_COMPONENT", "Shower Component", "SET", "5", "25", "12.00"),
+            Stock("TECHNICAL", "HVAC_FILTER", "HVAC Filter", "EACH", "20", "100", "14.00"),
+            Stock("TECHNICAL", "DOOR_LOCK_COMPONENT", "Door / Lock Component", "SET", "5", "25", "20.00"),
+            Stock("TECHNICAL", "SCREWS_FITTINGS", "Screws and Fittings", "PACK", "10", "50", "8.00")
+        )
+        stock.forEach { item ->
+            val categoryId = categoryIds.getValue(item.category)
+            jdbc.update("""insert into inventory_item(id,hotel_id,category_id,code,name,unit,unit_price,minimum_stock,created_at,updated_at)
+                values(:id,:hotel,:category,:code,:name,:unit,:price,:minimum,:now,:now)
+                on conflict(hotel_id,code) do update set category_id=excluded.category_id,name=excluded.name,unit=excluded.unit,unit_price=excluded.unit_price,minimum_stock=excluded.minimum_stock,updated_at=excluded.updated_at""",
+                mapOf("id" to UuidV7Generator.generate(now), "hotel" to hotelId, "category" to categoryId, "code" to item.code, "name" to item.name, "unit" to item.unit, "price" to item.price.toBigDecimal(), "minimum" to item.minimum.toBigDecimal(), "now" to Timestamp.from(now)))
+            val itemId = jdbc.queryForObject("select id from inventory_item where hotel_id=:hotel and code=:code", mapOf("hotel" to hotelId, "code" to item.code), UUID::class.java)!!
+            jdbc.update("""insert into inventory_balance(hotel_id,item_id,location_id,quantity,version,updated_at)
+                values(:hotel,:item,:location,:quantity,0,:now)
+                on conflict(hotel_id,item_id,location_id) do update set quantity=excluded.quantity,updated_at=excluded.updated_at""",
+                mapOf("hotel" to hotelId, "item" to itemId, "location" to mainLocation, "quantity" to item.quantity.toBigDecimal(), "now" to Timestamp.from(now)))
         }
     }
 
@@ -208,7 +269,11 @@ class DemoBootstrapService(
                 FIELD + setOf(PermissionCodes.TASK_ASSIGN, PermissionCodes.HOUSEKEEPING_OPERATIONS, PermissionCodes.HOUSEKEEPING_INSPECTION, PermissionCodes.SHIFT_OPERATIONS)),
             DemoUser("HOUSEKEEPER", "housekeeper@demo.hotelopai.app", "DEMO-HK", "Housekeeper", "HOUSEKEEPING", setOf("ROOM_CLEANING", "MINIBAR"), "3",
                 FIELD + setOf(PermissionCodes.HOUSEKEEPING_OPERATIONS, PermissionCodes.MINIBAR_OPERATIONS, PermissionCodes.SHIFT_OPERATIONS, PermissionCodes.GAMIFICATION_VIEW)),
+            DemoUser("HOUSEKEEPER_2", "ayse.housekeeper@demo.hotelopai.app", "DEMO-HK-2", "Ayşe Kaya", "HOUSEKEEPING", setOf("ROOM_CLEANING"), "1", FIELD + setOf(PermissionCodes.HOUSEKEEPING_OPERATIONS, PermissionCodes.SHIFT_OPERATIONS)),
+            DemoUser("HOUSEKEEPER_3", "burcu.housekeeper@demo.hotelopai.app", "DEMO-HK-3", "Burcu Çetin", "HOUSEKEEPING", setOf("ROOM_CLEANING", "MINIBAR"), "4", FIELD + setOf(PermissionCodes.HOUSEKEEPING_OPERATIONS, PermissionCodes.MINIBAR_OPERATIONS, PermissionCodes.SHIFT_OPERATIONS)),
             DemoUser("TECHNICIAN", "technician@demo.hotelopai.app", "DEMO-TECH", "HVAC Technician", "MAINTENANCE", setOf("HVAC_REPAIR", "ELECTRICAL", "PLUMBING"), "3", FIELD),
+            DemoUser("TECHNICIAN_PLUMBING", "murat.technician@demo.hotelopai.app", "DEMO-TECH-2", "Murat Yıldız", "MAINTENANCE", setOf("PLUMBING", "ELECTRICAL"), "2", FIELD),
+            DemoUser("TECHNICIAN_CARPENTRY", "burak.technician@demo.hotelopai.app", "DEMO-TECH-3", "Burak Çetin", "MAINTENANCE", setOf("CARPENTRY", "ELECTRICAL"), "4", FIELD),
             DemoUser("RECEPTION", "reception@demo.hotelopai.app", "DEMO-FO", "Front Office", "FRONT_OFFICE", emptySet(), null,
                 FIELD + setOf(PermissionCodes.MINIBAR_OPERATIONS, PermissionCodes.DAMAGE_REVIEW, PermissionCodes.SERVICE_RECOVERY_OPERATIONS, PermissionCodes.GUEST_MESSAGING_OPERATIONS)),
             DemoUser("GUEST_RELATIONS", "guest.relations@demo.hotelopai.app", "DEMO-GR", "Guest Relations", "GUEST_RELATIONS", setOf("GUEST_RECOVERY"), null,

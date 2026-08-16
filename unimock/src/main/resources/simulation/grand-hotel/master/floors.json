@@ -4,7 +4,6 @@
     { "code": "F2", "name": "Second Floor" },
     { "code": "F3", "name": "Third Floor" },
     { "code": "F4", "name": "Fourth Floor" },
-    { "code": "F6", "name": "Sixth Floor" },
-    { "code": "F8", "name": "Eighth Floor" }
+    { "code": "F5", "name": "Fifth Floor" }
   ]
 }

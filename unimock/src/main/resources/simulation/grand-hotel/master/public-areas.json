@@ -1,7 +1,26 @@
 {
   "publicAreas": [
     { "code": "LOBBY", "name": "Lobby" },
-    { "code": "POOL", "name": "Pool Area" },
-    { "code": "RESTAURANT", "name": "Restaurant" }
+    { "code": "RECEPTION", "name": "Reception / Front Desk" },
+    { "code": "RESTAURANT", "name": "Restaurant" },
+    { "code": "KITCHEN", "name": "Kitchen" },
+    { "code": "LOBBY_BAR", "name": "Lobby Bar" },
+    { "code": "HOUSEKEEPING_OFFICE", "name": "Housekeeping Office" },
+    { "code": "LAUNDRY", "name": "Laundry" },
+    { "code": "LINEN_STORAGE", "name": "Linen / Housekeeping Storage" },
+    { "code": "GENERAL_STORAGE", "name": "General Storage" },
+    { "code": "TECHNICAL_ROOM", "name": "Technical Room" },
+    { "code": "ELECTRICAL_ROOM", "name": "Electrical Room" },
+    { "code": "PARKING", "name": "Parking" },
+    { "code": "FLOOR_1_CORRIDOR", "name": "Floor 1 Corridor" },
+    { "code": "FLOOR_2_CORRIDOR", "name": "Floor 2 Corridor" },
+    { "code": "FLOOR_3_CORRIDOR", "name": "Floor 3 Corridor" },
+    { "code": "FLOOR_4_CORRIDOR", "name": "Floor 4 Corridor" },
+    { "code": "FLOOR_5_CORRIDOR", "name": "Floor 5 Corridor" },
+    { "code": "ELEVATOR_LOBBY", "name": "Elevator Lobby" },
+    { "code": "MEETING_ROOM_1", "name": "Meeting Room 1" },
+    { "code": "MEETING_ROOM_2", "name": "Meeting Room 2" },
+    { "code": "PUBLIC_RESTROOM", "name": "Public Restrooms" },
+    { "code": "STAFF_BACK_OF_HOUSE", "name": "Staff / Back-of-house" }
   ]
 }

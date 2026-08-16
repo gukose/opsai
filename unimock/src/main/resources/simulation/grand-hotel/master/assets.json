@@ -1,10 +1,23 @@
 {
   "assets": [
-    { "assetId": "ASSET-101-A1", "roomNumber": "101", "name": "Television" },
-    { "assetId": "ASSET-101-A2", "roomNumber": "101", "name": "Air Conditioner" },
-    { "assetId": "ASSET-102-A1", "roomNumber": "102", "name": "Television" },
-    { "assetId": "ASSET-201-A1", "roomNumber": "201", "name": "Air Conditioner" },
-    { "assetId": "ASSET-605-A1", "roomNumber": "605", "name": "Air Conditioner" },
-    { "assetId": "ASSET-805-A1", "roomNumber": "805", "name": "Air Conditioner" }
+    { "assetId": "ASSET-101-03", "roomNumber": "101", "name": "HVAC Indoor Unit" },
+    { "assetId": "ASSET-110-12", "roomNumber": "110", "name": "Toilet Flush" },
+    { "assetId": "ASSET-120-07", "roomNumber": "120", "name": "Telephone" },
+    { "assetId": "ASSET-201-04", "roomNumber": "201", "name": "Minibar" },
+    { "assetId": "ASSET-204-01", "roomNumber": "204", "name": "HVAC Indoor Unit" },
+    { "assetId": "ASSET-204-02", "roomNumber": "204", "name": "TV" },
+    { "assetId": "ASSET-204-03", "roomNumber": "204", "name": "Faucet" },
+    { "assetId": "ASSET-204-04", "roomNumber": "204", "name": "Minibar" },
+    { "assetId": "ASSET-210-13", "roomNumber": "210", "name": "Window Handle" },
+    { "assetId": "ASSET-220-08", "roomNumber": "220", "name": "Hair Dryer" },
+    { "assetId": "ASSET-301-05", "roomNumber": "301", "name": "Safe" },
+    { "assetId": "ASSET-310-14", "roomNumber": "310", "name": "Curtain Rail" },
+    { "assetId": "ASSET-320-09", "roomNumber": "320", "name": "Bathroom Light" },
+    { "assetId": "ASSET-401-06", "roomNumber": "401", "name": "Kettle" },
+    { "assetId": "ASSET-410-15", "roomNumber": "410", "name": "Smoke Detector" },
+    { "assetId": "ASSET-420-10", "roomNumber": "420", "name": "Shower Head" },
+    { "assetId": "ASSET-501-07", "roomNumber": "501", "name": "Telephone" },
+    { "assetId": "ASSET-510-01", "roomNumber": "510", "name": "Electronic Door Lock" },
+    { "assetId": "ASSET-520-11", "roomNumber": "520", "name": "Faucet" }
   ]
 }

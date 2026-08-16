@@ -1,6 +1,22 @@
 {
   "items": [
-    { "roomNumber": "101", "sku": "MINI-001", "name": "Water Bottle", "quantity": 4 },
-    { "roomNumber": "102", "sku": "MINI-002", "name": "Snack Bar", "quantity": 2 }
+    { "roomNumber": "101", "sku": "MINI-WATER", "name": "Still Water", "quantity": 2 },
+    { "roomNumber": "101", "sku": "MINI-SPARKLING", "name": "Sparkling Water", "quantity": 1 },
+    { "roomNumber": "101", "sku": "MINI-COLA", "name": "Cola", "quantity": 2 },
+    { "roomNumber": "101", "sku": "MINI-JUICE", "name": "Fruit Juice", "quantity": 1 },
+    { "roomNumber": "101", "sku": "MINI-SNACK", "name": "Chocolate Snack", "quantity": 2 },
+    { "roomNumber": "102", "sku": "MINI-WATER", "name": "Still Water", "quantity": 2 },
+    { "roomNumber": "102", "sku": "MINI-SNACK", "name": "Chocolate Snack", "quantity": 2 },
+    { "roomNumber": "204", "sku": "MINI-WATER", "name": "Still Water", "quantity": 2 },
+    { "roomNumber": "204", "sku": "MINI-SPARKLING", "name": "Sparkling Water", "quantity": 1 },
+    { "roomNumber": "204", "sku": "MINI-COLA", "name": "Cola", "quantity": 2 },
+    { "roomNumber": "204", "sku": "MINI-JUICE", "name": "Fruit Juice", "quantity": 1 },
+    { "roomNumber": "204", "sku": "MINI-SNACK", "name": "Mixed Nuts", "quantity": 2 },
+    { "roomNumber": "305", "sku": "MINI-WATER", "name": "Still Water", "quantity": 2 },
+    { "roomNumber": "305", "sku": "MINI-COLA", "name": "Cola", "quantity": 1 },
+    { "roomNumber": "409", "sku": "MINI-WATER", "name": "Still Water", "quantity": 2 },
+    { "roomNumber": "409", "sku": "MINI-SNACK", "name": "Chocolate Snack", "quantity": 2 },
+    { "roomNumber": "520", "sku": "MINI-WATER", "name": "Still Water", "quantity": 2 },
+    { "roomNumber": "520", "sku": "MINI-JUICE", "name": "Fruit Juice", "quantity": 1 }
   ]
 }
