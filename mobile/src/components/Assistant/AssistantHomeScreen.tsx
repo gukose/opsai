@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
     paddingBottom: 18
   },
   footer: {
-    paddingTop: 2,
+    paddingTop: 0,
     backgroundColor: colors.background
   },
   footerDesktop: {
@@ -527,16 +527,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12
   },
   assistantRelationshipCue: {
-    height: 12,
+    height: 6,
     marginHorizontal: 8,
-    marginBottom: 1,
+    marginBottom: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between"
   },
   relationshipBracket: {
     width: 13,
-    height: 11,
+    height: 7,
     borderColor: "rgba(148, 163, 184, 0.46)",
     borderWidth: 1
   },

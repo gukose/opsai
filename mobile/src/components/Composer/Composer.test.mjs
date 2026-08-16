@@ -51,3 +51,9 @@ test("assistant relationship cue uses short subtle side braces without a connect
   assert.match(homeSource, /rgba\(148, 163, 184, 0\.46\)/);
   assert.doesNotMatch(homeSource, /relationshipCue.*borderTopWidth/);
 });
+
+test("assistant card and composer stay visually close by default", () => {
+  assert.match(assistantHomeSource, /footer:\s*\{\s*paddingTop:\s*0/);
+  assert.match(assistantHomeSource, /assistantRelationshipCue:\s*\{\s*height:\s*6/);
+  assert.match(assistantHomeSource, /marginBottom:\s*0/);
+});
