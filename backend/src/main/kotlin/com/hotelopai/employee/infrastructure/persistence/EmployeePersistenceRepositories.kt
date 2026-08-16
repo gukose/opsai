@@ -55,10 +55,15 @@ class JpaSkillRepositoryAdapter(
 class JpaEmployeeRepositoryAdapter(
     private val employeeJpaRepository: EmployeeJpaRepository
 ) : EmployeeRepository {
-    override fun save(employee: Employee): Employee =
-        EmployeePersistenceMapper.toDomain(
-            employeeJpaRepository.saveAndFlush(EmployeePersistenceMapper.toEntity(employee))
-        )
+    override fun save(employee: Employee): Employee {
+        val entity = employeeJpaRepository.findById(employee.id).orElse(null)?.also {
+            require(it.hotelId == employee.hotelId) {
+                "Cannot update employee ${employee.id} outside hotel ${employee.hotelId}"
+            }
+            EmployeePersistenceMapper.updateEntity(employee, it)
+        } ?: EmployeePersistenceMapper.toEntity(employee)
+        return EmployeePersistenceMapper.toDomain(employeeJpaRepository.saveAndFlush(entity))
+    }
 
     override fun findById(id: UUID): Employee? =
         employeeJpaRepository.findById(id).orElse(null)?.let(EmployeePersistenceMapper::toDomain)

@@ -86,8 +86,13 @@ internal object UserPersistenceMapper {
         )
 
     fun toEntity(domain: User): UserJpaEntity =
-        UserJpaEntity().apply {
+        updateEntity(domain, UserJpaEntity()).apply {
             id = domain.id
+            version = domain.version.takeIf { it > 0 }
+        }
+
+    fun updateEntity(domain: User, entity: UserJpaEntity): UserJpaEntity =
+        entity.apply {
             hotelId = domain.hotelId
             employeeId = domain.employeeId
             email = domain.email.value
@@ -95,7 +100,6 @@ internal object UserPersistenceMapper {
             passwordHash = domain.passwordHash
             status = domain.status
             roleIds = domain.roleIds.toMutableSet()
-            version = domain.version.takeIf { it > 0 }
             createdAt = PersistenceInstant.toPersistencePrecision(domain.createdAt)
             createdBy = domain.createdBy
             updatedAt = PersistenceInstant.toPersistencePrecision(domain.updatedAt)

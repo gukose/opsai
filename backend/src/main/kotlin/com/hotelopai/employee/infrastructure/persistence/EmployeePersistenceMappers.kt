@@ -92,8 +92,13 @@ internal object EmployeePersistenceMapper {
         )
 
     fun toEntity(domain: Employee): EmployeeJpaEntity =
-        EmployeeJpaEntity().apply {
+        updateEntity(domain, EmployeeJpaEntity()).apply {
             id = domain.id
+            version = domain.version.takeIf { it > 0 }
+        }
+
+    fun updateEntity(domain: Employee, entity: EmployeeJpaEntity): EmployeeJpaEntity =
+        entity.apply {
             hotelId = domain.hotelId
             userId = domain.userId
             employeeNumber = domain.employeeNumber
@@ -107,7 +112,6 @@ internal object EmployeePersistenceMapper {
             operationalStatus = domain.operationalStatus
             roleIds = domain.roleIds.toMutableSet()
             skillIds = domain.skillIds.toMutableSet()
-            version = domain.version.takeIf { it > 0 }
             createdAt = PersistenceInstant.toPersistencePrecision(domain.createdAt)
             createdBy = domain.createdBy
             updatedAt = PersistenceInstant.toPersistencePrecision(domain.updatedAt)

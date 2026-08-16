@@ -69,10 +69,15 @@ class JpaRoleRepositoryAdapter(
 class JpaUserRepositoryAdapter(
     private val userJpaRepository: UserJpaRepository
 ) : UserRepository {
-    override fun save(user: User): User =
-        UserPersistenceMapper.toDomain(
-            userJpaRepository.saveAndFlush(UserPersistenceMapper.toEntity(user))
-        )
+    override fun save(user: User): User {
+        val entity = userJpaRepository.findById(user.id).orElse(null)?.also {
+            require(it.hotelId == user.hotelId) {
+                "Cannot update user ${user.id} outside hotel ${user.hotelId}"
+            }
+            UserPersistenceMapper.updateEntity(user, it)
+        } ?: UserPersistenceMapper.toEntity(user)
+        return UserPersistenceMapper.toDomain(userJpaRepository.saveAndFlush(entity))
+    }
 
     override fun findById(id: UUID): User? =
         userJpaRepository.findById(id).orElse(null)?.let(UserPersistenceMapper::toDomain)
