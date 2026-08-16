@@ -3,18 +3,11 @@ package com.hotelopai.demo
 import com.hotelopai.auth.application.PasswordHasher
 import com.hotelopai.auth.application.PermissionRepository
 import com.hotelopai.auth.application.RoleRepository
-import com.hotelopai.auth.application.UserRepository
-import com.hotelopai.auth.domain.EmailAddress
 import com.hotelopai.auth.domain.Permission
 import com.hotelopai.auth.domain.Role
-import com.hotelopai.auth.domain.User
-import com.hotelopai.auth.domain.UserStatus
 import com.hotelopai.employee.application.DepartmentRepository
-import com.hotelopai.employee.application.EmployeeRepository
 import com.hotelopai.employee.application.SkillRepository
 import com.hotelopai.employee.domain.Department
-import com.hotelopai.employee.domain.Employee
-import com.hotelopai.employee.domain.EmployeeOperationalStatus
 import com.hotelopai.employee.domain.Skill
 import com.hotelopai.hotel.application.HotelRepository
 import com.hotelopai.hotel.domain.Hotel
@@ -101,8 +94,6 @@ class DemoBootstrapService(
     private val hotels: HotelRepository,
     private val permissions: PermissionRepository,
     private val roles: RoleRepository,
-    private val users: UserRepository,
-    private val employees: EmployeeRepository,
     private val departments: DepartmentRepository,
     private val skills: SkillRepository,
     private val passwordHasher: PasswordHasher,
@@ -140,31 +131,20 @@ class DemoBootstrapService(
         // password once per bootstrap, rather than once per employee/alias.
         val passwordHashByPassword = mutableMapOf<String, String>()
         val staff = phase("employee") {
-            val existingEmployees = employees.findByHotelId(hotel.id).associateBy { it.employeeNumber }.toMutableMap()
-            val existingUsers = users.findByHotelId(hotel.id).associateBy { it.email.value }.toMutableMap()
-            CANONICAL_EMPLOYEES.map { definition ->
-                ensureUserAndEmployee(hotel.id, definition, roleByCode.getValue(definition.appRole).id, departmentByCode.getValue(definition.department),
-                    definition.skills.map(skillByCode::getValue).map(Skill::id).toSet(),
-                    passwordHashByPassword.getOrPut(properties.passwordFor(definition.appRole)) { passwordHasher.hash(properties.passwordFor(definition.appRole)) },
-                    existingEmployees, existingUsers)
-            }
+            upsertCanonicalEmployees(hotel.id, departmentByCode, roleByCode, skillByCode, passwordHashByPassword)
         }
         phase("legacyReconciliation") { reconcileLegacyDemoAccounts(hotel.id) }
-        phase("alias") { ensureLegacyAliases(hotel.id, staff, passwordHashByPassword) }
-        val employeeByNumber = staff.associateBy { it.employeeNumber }
+        phase("alias") { ensureLegacyAliases(hotel.id, staff, roleByCode, passwordHashByPassword) }
         phase("employeeRole") {
-            CANONICAL_EMPLOYEES.forEach { definition ->
-                val supervisor = definition.supervisorEmployeeNumber?.let(employeeByNumber::getValue)?.id
-                val current = employeeByNumber.getValue(definition.employeeNumber)
-                if (current.supervisorEmployeeId != supervisor) employees.save(current.copy(supervisorEmployeeId = supervisor))
-            }
+            syncEmployeeRoles(hotel.id, staff, roleByCode)
         }
-        phase("shift") { staff.forEach { ensureActiveShift(hotel.id, it.id) } }
+        phase("employeeSkill") { syncEmployeeSkills(staff, skillByCode) }
+        phase("shift") { ensureActiveShifts(hotel.id, staff.map { it.employeeId }) }
         // Master operational data is idempotent and is also repaired for an
         // already bootstrapped demo (the marker only governs sample tasks).
         phase("inventory") { seedInventory(hotel.id, Instant.now()) }
         phase("dataset") { seedDatasetOnce(hotel.id) }
-        logger.info("event=demo_bootstrap phase=complete totalMs={} transactionCount={} employeeCount={}", elapsedMs(started), 11, staff.size)
+        logger.info("event=demo_bootstrap phase=complete totalMs={} transactionCount={} employeeCount={}", elapsedMs(started), 12, staff.size)
     }
 
     private fun <T> phase(name: String, block: () -> T): T {
@@ -200,32 +180,66 @@ class DemoBootstrapService(
         return result
     }
 
-    private fun ensureUserAndEmployee(hotelId: UUID, definition: DemoUser, roleId: UUID, department: Department, skillIds: Set<UUID>, passwordHash: String,
-                                      existingEmployees: MutableMap<String, Employee>, existingUsers: MutableMap<String, User>): Employee {
-        val existingEmployee = existingEmployees[definition.employeeNumber]
-        val employeeId = existingEmployee?.id ?: UuidV7Generator.generate()
-        val email = emailFor(definition.displayName)
-        val existingUser = existingUsers[email]
-        val user = if (existingUser == null) users.save(User(
-            hotelId = hotelId, employeeId = employeeId, email = EmailAddress.of(email),
-            displayName = definition.displayName, passwordHash = passwordHash, roleIds = setOf(roleId), status = UserStatus.ACTIVE
-        )) else users.save(existingUser.copy(
-            employeeId = employeeId, displayName = definition.displayName, passwordHash = passwordHash,
-            roleIds = setOf(roleId), status = UserStatus.ACTIVE
-        ))
-        existingUsers[email] = user
-        val saved = employees.save((existingEmployee ?: Employee(
-            id = employeeId, hotelId = hotelId, employeeNumber = definition.employeeNumber, displayName = definition.displayName
-        )).copy(
-            userId = user.id, displayName = definition.displayName, departmentId = department.id,
-            roleIds = setOf(roleId), skillIds = skillIds, primaryRoleCode = definition.appRole,
-            homeArea = definition.homeArea, languages = definition.languages,
-            status = com.hotelopai.employee.domain.EmployeeStatus.ACTIVE,
-            operationalStatus = EmployeeOperationalStatus.AVAILABLE
-        ))
-        existingEmployees[definition.employeeNumber] = saved
-        return saved
+    private data class CanonicalStaff(val employeeNumber: String, val employeeId: UUID, val userId: UUID, val roleCode: String)
+
+    private fun upsertCanonicalEmployees(
+        hotelId: UUID,
+        departmentByCode: Map<String, Department>,
+        roleByCode: Map<String, Role>,
+        skillByCode: Map<String, Skill>,
+        passwordHashByPassword: MutableMap<String, String>
+    ): List<CanonicalStaff> {
+        val now = Timestamp.from(Instant.now())
+        val existingEmployees = jdbc.query("select employee_number,id,user_id from employee where hotel_id=:hotel", mapOf("hotel" to hotelId)) { rs, _ ->
+            Triple(rs.getString("employee_number"), rs.getObject("id", UUID::class.java), rs.getObject("user_id", UUID::class.java))
+        }.associateBy { it.first }
+        val existingUsers = jdbc.query("select email,id from app_user where hotel_id=:hotel", mapOf("hotel" to hotelId)) { rs, _ ->
+            rs.getString("email") to rs.getObject("id", UUID::class.java)
+        }.toMap()
+        val staff = CANONICAL_EMPLOYEES.map { definition ->
+            val existing = existingEmployees[definition.employeeNumber]
+            val employeeId = existing?.second ?: UuidV7Generator.generate()
+            val email = emailFor(definition.displayName)
+            val userId = existingUsers[email] ?: UuidV7Generator.generate()
+            CanonicalStaff(definition.employeeNumber, employeeId, userId, definition.appRole)
+        }
+        val staffByNumber = staff.associateBy { it.employeeNumber }
+        val userRows = CANONICAL_EMPLOYEES.mapIndexed { index, definition ->
+            val row = staff[index]
+            val rawPassword = properties.passwordFor(definition.appRole)
+            mapOf<String, Any?>(
+                "id" to row.userId, "hotel" to hotelId, "employee" to row.employeeId,
+                "email" to emailFor(definition.displayName), "displayName" to definition.displayName,
+                "passwordHash" to passwordHashByPassword.getOrPut(rawPassword) { passwordHasher.hash(rawPassword) },
+                "now" to now
+            )
+        }
+        jdbc.batchUpdate("""insert into app_user(id,hotel_id,employee_id,version,created_at,updated_at,email,display_name,password_hash,status)
+            values(:id,:hotel,:employee,0,:now,:now,:email,:displayName,:passwordHash,'ACTIVE')
+            on conflict(hotel_id,email) do update set employee_id=excluded.employee_id,display_name=excluded.display_name,
+              password_hash=excluded.password_hash,status='ACTIVE',version=app_user.version+1,updated_at=excluded.updated_at""", userRows.toTypedArray())
+        val employeeRows = CANONICAL_EMPLOYEES.mapIndexed { index, definition ->
+            val row = staff[index]
+            val supervisor = definition.supervisorEmployeeNumber?.let { staffByNumber.getValue(it).employeeId }
+            mapOf<String, Any?>(
+                "id" to row.employeeId, "hotel" to hotelId, "user" to row.userId,
+                "department" to departmentByCode.getValue(definition.department).id,
+                "employeeNumber" to row.employeeNumber, "displayName" to definition.displayName,
+                "roleCode" to definition.appRole, "supervisor" to supervisor, "homeArea" to definition.homeArea,
+                "languages" to postgresTextArray(definition.languages), "now" to now
+            )
+        }
+        jdbc.batchUpdate("""insert into employee(id,hotel_id,user_id,department_id,version,created_at,updated_at,employee_number,display_name,status,primary_role_code,supervisor_employee_id,home_area,languages,operational_status)
+            values(:id,:hotel,:user,:department,0,:now,:now,:employeeNumber,:displayName,'ACTIVE',:roleCode,:supervisor,:homeArea,cast(:languages as text[]),'AVAILABLE')
+            on conflict(hotel_id,employee_number) do update set user_id=excluded.user_id,department_id=excluded.department_id,
+              display_name=excluded.display_name,status='ACTIVE',primary_role_code=excluded.primary_role_code,
+              supervisor_employee_id=excluded.supervisor_employee_id,home_area=excluded.home_area,languages=excluded.languages,
+              operational_status='AVAILABLE',version=employee.version+1,updated_at=excluded.updated_at""", employeeRows.toTypedArray())
+        logger.info("event=demo_bootstrap phase=employee_detail employeeCount={} sqlStatements=4 repositoryCalls=0 saveCalls=0 flushCount=0 bcryptCalls={}", staff.size, passwordHashByPassword.size)
+        return staff
     }
+
+    private fun postgresTextArray(values: Set<String>): String = values.joinToString(",", prefix = "{", postfix = "}") { it.replace("\\", "\\\\").replace(",", "\\,") }
 
     private fun emailFor(displayName: String): String = displayName
         .lowercase()
@@ -245,9 +259,8 @@ class DemoBootstrapService(
         jdbc.update("update employee set status='INACTIVE' where hotel_id=:hotel and employee_number in ('EMP-ADMIN','EMP-TECH-001','EMP-HK-001')", mapOf("hotel" to hotelId))
     }
 
-    private fun ensureLegacyAliases(hotelId: UUID, staff: List<Employee>, passwordHashByPassword: MutableMap<String, String>) {
+    private fun ensureLegacyAliases(hotelId: UUID, staff: List<CanonicalStaff>, roleByCode: Map<String, Role>, passwordHashByPassword: MutableMap<String, String>) {
         val employeeByNumber = staff.associateBy { it.employeeNumber }
-        val existingUsers = users.findByHotelId(hotelId).associateBy { it.email.value }.toMutableMap()
         val aliases = listOf(
             "reviewer.admin@demo.hotelopai.app" to "EMP0001",
             "gm@demo.hotelopai.app" to "EMP0001",
@@ -257,41 +270,49 @@ class DemoBootstrapService(
             "reception@demo.hotelopai.app" to "EMP0006",
             "guest.relations@demo.hotelopai.app" to "EMP0011"
         )
-        aliases.forEach { (email, employeeNumber) ->
+        val rows = aliases.map { (email, employeeNumber) ->
             val employee = employeeByNumber.getValue(employeeNumber)
-            val roleId = employee.roleIds.firstOrNull()
-                ?: error("Canonical employee $employeeNumber has no role")
-            val existing = existingUsers[email]
-            val roleCode = employee.primaryRoleCode ?: ""
+            val roleCode = employee.roleCode
             val rawPassword = properties.passwordFor(roleCode)
             val passwordHash = passwordHashByPassword.getOrPut(rawPassword) { passwordHasher.hash(rawPassword) }
-            val alias = existing?.copy(
-                employeeId = employee.id,
-                displayName = employee.displayName,
-                passwordHash = passwordHash,
-                roleIds = setOf(roleId),
-                status = UserStatus.ACTIVE
-            ) ?: User(
-                hotelId = hotelId,
-                employeeId = employee.id,
-                email = EmailAddress.of(email),
-                displayName = employee.displayName,
-                passwordHash = passwordHash,
-                roleIds = setOf(roleId),
-                status = UserStatus.ACTIVE
-            )
-            existingUsers[email] = users.save(alias)
+            mapOf<String, Any?>("id" to UuidV7Generator.generate(), "hotel" to hotelId, "employee" to employee.employeeId,
+                "email" to email, "displayName" to CANONICAL_EMPLOYEES.first { it.employeeNumber == employeeNumber }.displayName,
+                "passwordHash" to passwordHash, "now" to Timestamp.from(Instant.now()))
         }
+        jdbc.batchUpdate("""insert into app_user(id,hotel_id,employee_id,version,created_at,updated_at,email,display_name,password_hash,status)
+            values(:id,:hotel,:employee,0,:now,:now,:email,:displayName,:passwordHash,'ACTIVE')
+            on conflict(hotel_id,email) do update set employee_id=excluded.employee_id,display_name=excluded.display_name,
+              password_hash=excluded.password_hash,status='ACTIVE',version=app_user.version+1,updated_at=excluded.updated_at""", rows.toTypedArray())
+        val ids = jdbc.query("select email,id from app_user where hotel_id=:hotel and email in (:emails)", mapOf("hotel" to hotelId, "emails" to aliases.map { it.first })) { rs, _ -> rs.getString("email") to rs.getObject("id", UUID::class.java) }.toMap()
+        jdbc.update("delete from user_role where user_id in (:ids)", mapOf("ids" to ids.values.toList()))
+        jdbc.batchUpdate("insert into user_role(user_id,role_id) values(:user,:role)", aliases.map { (email, employeeNumber) -> mapOf("user" to ids.getValue(email), "role" to roleByCode.getValue(employeeByNumber.getValue(employeeNumber).roleCode).id) }.toTypedArray())
+        logger.info("event=demo_bootstrap phase=alias_detail aliasCount={} sqlStatements=4 repositoryCalls=0 saveCalls=0 flushCount=0 bcryptCalls={}", aliases.size, passwordHashByPassword.size)
     }
 
-    private fun ensureActiveShift(hotelId: UUID, employeeId: UUID) {
+    private fun syncEmployeeRoles(hotelId: UUID, staff: List<CanonicalStaff>, roleByCode: Map<String, Role>) {
+        jdbc.update("delete from employee_role where employee_id in (:ids)", mapOf("ids" to staff.map { it.employeeId }))
+        jdbc.update("delete from user_role where user_id in (:ids)", mapOf("ids" to staff.map { it.userId }))
+        jdbc.batchUpdate("insert into employee_role(employee_id,role_id) values(:employee,:role)", staff.map { mapOf("employee" to it.employeeId, "role" to roleByCode.getValue(it.roleCode).id) }.toTypedArray())
+        jdbc.batchUpdate("insert into user_role(user_id,role_id) values(:user,:role)", staff.map { mapOf("user" to it.userId, "role" to roleByCode.getValue(it.roleCode).id) }.toTypedArray())
+    }
+
+    private fun syncEmployeeSkills(staff: List<CanonicalStaff>, skillByCode: Map<String, Skill>) {
+        jdbc.update("delete from employee_skill where employee_id in (:ids)", mapOf("ids" to staff.map { it.employeeId }))
+        val rows = CANONICAL_EMPLOYEES.flatMapIndexed { index, definition -> definition.skills.map { skill -> mapOf("employee" to staff[index].employeeId, "skill" to skillByCode.getValue(skill).id) } }
+        if (rows.isNotEmpty()) jdbc.batchUpdate("insert into employee_skill(employee_id,skill_id) values(:employee,:skill)", rows.toTypedArray())
+    }
+
+    private fun ensureActiveShifts(hotelId: UUID, employeeIds: List<UUID>) {
         val now = Instant.now()
+        val ids = employeeIds.map { UuidV7Generator.generate(now) }
         jdbc.update("""insert into workforce_shift(id,hotel_id,employee_id,planned_start,planned_end,actual_start,status,created_at,updated_at)
-            select :id,:hotel,:employee,:start,:end,:start,'WORKING',:now,:now where not exists(
-              select 1 from workforce_shift where hotel_id=:hotel and employee_id=:employee and status in ('STARTED','WORKING')
-                and coalesce(actual_end,planned_end)>:now)""",
-            mapOf("id" to UuidV7Generator.generate(now), "hotel" to hotelId, "employee" to employeeId,
+            select cast(seed.shift_id as uuid),:hotel,cast(seed.employee_id as uuid),:start,:end,:start,'WORKING',:now,:now
+            from unnest(cast(:employeeIds as uuid[]),cast(:shiftIds as uuid[])) seed(employee_id,shift_id)
+            where not exists(select 1 from workforce_shift w where w.hotel_id=:hotel and w.employee_id=cast(seed.employee_id as uuid)
+              and w.status in ('STARTED','WORKING') and coalesce(w.actual_end,w.planned_end)>:now)""",
+            mapOf("hotel" to hotelId, "employeeIds" to employeeIds.joinToString(",", "{", "}"), "shiftIds" to ids.joinToString(",", "{", "}"),
                 "start" to Timestamp.from(now.minus(1, ChronoUnit.HOURS)), "end" to Timestamp.from(now.plus(12, ChronoUnit.HOURS)), "now" to Timestamp.from(now)))
+        logger.info("event=demo_bootstrap phase=shift_detail employeeCount={} sqlStatements=1 repositoryCalls=0 saveCalls=0 flushCount=0", employeeIds.size)
     }
 
     private fun seedDatasetOnce(hotelId: UUID) {
