@@ -24,6 +24,12 @@ class SupervisorTaskAssignmentServiceTest {
     private val now = Instant.parse("2026-08-16T10:00:00Z")
 
     @Test
+    fun `assignment has no clock default argument bridge`() {
+        assertThat(SupervisorTaskAssignmentService::class.java.declaredMethods)
+            .noneMatch { it.name == "assign\$default" }
+    }
+
+    @Test
     fun `manual assignment and reassignment use canonical same-hotel employees and notify`() {
         val hotelId = UuidV7Generator.generate()
         val repository = InMemoryTasks()
@@ -40,7 +46,12 @@ class SupervisorTaskAssignmentServiceTest {
         )
 
         val assigned = service.assign(task.id.toString(), hotelId, UuidV7Generator.generate(), command(first))
-        val reassigned = service.assign(task.id.toString(), hotelId, UuidV7Generator.generate(), command(second), now.plusSeconds(60))
+        val reassignmentService = SupervisorTaskAssignmentService(
+            TaskLifecycleService(repository), Employees(listOf(first, second)),
+            mock(NamedParameterJdbcTemplate::class.java), notifications,
+            Clock.fixed(now.plusSeconds(60), ZoneOffset.UTC)
+        )
+        val reassigned = reassignmentService.assign(task.id.toString(), hotelId, UuidV7Generator.generate(), command(second))
 
         assertThat(assigned.assignment?.assigneeId).isEqualTo(first.userId.toString())
         assertThat(assigned.assignment?.assignedAt).isEqualTo(now)

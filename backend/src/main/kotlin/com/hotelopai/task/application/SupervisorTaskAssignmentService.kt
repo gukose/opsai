@@ -15,7 +15,6 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.sql.Timestamp
 import java.time.Clock
-import java.time.Instant
 import java.util.UUID
 
 @Service
@@ -31,9 +30,9 @@ class SupervisorTaskAssignmentService(
         taskId: String,
         hotelId: UUID,
         actorUserId: UUID,
-        request: AssignTaskCommand,
-        now: Instant = clock.instant()
+        request: AssignTaskCommand
     ): Task {
+        val now = clock.instant()
         val employee = if (request.assignment.assigneeType == TaskAssigneeType.USER) {
             val requestedId = UUID.fromString(request.assignment.assigneeId)
             employees.findByHotelId(hotelId).firstOrNull {

@@ -9,6 +9,7 @@ import com.hotelopai.outbox.domain.OperationalOutboxEventTypes
 import com.hotelopai.outbox.domain.OperationalOutboxStatus
 import com.hotelopai.support.PostgresIntegrationTestSupport
 import com.hotelopai.task.application.TaskRepository
+import com.hotelopai.task.application.SupervisorTaskAssignmentService
 import com.hotelopai.task.domain.Task
 import com.hotelopai.task.domain.TaskIntentType
 import com.hotelopai.task.domain.TaskPriority
@@ -56,7 +57,17 @@ class TaskControllerTest : PostgresIntegrationTestSupport() {
     @Autowired
     private lateinit var outboxRepository: OperationalOutboxRepository
 
+    @Autowired
+    private lateinit var supervisorTaskAssignmentService: SupervisorTaskAssignmentService
+
     private val httpClient = HttpClient.newHttpClient()
+
+    @Test
+    fun `spring wires supervisor assignment service with a non-null clock`() {
+        val clockField = SupervisorTaskAssignmentService::class.java.getDeclaredField("clock")
+        clockField.isAccessible = true
+        assertThat(clockField.get(supervisorTaskAssignmentService)).isNotNull
+    }
 
     @Test
     fun `unauthenticated task create returns unauthorized`() {

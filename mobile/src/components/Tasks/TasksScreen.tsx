@@ -68,7 +68,6 @@ export function TasksScreen({
       <View style={styles.titleRow}>
         <View>
           <Text style={styles.kicker}>MY TASKS</Text>
-          <Text style={styles.title}>Backend task queue</Text>
           <Text style={styles.subtitle} numberOfLines={1}>
             {hotelLabel}
             {displayName ? ` · ${displayName}` : ""}
