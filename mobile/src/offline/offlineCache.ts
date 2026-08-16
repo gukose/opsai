@@ -53,7 +53,7 @@ export class OfflineCache {
 
   async clearScope(scope: OfflineScope): Promise<void> {
     try {
-      const prefix = `${PREFIX}:${OFFLINE_CACHE_VERSION}:${scope.hotelId}:${scope.userId}:`;
+      const prefix = scopePrefix(scope);
       const keys = await this.storage.keys();
       await Promise.all(keys.filter((key) => key.startsWith(prefix)).map((key) => this.remove(key)));
     } catch {
@@ -132,7 +132,12 @@ export function assistantDraftCacheKeyPrefix(scope: OfflineScope): string {
 }
 
 function scopedKey(scope: OfflineScope, kind: string, identity: string): string {
-  return `${PREFIX}:${OFFLINE_CACHE_VERSION}:${scope.hotelId}:${scope.userId}:${kind}:${identity}`;
+  return `${scopePrefix(scope)}${kind}:${identity}`;
+}
+
+function scopePrefix(scope: OfflineScope): string {
+  const identity = scope.employeeId?.trim() || scope.userId;
+  return `${PREFIX}:${OFFLINE_CACHE_VERSION}:${scope.hotelId}:${identity}:`;
 }
 
 function normalizedTaskFilters(filters?: TaskFilterState) {

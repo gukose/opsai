@@ -10,7 +10,10 @@ data class CurrentUserContext(
     val hotelId: UUID,
     val sessionId: UUID,
     val permissions: Set<String>,
-    val roles: Set<String>
+    val roles: Set<String>,
+    /** Canonical workforce identity. Login aliases intentionally share this value. */
+    val employeeId: UUID? = null,
+    val canonicalEmployeeUserId: UUID? = null
 )
 
 @Component
@@ -25,6 +28,8 @@ class CurrentUserContextResolver {
         return CurrentUserContext(
             userId = claimUuid(jwt.subject) ?: throw InvalidAccessSessionException(),
             hotelId = claimUuid(jwt.getClaimAsString("hotelId")) ?: throw InvalidAccessSessionException(),
+            employeeId = claimUuid(jwt.getClaimAsString("employeeId")),
+            canonicalEmployeeUserId = claimUuid(jwt.getClaimAsString("canonicalEmployeeUserId")),
             sessionId = claimUuid(jwt.getClaimAsString("sid")) ?: throw InvalidAccessSessionException(),
             permissions = claimStrings(jwt.claims["permissions"]),
             roles = claimStrings(jwt.claims["roleCodes"])

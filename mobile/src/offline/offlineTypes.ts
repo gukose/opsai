@@ -3,6 +3,8 @@ export const OFFLINE_CACHE_VERSION = "v1";
 export type OfflineScope = {
   hotelId: string;
   userId: string;
+  /** Canonical employee identity; aliases must share task cache scope. */
+  employeeId?: string | null;
 };
 
 export type CachedEnvelope<T> = {

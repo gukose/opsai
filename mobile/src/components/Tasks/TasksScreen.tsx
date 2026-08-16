@@ -90,7 +90,12 @@ export function TasksScreen({
         </Text>
       ) : null}
       {isLoading ? <Text style={styles.loading}>Loading tasks...</Text> : null}
-      <TaskFilterRow filters={filters} onChange={onFiltersChange} onClear={onClearFilters} />
+      <TaskFilterRow
+        filters={filters}
+        onChange={onFiltersChange}
+        onClear={onClearFilters}
+        canViewAssignmentQueue={canAssignTasks}
+      />
 
       {!isLoading && tasks.length === 0 ? (
         <TaskEmptyState
@@ -172,11 +177,13 @@ export function TasksScreen({
 function TaskFilterRow({
   filters,
   onChange,
-  onClear
+  onClear,
+  canViewAssignmentQueue
 }: {
   filters: TaskFilterState;
   onChange: (filters: TaskFilterState) => void;
   onClear: () => void;
+  canViewAssignmentQueue: boolean;
 }) {
   const active = hasActiveTaskFilters(filters);
 
@@ -227,13 +234,15 @@ function TaskFilterRow({
           active={filters.assignment === "mine"}
           onPress={() => onChange({ ...filters, assignment: filters.assignment === "mine" ? null : "mine" })}
         />
-        <FilterChip
-          label="Needs Assignment"
-          active={filters.assignment === "unassigned"}
-          onPress={() =>
-            onChange({ ...filters, assignment: filters.assignment === "unassigned" ? null : "unassigned" })
-          }
-        />
+        {canViewAssignmentQueue ? (
+          <FilterChip
+            label="Needs Assignment"
+            active={filters.assignment === "unassigned"}
+            onPress={() =>
+              onChange({ ...filters, assignment: filters.assignment === "unassigned" ? null : "unassigned" })
+            }
+          />
+        ) : null}
         {active ? <FilterChip label="Clear" active={false} onPress={onClear} /> : null}
       </ScrollView>
     </View>

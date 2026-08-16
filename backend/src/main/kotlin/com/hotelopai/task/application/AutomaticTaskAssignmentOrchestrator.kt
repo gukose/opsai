@@ -13,6 +13,11 @@ import com.hotelopai.task.domain.TaskAssignment
 import com.hotelopai.task.domain.TaskIntentType
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Service
+import org.slf4j.LoggerFactory
+import org.slf4j.MDC
+import com.zaxxer.hikari.HikariDataSource
+import javax.sql.DataSource
+import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
 import java.sql.Timestamp
 import java.util.UUID
@@ -54,15 +59,32 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
     private val departmentRepository: DepartmentRepository,
     private val skillRepository: SkillRepository,
     private val jdbc: NamedParameterJdbcTemplate,
-    private val observability: OperationalObservability = OperationalObservability.noop()
+    private val observability: OperationalObservability = OperationalObservability.noop(),
+    private val dataSource: DataSource
 ) : TaskCreationAssignmentOrchestrator, TaskAssignmentCandidateQuery {
 
+    @Transactional(readOnly = true)
     override fun candidates(task: Task, now: Instant): List<AssignmentCandidateView> {
+        val started = System.nanoTime()
+        val requirementStarted = System.nanoTime()
         val requirement = resolveRequirement(task)
+        val departmentMs = elapsedMs(requirementStarted)
+        val employeeStarted = System.nanoTime()
         val employees = employeeRepository.findByHotelId(task.hotelId).filter { it.status == EmployeeStatus.ACTIVE }
+        val employeeQueryMs = elapsedMs(employeeStarted)
         val excluded = employees.filter { it.primaryRoleCode?.let(::isSupervisoryRole) == true }.map(Employee::id).toSet()
+        val shiftStarted = System.nanoTime()
         val shifts = activeShiftEmployeeIds(task.hotelId, now)
+        val shiftMs = elapsedMs(shiftStarted)
+        val workloadStarted = System.nanoTime()
         val workloads = workload(task.hotelId)
+        val workloadMs = elapsedMs(workloadStarted)
+        val skillStarted = System.nanoTime()
+        val skillLevels = skillLevels(task.hotelId)
+        val skillLevelMs = elapsedMs(skillStarted)
+        val activeStarted = System.nanoTime()
+        val activeTaskIds = activeTaskEmployeeIds(task.hotelId)
+        val activeTaskMs = elapsedMs(activeStarted)
         val decision = assignmentService.evaluate(
             AssignmentCriteria(
                 hotelId = task.hotelId,
@@ -70,12 +92,12 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
                 requiredSkillId = requirement.requiredSkillId,
                 departmentId = requirement.departmentId,
                 strictRequiredSkill = requirement.requiredSkillId != null,
-                employeeSkillLevels = skillLevels(task.hotelId),
+                employeeSkillLevels = skillLevels,
                 activeShiftEmployeeIds = shifts,
                 requireActiveShift = true,
                 workloadByEmployeeId = workloads,
                 maximumWorkload = MAXIMUM_ACTIVE_WORKLOAD,
-                activeTaskEmployeeIds = activeTaskEmployeeIds(task.hotelId),
+                activeTaskEmployeeIds = activeTaskIds,
                 preferredArea = task.roomNumber,
                 unavailableEmployeeIds = excluded
             ),
@@ -95,7 +117,7 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
                     .thenBy { workloads[it.id] ?: 0 }
                     .thenBy { it.employeeNumber }
             )
-        return manualChoices.map { employee ->
+        val candidates = manualChoices.map { employee ->
                 AssignmentCandidateView(
                     assigneeId = (employee.userId ?: employee.id).toString(),
                     displayName = employee.displayName,
@@ -106,6 +128,13 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
                     score = rankedScore[employee.id] ?: Int.MIN_VALUE
                 )
         }
+        logger.info(
+            "event=assignment_candidates correlationId={} taskId={} departmentMs={} employeeQueryMs={} shiftMs={} workloadMs={} skillLevelMs={} activeTaskMs={} mappingMs={} dbMs={} externalMs={} totalMs={} candidateCount={} poolActive={} poolIdle={} poolPending={} poolMax={}",
+            MDC.get("correlationId") ?: "unknown", task.id, departmentMs, employeeQueryMs, shiftMs, workloadMs,
+            skillLevelMs, activeTaskMs, elapsedMs(started) - departmentMs - employeeQueryMs - shiftMs - workloadMs - skillLevelMs - activeTaskMs,
+            elapsedMs(started), 0, elapsedMs(started), candidates.size, pool().active, pool().idle, pool().pending, pool().max
+        )
+        return candidates
     }
 
     override fun evaluate(task: Task, now: Instant): AutomaticAssignmentResult {
@@ -307,5 +336,16 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
     companion object {
         private const val MAXIMUM_ACTIVE_WORKLOAD = 5
         private const val RULE_VERSION = "automatic-assignment-v1"
+        private val logger = LoggerFactory.getLogger(PersistedWorkforceTaskAssignmentOrchestrator::class.java)
     }
+
+    private fun elapsedMs(started: Long): Long = (System.nanoTime() - started) / 1_000_000
+
+    private fun pool(): PoolSnapshot {
+        val hikari = dataSource as? HikariDataSource
+        val bean = hikari?.hikariPoolMXBean
+        return PoolSnapshot(bean?.activeConnections ?: -1, bean?.idleConnections ?: -1, bean?.threadsAwaitingConnection ?: -1, hikari?.maximumPoolSize ?: -1)
+    }
+
+    private data class PoolSnapshot(val active: Int, val idle: Int, val pending: Int, val max: Int)
 }

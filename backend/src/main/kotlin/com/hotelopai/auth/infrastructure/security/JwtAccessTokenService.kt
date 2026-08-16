@@ -45,6 +45,7 @@ class JwtAccessTokenService(
             .claim("permissionIds", context.permissionIds.map(UUID::toString))
             .claim("permissions", context.permissionCodes.toList())
         context.employeeId?.let { claimsBuilder.claim("employeeId", it.toString()) }
+        context.canonicalEmployeeUserId?.let { claimsBuilder.claim("canonicalEmployeeUserId", it.toString()) }
         val claims = claimsBuilder.build()
 
         return AccessTokenResult(

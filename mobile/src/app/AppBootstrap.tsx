@@ -124,7 +124,11 @@ export function AppBootstrapProvider({ children }: { children: ReactNode }) {
       logout: async () => {
         setStatus("loading");
         const scope = session?.currentUser?.hotelId && session.currentUser.userId
-          ? { hotelId: session.currentUser.hotelId, userId: session.currentUser.userId }
+          ? {
+              hotelId: session.currentUser.hotelId,
+              userId: session.currentUser.userId,
+              employeeId: session.currentUser.employeeId
+            }
           : null;
 
         try {

@@ -117,11 +117,19 @@ class TaskLifecycleService @Autowired constructor(
     fun getTaskForHotel(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task =
         taskRepository.findByIdAndHotelId(taskId.toTaskId(), hotelId) ?: throw TaskNotFoundException(taskId.toTaskId())
 
+    fun getTaskForScope(taskId: String, scope: TaskVisibilityScope, now: Instant = Instant.now()): Task =
+        getTaskForHotel(taskId, scope.hotelId, now)
+            .takeIf { TaskVisibilityRules.canView(it, scope) }
+            ?: throw TaskNotFoundException(taskId.toTaskId())
+
     fun listTasks(now: Instant = Instant.now()): List<Task> =
         taskRepository.findAll()
 
     fun listTasksForHotel(hotelId: UUID, now: Instant = Instant.now()): List<Task> =
         taskRepository.findAllByHotelId(hotelId)
+
+    fun listTasksForScope(scope: TaskVisibilityScope, now: Instant = Instant.now()): List<Task> =
+        taskRepository.findAllByHotelId(scope.hotelId).filter { TaskVisibilityRules.canView(it, scope) }
 
     fun listTasksPage(request: TaskPageRequest, now: Instant = Instant.now()): TaskPage<Task> =
         taskRepository.findPage(request)

@@ -78,6 +78,13 @@ class NotificationService(
                 hotelId = currentUser.hotelId,
                 userId = currentUser.userId,
                 roleCodes = currentUser.roles
+                    .takeIf { roles ->
+                        roles.map(String::uppercase).any {
+                            it in setOf("ADMIN", "GM", "GENERAL_MANAGER", "HOTEL_ADMIN") ||
+                                it.contains("SUPERVISOR") || it.contains("MANAGER") || it == "CHIEF_ENGINEER"
+                        }
+                    }
+                    ?: emptySet()
             ).also {
                 outcome = "success"
                 recordNotification("list", outcome, "none")

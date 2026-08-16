@@ -94,6 +94,15 @@ export function useTaskBoardState(
     }
   }, [currentUser?.permissions, service]);
 
+  const loadAttachments = useCallback(async (taskId: string) => {
+    try {
+      const attachments = await service.getTaskAttachments(taskId);
+      setSelectedTask((current) => current?.id === taskId ? { ...current, attachments } : current);
+    } catch {
+      // Attachments are secondary detail data and must not block task actions.
+    }
+  }, [service]);
+
   useEffect(() => {
     selectedTaskIdRef.current = selectedTaskId;
   }, [selectedTaskId]);
@@ -169,7 +178,7 @@ export function useTaskBoardState(
         setSelectedTaskId(resolvedId);
         const detail = await service.getTask(resolvedId);
         setSelectedTask(detail);
-        await refreshAssignmentCandidates(resolvedId);
+        void loadAttachments(resolvedId);
       } catch (error) {
         const message = getAppApiErrorMessage(error);
         setErrorMessage(message);
@@ -203,7 +212,7 @@ export function useTaskBoardState(
         }
       }
     },
-    [accessToken, service, useMockTasks,currentUser,refreshAssignmentCandidates]
+    [accessToken, service, useMockTasks,currentUser,refreshAssignmentCandidates,loadAttachments]
   );
 
   useEffect(() => {
@@ -237,14 +246,14 @@ export function useTaskBoardState(
         setIsRefreshing(true);
         const detail = await service.getTask(taskId);
         setSelectedTask(detail);
-        await refreshAssignmentCandidates(taskId);
+        void loadAttachments(taskId);
       } catch (error) {
         setErrorMessage(getAppApiErrorMessage(error));
       } finally {
         setIsRefreshing(false);
       }
     },
-    [accessToken, service, useMockTasks, refreshAssignmentCandidates]
+    [accessToken, service, useMockTasks, refreshAssignmentCandidates, loadAttachments]
   );
 
   const runCommand = useCallback(
@@ -263,12 +272,6 @@ export function useTaskBoardState(
         setIsRefreshing(true);
         const updatedTask = await command(taskId);
         setSelectedTask(updatedTask);
-        try {
-          await refreshAssignmentCandidates(updatedTask.id);
-        } catch {
-          // A successful assignment must not be reported as failed if the
-          // follow-up candidate refresh is temporarily unavailable.
-        }
         setTasks((current) =>
           current.map((task) => (task.id === updatedTask.id ? taskSummaryFromDetail(updatedTask) : task))
         );
@@ -373,7 +376,8 @@ function scopedTaskCacheKey(currentUser: CurrentUserSnapshot | null | undefined,
   return taskListCacheKey(
     {
       hotelId: currentUser.hotelId,
-      userId: currentUser.userId
+      userId: currentUser.userId,
+      employeeId: currentUser.employeeId
     },
     filters
   );

@@ -8,7 +8,8 @@ import {
   taskAttachmentFromResponse,
   taskDetailFromResponse,
   taskSummariesFromListResponse,
-  TaskSummary
+  TaskSummary,
+  TaskAttachmentMetadata
 } from "./types";
 
 export class TaskService {
@@ -38,16 +39,17 @@ export class TaskService {
   }
 
   async getTask(taskId: string): Promise<TaskDetail> {
-    const task = taskDetailFromResponse(await this.taskApi.getTask(taskId));
-    try {
-      const attachments = await this.taskApi.getTaskAttachments(taskId);
-      return {
-        ...task,
-        attachments: attachments.map(taskAttachmentFromResponse)
-      };
-    } catch {
-      return task;
-    }
+    // Attachments are secondary detail data. They must not block the task
+    // detail/assignment controls behind a second database request.
+    const started = nowMs();
+    const detail = taskDetailFromResponse(await this.taskApi.getTask(taskId));
+    debugTiming("task_detail_load", { taskId, totalMs: Math.round(nowMs() - started) });
+    return detail;
+  }
+
+  async getTaskAttachments(taskId: string): Promise<TaskAttachmentMetadata[]> {
+    const attachments = await this.taskApi.getTaskAttachments(taskId);
+    return attachments.map(taskAttachmentFromResponse);
   }
 
   async startTask(taskId: string): Promise<TaskDetail> {
@@ -71,10 +73,14 @@ export class TaskService {
   }
 
   async assignmentCandidates(taskId: string): Promise<AssignmentCandidate[]> {
-    return this.authorizedJson<AssignmentCandidate[]>(`/api/v1/tasks/${taskId}/assignment-candidates`, { method: "GET" });
+    const started = nowMs();
+    const candidates = await this.authorizedJson<AssignmentCandidate[]>(`/api/v1/tasks/${taskId}/assignment-candidates`, { method: "GET" });
+    debugTiming("assignment_candidates", { taskId, totalMs: Math.round(nowMs() - started), candidateCount: candidates.length });
+    return candidates;
   }
 
   async assignTask(taskId: string, candidate: AssignmentCandidate): Promise<TaskDetail> {
+    const started = nowMs();
     const response = await this.authorizedJson<import("../api/task/TaskDtos").TaskResponseDto>(
       `/api/v1/tasks/${taskId}/assign`,
       {
@@ -82,7 +88,9 @@ export class TaskService {
         body: JSON.stringify({ assigneeType: "USER", assigneeId: candidate.assigneeId, displayName: candidate.displayName })
       }
     );
-    return taskDetailFromResponse(response);
+    const detail = taskDetailFromResponse(response);
+    debugTiming("task_assign", { taskId, totalMs: Math.round(nowMs() - started) });
+    return detail;
   }
 
   private async authorizedJson<T>(path: string, init: RequestInit): Promise<T> {
@@ -94,6 +102,17 @@ export class TaskService {
     });
     if (!response.ok) throw new Error(`Assignment request failed with ${response.status}`);
     return response.json() as Promise<T>;
+  }
+}
+
+function nowMs(): number {
+  return typeof globalThis.performance?.now === "function" ? globalThis.performance.now() : Date.now();
+}
+
+function debugTiming(event: string, fields: Record<string, unknown>): void {
+  if (typeof __DEV__ !== "undefined" && __DEV__) {
+    // No credentials or task contents are logged; this is UAT timing only.
+    console.debug(`event=${event}`, fields);
   }
 }
 

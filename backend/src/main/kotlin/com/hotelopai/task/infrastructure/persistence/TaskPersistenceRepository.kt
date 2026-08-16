@@ -7,6 +7,8 @@ import com.hotelopai.task.application.TaskPageRequest
 import com.hotelopai.task.application.TaskRepository
 import com.hotelopai.task.application.TaskAssignmentFilter
 import com.hotelopai.task.application.TaskSearchQuery
+import com.hotelopai.task.application.TaskVisibilityLevel
+import com.hotelopai.task.application.TaskVisibilityRules
 import com.hotelopai.task.application.TaskStateHistoryEntry
 import com.hotelopai.task.application.TaskStateHistoryRepository
 import com.hotelopai.task.domain.Task
@@ -85,6 +87,24 @@ class TaskPersistenceRepository(
             val predicates = mutableListOf<Predicate>()
             predicates += criteriaBuilder.equal(root.get<UUID>("hotelId"), hotelId)
 
+            visibility?.let { scope ->
+                when (scope.level) {
+                    TaskVisibilityLevel.HOTEL -> Unit
+                    TaskVisibilityLevel.SELF -> {
+                        val ids = setOfNotNull(scope.employeeId, scope.userId, scope.canonicalEmployeeUserId).map(UUID::toString)
+                        predicates += criteriaBuilder.and(
+                            criteriaBuilder.equal(root.get<TaskAssigneeType>("assigneeType"), TaskAssigneeType.USER),
+                            root.get<String>("assigneeId").`in`(ids)
+                        )
+                    }
+                    TaskVisibilityLevel.DEPARTMENT -> {
+                        val intents = TaskVisibilityRules.allowedIntents(scope.roleCodes)
+                        predicates += if (intents.isEmpty()) criteriaBuilder.disjunction()
+                        else root.get<Any>("intentType").`in`(intents)
+                    }
+                }
+            }
+
             text?.let { rawText ->
                 val pattern = "%${escapeLike(rawText.lowercase())}%"
                 predicates += criteriaBuilder.or(
@@ -109,7 +129,9 @@ class TaskPersistenceRepository(
                     TaskAssignmentFilter.UNASSIGNED -> criteriaBuilder.isNull(root.get<String>("assigneeId"))
                     TaskAssignmentFilter.MINE -> criteriaBuilder.and(
                         criteriaBuilder.equal(root.get<TaskAssigneeType>("assigneeType"), TaskAssigneeType.USER),
-                        criteriaBuilder.equal(root.get<String>("assigneeId"), userId.toString())
+                        root.get<String>("assigneeId").`in`(
+                            setOfNotNull(employeeId, userId, canonicalEmployeeUserId).map(UUID::toString)
+                        )
                     )
                     TaskAssignmentFilter.ROLE -> if (roleCodes.isEmpty()) {
                         criteriaBuilder.disjunction()

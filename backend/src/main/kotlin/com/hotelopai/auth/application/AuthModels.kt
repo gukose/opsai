@@ -71,7 +71,9 @@ data class AccessTokenContext(
     val roleIds: Set<UUID>,
     val roleCodes: Set<String>,
     val permissionIds: Set<UUID>,
-    val permissionCodes: Set<String>
+    val permissionCodes: Set<String>,
+    /** User id belonging to the canonical employee, distinct from a legacy login alias. */
+    val canonicalEmployeeUserId: UUID? = null
 )
 
 data class AccessTokenResult(

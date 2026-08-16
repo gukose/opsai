@@ -23,6 +23,7 @@ interface TaskRepository {
 
     fun findPage(query: TaskSearchQuery): TaskPage<Task> {
         val filtered = findAllByHotelId(query.hotelId)
+            .filter { query.visibility?.let { scope -> TaskVisibilityRules.canView(it, scope) } ?: true }
             .filter { task ->
                 query.text?.let { text ->
                     listOfNotNull(task.title, task.description, task.roomNumber, task.assignment?.displayName)
@@ -38,7 +39,8 @@ interface TaskRepository {
                     TaskAssignmentFilter.ASSIGNED -> task.assignment != null
                     TaskAssignmentFilter.UNASSIGNED -> task.assignment == null
                     TaskAssignmentFilter.MINE -> task.assignment?.assigneeType?.name == "USER" &&
-                        task.assignment.assigneeId == query.userId.toString()
+                        task.assignment.assigneeId in setOfNotNull(query.employeeId, query.userId, query.canonicalEmployeeUserId)
+                            .map(UUID::toString).toSet()
                     TaskAssignmentFilter.ROLE -> task.assignment?.assigneeType?.name == "TEAM" &&
                         task.assignment.assigneeId in query.roleCodes
                     TaskAssignmentFilter.USER -> task.assignment?.assigneeType?.name == "USER"
@@ -62,6 +64,8 @@ interface TaskRepository {
 data class TaskSearchQuery(
     val hotelId: UUID,
     val userId: UUID,
+    val employeeId: UUID? = null,
+    val canonicalEmployeeUserId: UUID? = null,
     val roleCodes: Set<String>,
     val pageRequest: TaskPageRequest,
     val text: String? = null,
@@ -69,7 +73,8 @@ data class TaskSearchQuery(
     val priorities: Set<TaskPriority> = emptySet(),
     val assignment: TaskAssignmentFilter? = null,
     val createdFrom: Instant? = null,
-    val createdTo: Instant? = null
+    val createdTo: Instant? = null,
+    val visibility: TaskVisibilityScope? = null
 )
 
 enum class TaskAssignmentFilter {

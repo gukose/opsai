@@ -214,6 +214,7 @@ class AuthenticationApplicationService(
             roleIds = user.roleIds,
             roleCodes = currentUser.roles.map { it.code }.toSet(),
             permissionIds = currentUser.permissions.map { it.permissionId }.toSet(),
-            permissionCodes = currentUser.permissions.map { it.code }.toSet()
+            permissionCodes = currentUser.permissions.map { it.code }.toSet(),
+            canonicalEmployeeUserId = currentUser.employeeId?.let(employeeRepository::findById)?.userId
         )
 }
