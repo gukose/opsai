@@ -47,29 +47,29 @@ class DemoTaskResetService(
 
         related += delete(
             """delete from pms_outbound_operation p where p.hotel_id=:hotel and exists (
-               select 1 from housekeeping_workflow w where w.hotel_id=:hotel and w.task_id in (:taskIds)
+               select 1 from housekeeping_workflow w where w.task_id in (:taskIds)
                  and p.idempotency_key like 'housekeeping-room-ready:' || w.id::text || ':%')""",
             parameters
         )
         related += delete(
             """delete from room_operational_state r where r.hotel_id=:hotel and exists (
-               select 1 from housekeeping_workflow w where w.hotel_id=:hotel and w.task_id in (:taskIds)
+               select 1 from housekeeping_workflow w where w.task_id in (:taskIds)
                  and r.source_type='HOUSEKEEPING' and r.source_reference='housekeeping:' || w.id::text)""",
             parameters
         )
         related += delete(
             """delete from housekeeping_inspection_answer a where exists (
                select 1 from housekeeping_inspection i join housekeeping_workflow w on w.id=i.workflow_id
-               where a.inspection_id=i.id and w.hotel_id=:hotel and w.task_id in (:taskIds))""",
+               where a.inspection_id=i.id and w.task_id in (:taskIds))""",
             parameters
         )
         related += delete(
             """delete from housekeeping_inspection i where exists (
                select 1 from housekeeping_workflow w where w.id=i.workflow_id
-                 and w.hotel_id=:hotel and w.task_id in (:taskIds))""",
+                 and w.task_id in (:taskIds))""",
             parameters
         )
-        related += delete("delete from housekeeping_workflow where hotel_id=:hotel and task_id in (:taskIds)", parameters)
+        related += delete("delete from housekeeping_workflow where task_id in (:taskIds)", parameters)
 
         related += delete(
             """delete from financial_charge_proposal f where f.hotel_id=:hotel and exists (
@@ -119,19 +119,19 @@ class DemoTaskResetService(
         )
         related += delete("delete from shift_handover where hotel_id=:hotel and task_id in (:taskIds)", parameters)
         related += delete(
-            """delete from operational_outbox o using reservation_task_automation_execution e, reservation_snapshot s
-               where o.id=e.outbox_event_id and e.reservation_id=s.id and s.hotel_id=:hotel
+            """delete from operational_outbox o using reservation_task_automation_execution e
+               where o.id=e.outbox_event_id and o.hotel_id=:hotel
                  and e.created_task_id in (:taskIds)""",
             parameters
         )
         related += delete(
-            """delete from reservation_task_automation_execution e using reservation_snapshot s
-               where e.reservation_id=s.id and s.hotel_id=:hotel and e.created_task_id in (:taskIds)""",
+            """delete from reservation_task_automation_execution
+               where created_task_id in (:taskIds)""",
             parameters
         )
         related += delete(
-            """delete from reservation_task_recommendation r using reservation_snapshot s
-               where r.reservation_id=s.id and s.hotel_id=:hotel and r.applied_task_id in (:taskIds)""",
+            """delete from reservation_task_recommendation
+               where applied_task_id in (:taskIds)""",
             parameters
         )
         related += delete("delete from assistant_task_confirmation where created_task_id in (:taskIdTexts)", parameters)
