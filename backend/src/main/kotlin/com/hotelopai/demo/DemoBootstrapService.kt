@@ -109,6 +109,7 @@ class DemoBootstrapService(
                 definition.skills.map(skillByCode::getValue).map(Skill::id).toSet())
         }
         reconcileLegacyDemoAccounts(hotel.id)
+        ensureLegacyAliases(hotel.id, staff)
         val employeeByNumber = staff.associateBy { it.employeeNumber }
         CANONICAL_EMPLOYEES.forEach { definition ->
             val supervisor = definition.supervisorEmployeeNumber?.let(employeeByNumber::getValue)?.id
@@ -172,15 +173,49 @@ class DemoBootstrapService(
 
     private fun reconcileLegacyDemoAccounts(hotelId: UUID) {
         val legacyEmails = listOf(
-            "reviewer.admin@demo.hotelopai.app", "gm@demo.hotelopai.app", "technician@demo.hotelopai.app",
-            "murat.technician@demo.hotelopai.app", "burak.technician@demo.hotelopai.app", "housekeeper@demo.hotelopai.app",
+            "murat.technician@demo.hotelopai.app", "burak.technician@demo.hotelopai.app",
             "ayse.housekeeper@demo.hotelopai.app", "burcu.housekeeper@demo.hotelopai.app",
-            "housekeeping.supervisor@demo.hotelopai.app", "reception@demo.hotelopai.app", "guest.relations@demo.hotelopai.app",
             "admin@hotelopai.local", "technician@hotelopai.local", "housekeeper@hotelopai.local"
         )
         jdbc.update("update app_user set status='DISABLED' where hotel_id=:hotel and email in (:emails)", mapOf("hotel" to hotelId, "emails" to legacyEmails))
         jdbc.update("update employee set status='INACTIVE' where hotel_id=:hotel and employee_number like 'DEMO-%'", mapOf("hotel" to hotelId))
         jdbc.update("update employee set status='INACTIVE' where hotel_id=:hotel and employee_number in ('EMP-ADMIN','EMP-TECH-001','EMP-HK-001')", mapOf("hotel" to hotelId))
+    }
+
+    private fun ensureLegacyAliases(hotelId: UUID, staff: List<Employee>) {
+        val employeeByNumber = staff.associateBy { it.employeeNumber }
+        val aliases = listOf(
+            "reviewer.admin@demo.hotelopai.app" to "EMP0001",
+            "gm@demo.hotelopai.app" to "EMP0001",
+            "technician@demo.hotelopai.app" to "EMP0024",
+            "housekeeper@demo.hotelopai.app" to "EMP0014",
+            "housekeeping.supervisor@demo.hotelopai.app" to "EMP0013",
+            "reception@demo.hotelopai.app" to "EMP0006",
+            "guest.relations@demo.hotelopai.app" to "EMP0011"
+        )
+        aliases.forEach { (email, employeeNumber) ->
+            val employee = employeeByNumber.getValue(employeeNumber)
+            val roleId = employee.roleIds.firstOrNull()
+                ?: error("Canonical employee $employeeNumber has no role")
+            val existing = users.findByHotelIdAndEmail(hotelId, email)
+            val password = properties.passwordFor(employee.primaryRoleCode ?: "")
+            val alias = existing?.copy(
+                employeeId = employee.id,
+                displayName = employee.displayName,
+                passwordHash = passwordHasher.hash(password),
+                roleIds = setOf(roleId),
+                status = UserStatus.ACTIVE
+            ) ?: User(
+                hotelId = hotelId,
+                employeeId = employee.id,
+                email = EmailAddress.of(email),
+                displayName = employee.displayName,
+                passwordHash = passwordHasher.hash(password),
+                roleIds = setOf(roleId),
+                status = UserStatus.ACTIVE
+            )
+            users.save(alias)
+        }
     }
 
     private fun ensureActiveShift(hotelId: UUID, employeeId: UUID) {

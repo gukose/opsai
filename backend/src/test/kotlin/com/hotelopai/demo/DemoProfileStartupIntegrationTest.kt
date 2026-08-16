@@ -63,7 +63,7 @@ class DemoProfileStartupIntegrationTest : PostgresIntegrationTestSupport() {
         bootstrap.bootstrap()
 
         val seededEmails = users.findByHotelId(hotelId).filter { it.status == com.hotelopai.auth.domain.UserStatus.ACTIVE }.map { it.email.value }
-        assertThat(seededEmails).hasSize(35)
+        assertThat(seededEmails).hasSize(42)
         assertThat(seededEmails).contains(
             "kemal.yilmaz@demo.hotelopai.app", "bekzod.abdullayev@demo.hotelopai.app",
             "ayse.yilmaz@demo.hotelopai.app", "anna.muller@demo.hotelopai.app"
@@ -72,6 +72,29 @@ class DemoProfileStartupIntegrationTest : PostgresIntegrationTestSupport() {
         val employeeNumbers = jdbc.query("select employee_number from employee where hotel_id=:hotel and status='ACTIVE' order by employee_number", mapOf("hotel" to hotelId)) { rs, _ -> rs.getString(1) }
         assertThat(employeeNumbers).containsExactlyElementsOf((1..35).map { "EMP%04d".format(it) })
         assertThat(jdbc.queryForObject("select count(distinct email) from app_user where hotel_id=:hotel and status='ACTIVE'", mapOf("hotel" to hotelId), Long::class.java)).isEqualTo(35L)
+        val aliases = mapOf(
+            "reviewer.admin@demo.hotelopai.app" to "EMP0001",
+            "gm@demo.hotelopai.app" to "EMP0001",
+            "technician@demo.hotelopai.app" to "EMP0024",
+            "housekeeper@demo.hotelopai.app" to "EMP0014",
+            "housekeeping.supervisor@demo.hotelopai.app" to "EMP0013",
+            "reception@demo.hotelopai.app" to "EMP0006",
+            "guest.relations@demo.hotelopai.app" to "EMP0011"
+        )
+        aliases.forEach { (email, employeeNumber) ->
+            assertThat(jdbc.queryForObject("""select count(*) from app_user u join employee e on e.id=u.employee_id
+                where u.hotel_id=:hotel and u.email=:email and u.status='ACTIVE' and e.employee_number=:employee""",
+                mapOf("hotel" to hotelId, "email" to email, "employee" to employeeNumber), Long::class.java)).isEqualTo(1L)
+        }
+        assertThat(jdbc.queryForObject("select count(*) from employee where hotel_id=:hotel and status='ACTIVE'", mapOf("hotel" to hotelId), Long::class.java)).isEqualTo(35L)
+        assertThat(jdbc.queryForObject("""select count(*) from app_user u join user_role ur on ur.user_id=u.id
+            join role_permission rp on rp.role_id=ur.role_id join permission p on p.id=rp.permission_id
+            where u.hotel_id=:hotel and u.email in ('housekeeping.supervisor@demo.hotelopai.app','mustafa.tekin@demo.hotelopai.app') and p.code='TASK_ASSIGN'""",
+            mapOf("hotel" to hotelId), Long::class.java)).isEqualTo(2L)
+        assertThat(jdbc.queryForObject("""select count(*) from app_user u join user_role ur on ur.user_id=u.id
+            join role_permission rp on rp.role_id=ur.role_id join permission p on p.id=rp.permission_id
+            where u.hotel_id=:hotel and u.email='housekeeper@demo.hotelopai.app' and p.code='TASK_ASSIGN'""",
+            mapOf("hotel" to hotelId), Long::class.java)).isZero()
         assertThat(count("employee_role", hotelId)).isEqualTo(roleMappings)
         assertThat(count("employee_skill", hotelId)).isEqualTo(skillMappings)
         assertThat(count("workforce_shift", hotelId)).isEqualTo(shifts)

@@ -243,7 +243,7 @@ function AssignmentModal({
                 </Pressable>
               );
             }}
-            ListEmptyComponent={<Text style={styles.attachmentEmpty}>No eligible employees found.</Text>}
+            ListEmptyComponent={<Text style={styles.attachmentEmpty}>No eligible employees are currently available.</Text>}
           />
           {error ? <Text style={styles.modalError}>{error}</Text> : null}
           <View style={styles.sheetActions}>
