@@ -43,7 +43,9 @@ class SupervisorTaskAssignmentServiceTest {
         val reassigned = service.assign(task.id.toString(), hotelId, UuidV7Generator.generate(), command(second), now.plusSeconds(60))
 
         assertThat(assigned.assignment?.assigneeId).isEqualTo(first.userId.toString())
+        assertThat(assigned.assignment?.assignedAt).isEqualTo(now)
         assertThat(reassigned.assignment?.assigneeId).isEqualTo(second.userId.toString())
+        assertThat(reassigned.assignment?.assignedAt).isEqualTo(now.plusSeconds(60))
         assertThat(notifications.items).hasSize(2)
     }
 

@@ -1,5 +1,6 @@
 import { ComponentType } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useMemo, useState } from "react";
+import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { CalendarDays, Clock3, Flag, MapPin, Play, Pause, RotateCcw, Ban, CheckCheck, Image as ImageIcon, FileText } from "lucide-react-native";
 import { LucideProps } from "lucide-react-native";
 
@@ -18,7 +19,7 @@ type TaskDetailCardProps = {
   onCancel?: () => void;
   disabled?: boolean;
   assignmentCandidates?: AssignmentCandidate[];
-  onAssign?: (candidate: AssignmentCandidate) => void;
+  onAssign?: (candidate: AssignmentCandidate) => void | Promise<void>;
 };
 
 export function TaskDetailCard({
@@ -33,6 +34,39 @@ export function TaskDetailCard({
   onAssign
 }: TaskDetailCardProps) {
   const actions = getAvailableActions(task.status);
+  const [assignmentOpen, setAssignmentOpen] = useState(false);
+  const [selectedCandidate, setSelectedCandidate] = useState<AssignmentCandidate | null>(null);
+  const [candidateQuery, setCandidateQuery] = useState("");
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
+  const [assigning, setAssigning] = useState(false);
+  const filteredCandidates = useMemo(() => {
+    const query = candidateQuery.trim().toLowerCase();
+    if (!query) return assignmentCandidates;
+    return assignmentCandidates.filter((candidate) =>
+      `${candidate.displayName} ${candidate.skillCodes.join(" ")}`.toLowerCase().includes(query)
+    );
+  }, [assignmentCandidates, candidateQuery]);
+
+  const openAssignment = () => {
+    setAssignmentError(null);
+    setCandidateQuery("");
+    setSelectedCandidate(null);
+    setAssignmentOpen(true);
+  };
+
+  const confirmAssignment = async () => {
+    if (!selectedCandidate || !onAssign || assigning) return;
+    setAssigning(true);
+    setAssignmentError(null);
+    try {
+      await onAssign(selectedCandidate);
+      setAssignmentOpen(false);
+    } catch (error) {
+      setAssignmentError(error instanceof Error ? error.message : "Assignment failed. Try again.");
+    } finally {
+      setAssigning(false);
+    }
+  };
 
   return (
     <View style={styles.card}>
@@ -64,28 +98,34 @@ export function TaskDetailCard({
 
       {onAssign ? (
         <View style={styles.assignmentPanel}>
-          <Text style={styles.attachmentSectionTitle}>{task.assignmentLabel ? "Reassign" : "Needs Assignment"}</Text>
-          {assignmentCandidates.length === 0 ? (
-            <Text style={styles.attachmentEmpty}>No active hotel employees are available for manual assignment.</Text>
-          ) : assignmentCandidates.map((candidate) => (
+          <View style={styles.assignmentHeader}>
+            <Text style={styles.attachmentSectionTitle}>{task.assignmentLabel ? "Assigned" : "Needs Assignment"}</Text>
             <Pressable
-              key={candidate.assigneeId}
               accessibilityRole="button"
+              accessibilityLabel={task.assignmentLabel ? "Reassign task" : "Assign task"}
               disabled={disabled}
-              onPress={() => onAssign(candidate)}
-              style={styles.assignmentCandidate}
+              onPress={openAssignment}
+              style={({ pressed }) => [styles.assignButton, pressed && styles.actionPressed, disabled && styles.actionDisabled]}
             >
-              <View style={styles.assignmentCandidateBody}>
-                <Text style={styles.assignmentCandidateName}>{candidate.displayName}</Text>
-                <Text style={styles.assignmentCandidateMeta}>
-                  {candidate.skillCodes.join(", ")} · {candidate.onShift ? "On shift" : "Off shift"} · {candidate.available ? "Available" : "Busy"} · workload {candidate.workload}
-                </Text>
-              </View>
-              <Text style={styles.assignLabel}>Assign</Text>
+              <Text style={styles.assignButtonLabel}>{task.assignmentLabel ? "Reassign" : "Assign"}</Text>
             </Pressable>
-          ))}
+          </View>
         </View>
       ) : null}
+
+      <AssignmentModal
+        visible={assignmentOpen}
+        task={task}
+        candidates={filteredCandidates}
+        selectedCandidate={selectedCandidate}
+        query={candidateQuery}
+        error={assignmentError}
+        assigning={assigning}
+        onQueryChange={setCandidateQuery}
+        onSelect={setSelectedCandidate}
+        onCancel={() => setAssignmentOpen(false)}
+        onConfirm={() => { void confirmAssignment(); }}
+      />
 
       <View style={styles.infoRow}>
         <InfoChip label="Assignment" value={task.assignmentLabel ?? "Unassigned"} />
@@ -142,6 +182,81 @@ export function TaskDetailCard({
         ) : null}
       </View>
     </View>
+  );
+}
+
+function AssignmentModal({
+  visible, task, candidates, selectedCandidate, query, error, assigning, onQueryChange, onSelect, onCancel, onConfirm
+}: {
+  visible: boolean;
+  task: TaskDetail;
+  candidates: AssignmentCandidate[];
+  selectedCandidate: AssignmentCandidate | null;
+  query: string;
+  error: string | null;
+  assigning: boolean;
+  onQueryChange: (value: string) => void;
+  onSelect: (candidate: AssignmentCandidate) => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onCancel}>
+      <KeyboardAvoidingView style={styles.modalRoot} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <Pressable style={styles.modalBackdrop} onPress={onCancel} accessibilityLabel="Close assignment dialog" />
+        <View style={styles.assignmentSheet} accessibilityViewIsModal accessibilityLabel="Assign task">
+          <View style={styles.sheetHandle} />
+          <Text style={styles.sheetTitle}>{task.assignmentLabel ? "Reassign task" : "Assign task"}</Text>
+          <Text style={styles.sheetTask} numberOfLines={2}>{task.roomOrLocation ? `${task.roomOrLocation} · ` : ""}{task.title}</Text>
+          <TextInput
+            accessibilityLabel="Search employee"
+            placeholder="Search employee..."
+            placeholderTextColor={colors.textSubtle}
+            value={query}
+            onChangeText={onQueryChange}
+            style={styles.candidateSearch}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <FlatList
+            data={candidates}
+            keyExtractor={(candidate) => candidate.assigneeId}
+            keyboardShouldPersistTaps="handled"
+            style={styles.candidateList}
+            contentContainerStyle={styles.candidateListContent}
+            renderItem={({ item }) => {
+              const selected = selectedCandidate?.assigneeId === item.assigneeId;
+              return (
+                <Pressable
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  onPress={() => onSelect(item)}
+                  style={[styles.candidateRow, selected && styles.candidateRowSelected]}
+                >
+                  <View style={[styles.radio, selected && styles.radioSelected]}>{selected ? <View style={styles.radioDot} /> : null}</View>
+                  <View style={styles.candidateBody}>
+                    <Text style={styles.candidateName}>{item.displayName}</Text>
+                    <Text style={styles.candidateMeta} numberOfLines={2}>
+                      {item.skillCodes.length ? item.skillCodes.join(" · ") : "Suitable employee"} · {item.onShift ? "On shift" : "Off shift"} · {item.available ? "Available" : "Busy"} · {item.workload} active tasks
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            }}
+            ListEmptyComponent={<Text style={styles.attachmentEmpty}>No eligible employees found.</Text>}
+          />
+          {error ? <Text style={styles.modalError}>{error}</Text> : null}
+          <View style={styles.sheetActions}>
+            <Pressable accessibilityRole="button" onPress={onCancel} disabled={assigning} style={styles.cancelButton}>
+              <Text style={styles.cancelButtonLabel}>Cancel</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={onConfirm} disabled={!selectedCandidate || assigning} style={[styles.confirmButton, (!selectedCandidate || assigning) && styles.actionDisabled]}>
+              <Text style={styles.confirmButtonLabel}>{assigning ? "Assigning..." : "Assign"}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
@@ -428,6 +543,25 @@ const styles = StyleSheet.create({
     marginTop: 10,
     gap: 6
   },
+  assignmentHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8
+  },
+  assignButton: {
+    minHeight: 32,
+    paddingHorizontal: 14,
+    borderRadius: radius.pill,
+    backgroundColor: colors.blue,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  assignButtonLabel: {
+    color: "#ffffff",
+    fontSize: typography.caption,
+    fontWeight: "900"
+  },
   assignmentCandidate: {
     minHeight: 44,
     flexDirection: "row",
@@ -455,6 +589,148 @@ const styles = StyleSheet.create({
   },
   assignLabel: {
     color: colors.blue,
+    fontSize: typography.caption,
+    fontWeight: "900"
+  },
+  modalRoot: {
+    flex: 1,
+    justifyContent: "flex-end"
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(15, 23, 42, 0.38)"
+  },
+  assignmentSheet: {
+    maxHeight: "82%",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingTop: 9,
+    paddingBottom: 22,
+    ...shadow.card
+  },
+  sheetHandle: {
+    alignSelf: "center",
+    width: 38,
+    height: 4,
+    borderRadius: 4,
+    backgroundColor: colors.cardBorder,
+    marginBottom: 12
+  },
+  sheetTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  sheetTask: {
+    marginTop: 3,
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: "700"
+  },
+  candidateSearch: {
+    marginTop: 12,
+    minHeight: 42,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMuted,
+    color: colors.text,
+    paddingHorizontal: 12,
+    fontSize: typography.caption
+  },
+  candidateList: {
+    marginTop: 8,
+    minHeight: 80
+  },
+  candidateListContent: {
+    gap: 6,
+    paddingBottom: 6
+  },
+  candidateRow: {
+    minHeight: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    borderRadius: radius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  candidateRowSelected: {
+    borderColor: colors.blue,
+    backgroundColor: "#f1f6ff"
+  },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: colors.textSubtle,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  radioSelected: {
+    borderColor: colors.blue
+  },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.blue
+  },
+  candidateBody: {
+    flex: 1,
+    minWidth: 0
+  },
+  candidateName: {
+    color: colors.text,
+    fontSize: typography.caption,
+    fontWeight: "900"
+  },
+  candidateMeta: {
+    marginTop: 2,
+    color: colors.textMuted,
+    fontSize: typography.tiny,
+    fontWeight: "700"
+  },
+  modalError: {
+    marginTop: 4,
+    color: colors.red,
+    fontSize: typography.tiny,
+    fontWeight: "800"
+  },
+  sheetActions: {
+    marginTop: 10,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 8
+  },
+  cancelButton: {
+    minHeight: 40,
+    paddingHorizontal: 16,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceMuted,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  cancelButtonLabel: {
+    color: colors.textMuted,
+    fontSize: typography.caption,
+    fontWeight: "900"
+  },
+  confirmButton: {
+    minHeight: 40,
+    paddingHorizontal: 18,
+    borderRadius: radius.pill,
+    backgroundColor: colors.blue,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  confirmButtonLabel: {
+    color: "#ffffff",
     fontSize: typography.caption,
     fontWeight: "900"
   },

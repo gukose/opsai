@@ -24,7 +24,7 @@ class SupervisorTaskAssignmentService(
     private val employees: EmployeeRepository,
     private val jdbc: NamedParameterJdbcTemplate,
     private val notifications: NotificationRepository,
-    private val clock: Clock = Clock.systemUTC()
+    private val clock: Clock
 ) {
     @Transactional
     fun assign(

@@ -226,14 +226,14 @@ export function useTaskBoardState(
   );
 
   const runCommand = useCallback(
-    async (operation:OfflineMutationType|null,command: TaskCommand) => {
+    async (operation:OfflineMutationType|null,command: TaskCommand): Promise<boolean> => {
       if (inFlightRef.current) {
-        return;
+        return false;
       }
 
       const taskId = selectedTaskIdRef.current;
       if (!taskId) {
-        return;
+        return false;
       }
 
       try {
@@ -244,6 +244,7 @@ export function useTaskBoardState(
         setTasks((current) =>
           current.map((task) => (task.id === updatedTask.id ? taskSummaryFromDetail(updatedTask) : task))
         );
+        return true;
       } catch (error) {
         const scope=currentUser?.hotelId&&currentUser.userId?{hotelId:currentUser.hotelId,userId:currentUser.userId}:null;
         if(operation && scope && (error instanceof AppApiError ? error.kind==="network"||error.kind==="timeout" : !globalThis.navigator?.onLine)){
@@ -253,6 +254,7 @@ export function useTaskBoardState(
       } finally {
         inFlightRef.current = false;
         setIsRefreshing(false);
+        return false;
       }
     },
     [selectedTaskId,currentUser]
@@ -317,15 +319,18 @@ export function useTaskBoardState(
     clearFilters,
     selectTask,
     refreshTasks,
-    startSelectedTask: async () => runCommand("TASK_START",(taskId) => service.startTask(taskId)),
-    pauseSelectedTask: async () => runCommand("TASK_PAUSE",(taskId) => service.pauseTask(taskId)),
-    resumeSelectedTask: async () => runCommand("TASK_RESUME",(taskId) => service.resumeTask(taskId)),
-    completeSelectedTask: async () => runCommand("TASK_COMPLETE",(taskId) => service.completeTask(taskId)),
-    cancelSelectedTask: async () => runCommand(null,(taskId) => service.cancelTask(taskId)),
+    startSelectedTask: async () => { await runCommand("TASK_START",(taskId) => service.startTask(taskId)); },
+    pauseSelectedTask: async () => { await runCommand("TASK_PAUSE",(taskId) => service.pauseTask(taskId)); },
+    resumeSelectedTask: async () => { await runCommand("TASK_RESUME",(taskId) => service.resumeTask(taskId)); },
+    completeSelectedTask: async () => { await runCommand("TASK_COMPLETE",(taskId) => service.completeTask(taskId)); },
+    cancelSelectedTask: async () => { await runCommand(null,(taskId) => service.cancelTask(taskId)); },
     startHomeTask: async () => runHomeCommand((taskId) => service.startTask(taskId)),
     resumeHomeTask: async () => runHomeCommand((taskId) => service.resumeTask(taskId)),
     assignmentCandidates,
-    assignSelectedTask: async (candidate) => runCommand(null, (taskId) => service.assignTask(taskId, candidate))
+    assignSelectedTask: async (candidate) => {
+      const succeeded = await runCommand(null, (taskId) => service.assignTask(taskId, candidate));
+      if (!succeeded) throw new Error("Assignment failed. Try again.");
+    }
   };
 }
 
