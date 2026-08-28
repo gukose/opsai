@@ -12,6 +12,7 @@ interface TaskJpaRepository : JpaRepository<TaskJpaEntity, UUID>, JpaSpecificati
 
 interface TaskStateHistoryJpaRepository : JpaRepository<TaskStateHistoryJpaEntity, UUID> {
     fun findAllByTaskIdOrderByCreatedAtAsc(taskId: UUID): List<TaskStateHistoryJpaEntity>
+    fun findAllByTaskIdInOrderByTaskIdAscCreatedAtAsc(taskIds: Collection<UUID>): List<TaskStateHistoryJpaEntity>
 
     fun countByTaskId(taskId: UUID): Long
 }

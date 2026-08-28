@@ -28,6 +28,7 @@ class HousekeepingService(
     private val observability: OperationalObservability,
     private val roomReadyService: RoomReadyService,
     private val roomStates: RoomOperationalStateService? = null,
+    private val minibarReadiness: MinibarReadinessService? = null,
     private val templates: InspectionTemplateService? = null,
     @Value("\${ops.ai.housekeeping.room-ready.enabled:false}") private val roomReadyEnabled:Boolean,
     private val clock: Clock = Clock.systemUTC()
@@ -61,8 +62,8 @@ class HousekeepingService(
     fun finishCleaning(id:UUID,hotelId:UUID)=mutate(id,hotelId,"finish_cleaning") { workflow ->
         val updated=workflow.finishCleaning(clock.instant()); if(!updated.inspectionRequired) {
             tasks.completeTask(workflow.taskId.toString(),hotelId,clock.instant())
-            roomStates?.set(hotelId,workflow.roomNumber,RoomOperationalStatus.READY,"housekeeping:${workflow.id}")
-            if(roomReadyEnabled) roomReadyService.markReady(hotelId,workflow.roomNumber,"housekeeping-room-ready:${workflow.id}:no-inspection")
+            val ready=minibarReadiness?.reevaluateRoomReadiness(hotelId,workflow.roomNumber) ?: run { roomStates?.set(hotelId,workflow.roomNumber,RoomOperationalStatus.READY,"housekeeping:${workflow.id}");true }
+            if(roomReadyEnabled && ready) roomReadyService.markReady(hotelId,workflow.roomNumber,"housekeeping-room-ready:${workflow.id}:no-inspection")
         } else roomStates?.set(hotelId,workflow.roomNumber,RoomOperationalStatus.INSPECTION_REQUIRED,"housekeeping:${workflow.id}"); updated }
 
     fun inspect(id:UUID,hotelId:UUID,inspectorUserId:UUID,command:InspectHousekeepingCommand):HousekeepingWorkflow {
@@ -71,8 +72,8 @@ class HousekeepingService(
         repository.appendInspection(hotelId,HousekeepingInspection(UuidV7Generator.generate(now),id,inspectorUserId,history.size+1,command.result,command.rejectionReason,command.qualityScore,command.answers,current.inspectionStartedAt?:now,now))
         if(command.result==InspectionResult.PASS) {
             tasks.completeTask(current.taskId.toString(),hotelId,now)
-            roomStates?.set(hotelId,current.roomNumber,RoomOperationalStatus.READY,"housekeeping:${current.id}")
-            if(roomReadyEnabled) roomReadyService.markReady(hotelId,current.roomNumber,"housekeeping-room-ready:${current.id}:${history.size+1}")
+            val ready=minibarReadiness?.reevaluateRoomReadiness(hotelId,current.roomNumber) ?: run { roomStates?.set(hotelId,current.roomNumber,RoomOperationalStatus.READY,"housekeeping:${current.id}");true }
+            if(roomReadyEnabled && ready) roomReadyService.markReady(hotelId,current.roomNumber,"housekeeping-room-ready:${current.id}:${history.size+1}")
         } else roomStates?.set(hotelId,current.roomNumber,RoomOperationalStatus.REWORK,"housekeeping:${current.id}")
         return repository.save(updated).also { metric("inspect",command.result.name.lowercase()) }
     }

@@ -32,13 +32,14 @@ class TaskController(
     private val taskAttachmentLinkService: TaskAttachmentLinkService,
     private val currentUserContextResolver: CurrentUserContextResolver,
     private val supervisorTaskAssignmentService: SupervisorTaskAssignmentService,
-    private val taskAssignmentCandidateQuery: TaskAssignmentCandidateQuery
+    private val taskAssignmentCandidateQuery: TaskAssignmentCandidateQuery,
+    private val taskResponseMapper: TaskResponseMapper
 ) {
     @PostMapping
     @PreAuthorize(PermissionExpressions.TASK_CREATE)
     fun createTask(@RequestBody request: CreateTaskRequest): TaskResponse {
         val currentUser = currentUserContextResolver.current()
-        return TaskResponse.from(taskLifecycleService.createTask(request.toCommand(currentUser.hotelId)))
+        return taskResponseMapper.toResponse(taskLifecycleService.createTask(request.toCommand(currentUser.hotelId)))
     }
 
     @GetMapping("/{taskId}")
@@ -49,7 +50,7 @@ class TaskController(
         val current = currentUserContextResolver.current()
         val authStateMs = elapsedMs(authStarted)
         val taskStarted = System.nanoTime()
-        val response = TaskResponse.from(taskLifecycleService.getTaskForScope(taskId, TaskVisibilityScope.from(current)))
+        val response = taskResponseMapper.toResponse(taskLifecycleService.getTaskForScope(taskId, TaskVisibilityScope.from(current)))
         logger.info("event=task_detail_load correlationId={} taskId={} taskFetchMs={} authStateMs={} permissionResolutionMs={} totalMs={}", MDC.get("correlationId") ?: "unknown", taskId, elapsedMs(taskStarted), authStateMs, 0, elapsedMs(started))
         return response
     }
@@ -87,7 +88,7 @@ class TaskController(
             createdFrom == null &&
             createdTo == null
         ) {
-            return taskLifecycleService.listTasksForScope(scope).map(TaskResponse::from)
+            return taskResponseMapper.toResponses(taskLifecycleService.listTasksForScope(scope))
         }
 
         val pageRequest = TaskPageRequest(
@@ -95,7 +96,7 @@ class TaskController(
             size = size ?: TaskPageRequest.DEFAULT_SIZE
         )
 
-        return TaskPageResponse.from(
+        return taskResponseMapper.toPageResponse(
             taskLifecycleService.searchTasks(
                 TaskSearchQuery(
                     hotelId = currentUser.hotelId,
@@ -124,7 +125,7 @@ class TaskController(
     ): TaskResponse {
         val started = System.nanoTime()
         val current = currentUserContextResolver.current()
-        val response = TaskResponse.from(
+        val response = taskResponseMapper.toResponse(
             supervisorTaskAssignmentService.assignScoped(
                 taskId = taskId,
                 hotelId = current.hotelId,
@@ -151,32 +152,32 @@ class TaskController(
     @PostMapping("/{taskId}/start")
     @PreAuthorize(PermissionExpressions.TASK_START)
     fun startTask(@PathVariable taskId: String): TaskResponse =
-        TaskResponse.from(taskLifecycleService.startTask(taskId, visibleHotel(taskId)))
+        taskResponseMapper.toResponse(taskLifecycleService.startTask(taskId, visibleHotel(taskId)))
 
     @PostMapping("/{taskId}/pause")
     @PreAuthorize(PermissionExpressions.TASK_PAUSE)
     fun pauseTask(@PathVariable taskId: String): TaskResponse =
-        TaskResponse.from(taskLifecycleService.pauseTask(taskId, visibleHotel(taskId)))
+        taskResponseMapper.toResponse(taskLifecycleService.pauseTask(taskId, visibleHotel(taskId)))
 
     @PostMapping("/{taskId}/resume")
     @PreAuthorize(PermissionExpressions.TASK_RESUME)
     fun resumeTask(@PathVariable taskId: String): TaskResponse =
-        TaskResponse.from(taskLifecycleService.resumeTask(taskId, visibleHotel(taskId)))
+        taskResponseMapper.toResponse(taskLifecycleService.resumeTask(taskId, visibleHotel(taskId)))
 
     @PostMapping("/{taskId}/complete")
     @PreAuthorize(PermissionExpressions.TASK_COMPLETE)
     fun completeTask(@PathVariable taskId: String): TaskResponse =
-        TaskResponse.from(taskLifecycleService.completeTask(taskId, visibleHotel(taskId)))
+        taskResponseMapper.toResponse(taskLifecycleService.completeTask(taskId, visibleHotel(taskId)))
 
     @PostMapping("/{taskId}/cancel")
     @PreAuthorize(PermissionExpressions.TASK_CANCEL)
     fun cancelTask(@PathVariable taskId: String): TaskResponse =
-        TaskResponse.from(taskLifecycleService.cancelTask(taskId, visibleHotel(taskId)))
+        taskResponseMapper.toResponse(taskLifecycleService.cancelTask(taskId, visibleHotel(taskId)))
 
     @PostMapping("/{taskId}/overdue")
     @PreAuthorize(PermissionExpressions.TASK_MARK_OVERDUE)
     fun overdueTask(@PathVariable taskId: String): TaskResponse =
-        TaskResponse.from(taskLifecycleService.markOverdue(taskId, visibleHotel(taskId)))
+        taskResponseMapper.toResponse(taskLifecycleService.markOverdue(taskId, visibleHotel(taskId)))
 
     private fun visibleHotel(taskId: String) = currentUserContextResolver.current().let { current ->
         taskLifecycleService.getTaskForScope(taskId, TaskVisibilityScope.from(current))

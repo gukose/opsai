@@ -31,7 +31,6 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import java.security.MessageDigest
 import java.time.Clock
-import java.time.Duration
 import java.time.Instant
 import java.sql.Timestamp
 import java.util.UUID
@@ -107,6 +106,7 @@ class PmsDemoEventIngestionService(
     private val jdbc:NamedParameterJdbcTemplate,
     private val housekeeping:HousekeepingService,
     private val roomStates:RoomOperationalStateService,
+    private val checkout:PmsCheckoutOrchestrator,
     private val tasks:TaskLifecycleService,
     private val clock:Clock
 ) {
@@ -134,9 +134,8 @@ class PmsDemoEventIngestionService(
 
     private fun applyRule(hotelId:UUID,request:PmsDemoEventRequest,now:Instant):Pair<String,UUID>? = when(request.eventType) {
         PmsDemoEventType.CHECK_OUT -> {
-            val workflow=housekeeping.create(CreateHousekeepingCommand(hotelId,request.roomNumber,HousekeepingWorkflowType.DEPARTURE_CLEANING,true,"pms:${request.eventId}"))
-            tasks.createTask(CreateTaskCommand(hotelId,TaskIntentType.MINIBAR,TaskSource.IMPORT,"Minibar Check","PMS CHECK_OUT minibar inspection for room ${request.roomNumber}",request.roomNumber,TaskPriority.HIGH,now.plus(Duration.ofHours(2))))
-            "HOUSEKEEPING_WORKFLOW" to workflow.id
+            val result=checkout.checkout(hotelId,request.roomNumber,request.eventId,now)
+            "HOUSEKEEPING_WORKFLOW" to result.workflow.id
         }
         PmsDemoEventType.DEPARTURE -> housekeeping.create(CreateHousekeepingCommand(hotelId,request.roomNumber,HousekeepingWorkflowType.DEPARTURE_CLEANING,true,"pms:${request.eventId}")).let { "HOUSEKEEPING_WORKFLOW" to it.id }
         PmsDemoEventType.DIRTY -> housekeeping.create(CreateHousekeepingCommand(hotelId,request.roomNumber,HousekeepingWorkflowType.STAYOVER_CLEANING,false,"pms:${request.eventId}")).let { "HOUSEKEEPING_WORKFLOW" to it.id }
@@ -144,7 +143,7 @@ class PmsDemoEventIngestionService(
         PmsDemoEventType.CLEAN -> { roomStates.set(hotelId,request.roomNumber,RoomOperationalStatus.READY,"pms:${request.eventId}");null }
         PmsDemoEventType.OOO,PmsDemoEventType.OOS -> tasks.createTask(CreateTaskCommand(hotelId,TaskIntentType.MAINTENANCE,TaskSource.IMPORT,
             if(request.eventType==PmsDemoEventType.OOO) "Room out of order" else "Room out of service",
-            request.reason?.takeIf(String::isNotBlank)?:"PMS reported ${request.eventType.name}",request.roomNumber,TaskPriority.HIGH,now.plus(Duration.ofHours(2)))).let { "TASK" to it.id }
+            request.reason?.takeIf(String::isNotBlank)?:"PMS reported ${request.eventType.name}",request.roomNumber,TaskPriority.HIGH,now.plus(java.time.Duration.ofHours(2)))).let { "TASK" to it.id }
         PmsDemoEventType.CHECK_IN,PmsDemoEventType.ARRIVAL,PmsDemoEventType.OCCUPIED,PmsDemoEventType.VACANT,PmsDemoEventType.ROOM_MOVE -> null
     }
 

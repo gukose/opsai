@@ -94,6 +94,7 @@ internal object TaskPersistenceMapper {
 }
 
 internal object TaskStateHistoryPersistenceMapper {
+    fun fromEntity(entity: TaskStateHistoryJpaEntity): TaskStateHistoryEntry = TaskStateHistoryEntry(requireNotNull(entity.taskId), requireNotNull(entity.hotelId), entity.fromStatus, entity.toStatus, entity.operation, entity.note, entity.correlationId, requireNotNull(entity.createdAt))
     fun toEntity(entry: TaskStateHistoryEntry): TaskStateHistoryJpaEntity =
         TaskStateHistoryJpaEntity().apply {
             val occurredAt = PersistenceInstant.toPersistencePrecision(entry.occurredAt)

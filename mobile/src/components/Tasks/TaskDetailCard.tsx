@@ -1,5 +1,5 @@
 import { ComponentType } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { CalendarDays, Clock3, Flag, MapPin, Play, Pause, RotateCcw, Ban, CheckCheck, Image as ImageIcon, FileText } from "lucide-react-native";
 import { LucideProps } from "lucide-react-native";
@@ -41,6 +41,14 @@ export function TaskDetailCard({
   const [candidateQuery, setCandidateQuery] = useState("");
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
   const [assigning, setAssigning] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (task.status !== "STARTED" && task.status !== "IN_PROGRESS") return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [task.status]);
+  const productiveSeconds = (task.actualWorkingDurationSeconds ?? 0) + (task.status === "STARTED" || task.status === "IN_PROGRESS" ? Math.max(0, Math.floor((now - new Date(task.startedAt ?? task.updatedAt).getTime()) / 1000)) : 0);
+  const formatDuration = (seconds: number) => `${String(Math.floor(seconds / 3600)).padStart(2, "0")}:${String(Math.floor((seconds % 3600) / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
   const filteredCandidates = useMemo(() => {
     const query = candidateQuery.trim().toLowerCase();
     if (!query) return assignmentCandidates;
@@ -102,6 +110,8 @@ export function TaskDetailCard({
         <InfoChip label="Intent" value={task.intentType} />
         <InfoChip label="Source" value={task.source} />
       </View>
+      <Text style={styles.description}>{task.status === "STARTED" || task.status === "IN_PROGRESS" ? `Working · ${formatDuration(productiveSeconds)}` : task.status === "WAITING" ? `Paused · ${formatDuration(task.totalPauseDurationSeconds ?? 0)}\nWorked · ${formatDuration(task.actualWorkingDurationSeconds ?? 0)}` : task.completedAt ? `Worked · ${formatDuration(task.actualWorkingDurationSeconds ?? 0)}` : ""}</Text>
+      {task.intentType === "MINIBAR" || task.priority === "URGENT" ? <Text style={styles.kicker}>FLASH · Minibar Check</Text> : null}
 
       {onAssign ? (
         <View style={styles.assignmentPanel}>

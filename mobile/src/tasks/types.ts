@@ -48,6 +48,8 @@ export type TaskDetail = TaskSummary & {
   assigneeType: string | null;
   assigneeId: string | null;
   assignedAt: string | null;
+  totalPauseDurationSeconds?: number;
+  actualWorkingDurationSeconds?: number;
   attachments?: TaskAttachmentMetadata[];
 };
 
@@ -100,6 +102,8 @@ export function taskDetailFromResponse(task: TaskResponseDto): TaskDetail {
     assigneeType: task.assignment?.assigneeType ?? null,
     assigneeId: task.assignment?.assigneeId ?? null,
     assignedAt: task.assignment?.assignedAt ?? null,
+    totalPauseDurationSeconds: Number((task as TaskResponseDto & { totalPauseDurationSeconds?: number }).totalPauseDurationSeconds ?? 0),
+    actualWorkingDurationSeconds: Number((task as TaskResponseDto & { actualWorkingDurationSeconds?: number }).actualWorkingDurationSeconds ?? 0),
     attachments: []
   };
 }

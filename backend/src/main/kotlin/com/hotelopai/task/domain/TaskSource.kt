@@ -5,5 +5,6 @@ enum class TaskSource {
     MANUAL,
     MOBILE,
     API,
-    IMPORT
+    IMPORT,
+    PMS
 }

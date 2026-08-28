@@ -29,11 +29,23 @@ class PmsDemoEventIngestionIntegrationTest:PostgresIntegrationTestSupport() {
         assertEquals(1,count("select count(*) from task where hotel_id=:hotel",fixture.hotel))
     }
 
-    @Test fun `CHECK_OUT and OOO use existing workflow and task engines`() {
+    @Test fun `CHECK_OUT creates one departure workflow one minibar task and pending readiness idempotently`() {
         val fixture=fixture("PMS_RULES")
-        assertEquals("HOUSEKEEPING_WORKFLOW",service.ingest(request(fixture.code,"205",PmsDemoEventType.CHECK_OUT,"OUT-1")).resultType)
+        val event=request(fixture.code,"205",PmsDemoEventType.CHECK_OUT,"OUT-1")
+        val first=service.ingest(event)
+        val duplicate=service.ingest(event)
+        assertEquals("HOUSEKEEPING_WORKFLOW",first.resultType)
+        assertTrue(duplicate.duplicate)
+        assertEquals(first.resultId,duplicate.resultId)
+        assertEquals(1,count("select count(*) from housekeeping_workflow where hotel_id=:hotel",fixture.hotel))
+        assertEquals(1,count("select count(*) from task where hotel_id=:hotel and intent_type='MINIBAR' and source='PMS'",fixture.hotel))
+        assertEquals(1,count("select count(*) from room_minibar_readiness where hotel_id=:hotel and status='PENDING'",fixture.hotel))
+    }
+
+    @Test fun `OOO continues to use existing task engine`() {
+        val fixture=fixture("PMS_OOO")
         assertEquals("TASK",service.ingest(request(fixture.code,"310",PmsDemoEventType.OOO,"OOO-1",reason="Water leak")).resultType)
-        assertEquals(2,count("select count(*) from task where hotel_id=:hotel",fixture.hotel))
+        assertEquals(1,count("select count(*) from task where hotel_id=:hotel",fixture.hotel))
     }
 
     @Test fun `ROOM_MOVE validates both rooms and creates no unrelated task`() {

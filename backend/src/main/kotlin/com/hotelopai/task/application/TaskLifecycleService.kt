@@ -10,6 +10,7 @@ import com.hotelopai.task.domain.TaskStatus
 import com.hotelopai.task.domain.TaskTransition
 import com.hotelopai.observability.OperationalObservability
 import com.hotelopai.shared.kernel.PersistenceInstant
+import com.hotelopai.housekeeping.application.MinibarReadinessService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -31,6 +32,7 @@ class TaskLifecycleService @Autowired constructor(
     private val clock: Clock = Clock.systemUTC(),
     private val completionObservers: List<TaskCompletionObserver> = emptyList(),
     private val taskCreationAssignmentOrchestrator: TaskCreationAssignmentOrchestrator = NoOpTaskCreationAssignmentOrchestrator
+    , private val minibarReadinessService: MinibarReadinessService? = null
 ) : TaskApplicationPort {
     constructor(taskRepository: TaskRepository) : this(
         taskRepository = taskRepository,
@@ -185,7 +187,10 @@ class TaskLifecycleService @Autowired constructor(
                 successMessage = { _, _ ->
                     verificationLogId?.let { "Task completed after PMS verification $it" } ?: "Task completed"
                 }
-            ).also { completed -> completionObservers.forEach { observer -> observer.completed(completed) } }
+            ).also { completed ->
+                if (completed.intentType == TaskIntentType.MINIBAR && completed.roomNumber != null) minibarReadinessService?.markCompleted(completed.hotelId, completed.roomNumber)
+                completionObservers.forEach { observer -> observer.completed(completed) }
+            }
         }
 
     fun cancelTask(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task =

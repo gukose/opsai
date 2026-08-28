@@ -4,6 +4,7 @@ import com.hotelopai.task.application.AssignTaskCommand
 import com.hotelopai.task.application.AssignmentCommand
 import com.hotelopai.task.application.CreateTaskCommand
 import com.hotelopai.task.application.TaskPage
+import com.hotelopai.task.application.TaskTiming
 import com.hotelopai.task.domain.Task
 import com.hotelopai.task.domain.TaskAttachmentLinkView
 import com.hotelopai.task.domain.TaskAssigneeType
@@ -91,10 +92,14 @@ data class TaskResponse(
     val startedAt: Instant?,
     val completedAt: Instant?,
     val cancelledAt: Instant?,
-    val overdueAt: Instant?
+    val overdueAt: Instant?,
+    val totalPauseDurationSeconds: Long = 0,
+    val actualWorkingDurationSeconds: Long = 0
 ) {
     companion object {
-        fun from(task: Task): TaskResponse =
+        // Timing must be calculated from persisted state history by TaskResponseMapper.
+        // Keeping construction timing-explicit prevents user-facing fallback values.
+        fun from(task: Task, timing: TaskTiming): TaskResponse =
             TaskResponse(
                 id = task.id.toString(),
                 hotelId = task.hotelId.toString(),
@@ -114,7 +119,9 @@ data class TaskResponse(
                 startedAt = task.startedAt,
                 completedAt = task.completedAt,
                 cancelledAt = task.cancelledAt,
-                overdueAt = task.overdueAt
+                overdueAt = task.overdueAt,
+                totalPauseDurationSeconds = timing.totalPauseDurationSeconds,
+                actualWorkingDurationSeconds = timing.actualWorkingDurationSeconds
             )
 
         private fun safeUnassignedReason(code: String): String = when (code) {
@@ -157,9 +164,9 @@ data class TaskPageResponse(
     val hasPrevious: Boolean
 ) {
     companion object {
-        fun from(page: TaskPage<Task>): TaskPageResponse =
+        fun from(page: TaskPage<Task>, items: List<TaskResponse>): TaskPageResponse =
             TaskPageResponse(
-                items = page.items.map(TaskResponse::from),
+                items = items,
                 page = page.page,
                 size = page.size,
                 totalItems = page.totalItems,
