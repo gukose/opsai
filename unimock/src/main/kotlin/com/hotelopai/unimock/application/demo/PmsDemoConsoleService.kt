@@ -1,15 +1,13 @@
 package com.hotelopai.unimock.application.demo
 
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.hotelopai.unimock.application.pms.EventPushRequest
-import com.hotelopai.unimock.application.pms.PmsReadService
-import com.hotelopai.unimock.application.pms.PmsUpdateService
 import com.hotelopai.unimock.config.UniMockProperties
 import org.springframework.http.HttpStatusCode
 import org.springframework.stereotype.Service
 import org.springframework.web.client.RestClient
 import java.time.Clock
 import java.time.Instant
+import java.net.URI
 import java.util.UUID
 
 enum class DemoEventType { CHECK_IN,CHECK_OUT,ARRIVAL,DEPARTURE,DIRTY,CLEAN,OCCUPIED,VACANT,VIP,ROOM_MOVE,OOO,OOS }
@@ -18,20 +16,28 @@ data class DemoEventResult(val eventId:String,val roomNumber:String,val eventTyp
 data class DemoRoom(val roomNumber:String,val status:String)
 
 class DemoEventDeliveryException(message:String):RuntimeException(message)
+internal fun demoTargetUri(baseUrl:String,path:String):URI {
+    val base=baseUrl.trim().trimEnd('/')
+    val uri=runCatching { URI("$base$path") }.getOrElse { throw DemoEventDeliveryException("Hotel OpAI target URL is invalid") }
+    if (uri.scheme !in setOf("http","https") || uri.host.isNullOrBlank()) throw DemoEventDeliveryException("Hotel OpAI target URL is invalid")
+    return uri
+}
 
 interface DemoEventDeliveryPort { fun rooms():List<DemoRoom>; fun deliver(payload:Map<String,Any?>):DemoEventResult }
 
 @Service
 class HotelOpAiDemoEventClient(private val properties:UniMockProperties,private val objectMapper:ObjectMapper):DemoEventDeliveryPort {
+    private fun target(path:String):URI {
+        return demoTargetUri(properties.demoConsole.hotelOpaiBaseUrl,path)
+    }
     override fun rooms():List<DemoRoom> {
         require(properties.demoConsole.hotelOpaiBaseUrl.isNotBlank()) { "Hotel OpAI delivery is not configured" }
-        return RestClient.create(properties.demoConsole.hotelOpaiBaseUrl).get().uri("/api/v1/integrations/pms/unimock/demo-events/rooms")
+        return RestClient.create().get().uri(target("/api/v1/integrations/pms/unimock/demo-events/rooms"))
             .header("X-Demo-Pms-Key",properties.demoConsole.sharedKey).retrieve().body(Array<DemoRoom>::class.java)?.toList() ?: emptyList()
     }
     override fun deliver(payload:Map<String,Any?>):DemoEventResult {
         require(properties.demoConsole.hotelOpaiBaseUrl.isNotBlank() && properties.demoConsole.sharedKey.length>=12) { "Hotel OpAI delivery is not configured" }
-        return RestClient.create(properties.demoConsole.hotelOpaiBaseUrl).post()
-            .uri("/api/v1/integrations/pms/unimock/demo-events")
+        return RestClient.create().post().uri(target("/api/v1/integrations/pms/unimock/demo-events"))
             .header("X-Demo-Pms-Key",properties.demoConsole.sharedKey)
             .body(payload).retrieve()
             .onStatus(HttpStatusCode::isError) { _,response ->
@@ -43,7 +49,7 @@ class HotelOpAiDemoEventClient(private val properties:UniMockProperties,private 
 
 @Service
 class PmsDemoConsoleService(
-    private val updates:PmsUpdateService,
+    private val history:PmsDemoConsoleHistoryRepository,
     private val properties:UniMockProperties,
     private val delivery:DemoEventDeliveryPort,
     private val clock:Clock
@@ -74,7 +80,6 @@ class PmsDemoConsoleService(
         }
     }
 
-    private fun record(request:DemoEventRequest,eventId:String,occurredAt:Instant,status:String,message:String?) {
-        updates.pushEvent(EventPushRequest(eventId,request.eventType.name,occurredAt.toString(),request.roomNumber,request.toRoomNumber,status,message),"demo-console")
-    }
+    fun events():List<DemoHistoryEvent> = history.list()
+    private fun record(request:DemoEventRequest,eventId:String,occurredAt:Instant,status:String,message:String?) = history.record(request,eventId,occurredAt,status,message)
 }

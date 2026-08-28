@@ -1,36 +1,28 @@
 package com.hotelopai.unimock.application.demo
 
-import com.hotelopai.unimock.application.pms.EventPushRequest
-import com.hotelopai.unimock.application.pms.PmsReadService
-import com.hotelopai.unimock.application.pms.PmsUpdateService
-import com.hotelopai.unimock.application.pms.PmsUpdateResponse
-import com.hotelopai.unimock.application.pms.RoomReadModel
 import com.hotelopai.unimock.config.UniMockProperties
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import org.mockito.ArgumentCaptor
 import org.mockito.Mockito.*
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
-import java.util.UUID
 
 class PmsDemoConsoleServiceTest {
-    private val updates=mock(PmsUpdateService::class.java)
+    private val history=mock(PmsDemoConsoleHistoryRepository::class.java)
     private val delivery=FakeDelivery()
     private val now=Instant.parse("2026-08-28T10:15:30Z")
-    private val service=PmsDemoConsoleService(updates,UniMockProperties(demoConsole=UniMockProperties.DemoConsole(hotelCode="DEMO")),delivery,Clock.fixed(now,ZoneOffset.UTC))
+    private val service=PmsDemoConsoleService(history,UniMockProperties(demoConsole=UniMockProperties.DemoConsole(hotelCode="DEMO")),delivery,Clock.fixed(now,ZoneOffset.UTC))
 
     @Test fun `DIRTY payload follows Hotel OpAI contract and records processed history`() {
         val result=DemoEventResult("EVENT-1","205",DemoEventType.DIRTY,now,"PROCESSED")
         delivery.result=result
-        stubHistory("EVENT-1",DemoEventType.DIRTY,"205","PROCESSED",null)
         assertEquals(result,service.send(DemoEventRequest("EVENT-1","205",DemoEventType.DIRTY)))
         assertEquals("DEMO",delivery.payload?.get("hotelCode"))
         assertEquals("205",delivery.payload?.get("roomNumber"))
         assertEquals("DIRTY",delivery.payload?.get("eventType"))
-        verify(updates).pushEvent(EventPushRequest("EVENT-1","DIRTY",now.toString(),"205",null,"PROCESSED",null),"demo-console")
+        verify(history).record(DemoEventRequest("EVENT-1","205",DemoEventType.DIRTY),"EVENT-1",now,"PROCESSED",null)
     }
 
     @Test fun `ROOM_MOVE validates canonical destination room`() {
@@ -41,10 +33,9 @@ class PmsDemoConsoleServiceTest {
 
     @Test fun `failed delivery is recorded and exposed as business error`() {
         delivery.error=DemoEventDeliveryException("Hotel OpAI rejected the event")
-        stubHistory("EVENT-3",DemoEventType.OOO,"310","FAILED","Hotel OpAI rejected the event")
         val error=assertThrows<DemoEventDeliveryException>{service.send(DemoEventRequest("EVENT-3","310",DemoEventType.OOO,reason="Leak"))}
         assertEquals("Hotel OpAI rejected the event",error.message)
-        verify(updates).pushEvent(EventPushRequest("EVENT-3","OOO",now.toString(),"310",null,"FAILED","Hotel OpAI rejected the event"),"demo-console")
+        verify(history).record(DemoEventRequest("EVENT-3","310",DemoEventType.OOO,reason="Leak"),"EVENT-3",now,"FAILED","Hotel OpAI rejected the event")
     }
 
     @Test fun `invalid source room is rejected before delivery`() {
@@ -52,10 +43,6 @@ class PmsDemoConsoleServiceTest {
         assertNull(delivery.payload)
     }
 
-    private fun stubHistory(id:String,type:DemoEventType,room:String,status:String,message:String?) {
-        val event=EventPushRequest(id,type.name,now.toString(),room,null,status,message)
-        `when`(updates.pushEvent(event,"demo-console")).thenReturn(PmsUpdateResponse(UUID.randomUUID(),id,"EVENT_PUSH","CREATED"))
-    }
     private class FakeDelivery:DemoEventDeliveryPort {
         var result:DemoEventResult?=null;var error:RuntimeException?=null;var payload:Map<String,Any?>?=null
         override fun deliver(payload:Map<String,Any?>):DemoEventResult { this.payload=payload;error?.let{throw it};return requireNotNull(result) }

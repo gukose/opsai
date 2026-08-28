@@ -3,7 +3,6 @@ package com.hotelopai.unimock.api.demo
 import com.hotelopai.unimock.application.demo.DemoEventDeliveryException
 import com.hotelopai.unimock.application.demo.DemoEventRequest
 import com.hotelopai.unimock.application.demo.PmsDemoConsoleService
-import com.hotelopai.unimock.application.pms.PmsReadService
 import com.hotelopai.unimock.config.UniMockProperties
 import com.hotelopai.unimock.shared.error.ProblemDetailFactory
 import org.springframework.http.HttpStatus
@@ -13,10 +12,10 @@ import java.net.URI
 
 @RestController
 @RequestMapping("/api/demo-console")
-class PmsDemoConsoleController(private val service:PmsDemoConsoleService,private val reads:PmsReadService,private val properties:UniMockProperties) {
+class PmsDemoConsoleController(private val service:PmsDemoConsoleService,private val properties:UniMockProperties) {
     @GetMapping("/config") fun config()=mapOf("hotelCode" to properties.demoConsole.hotelCode,"hotelName" to "Hotel OpAI Demo")
     @GetMapping("/rooms") fun rooms()=service.rooms().map { mapOf("roomNumber" to it.roomNumber,"status" to it.status) }
-    @GetMapping("/events") fun events()=reads.listEvents().filter { it.deliveryStatus!=null }.takeLast(25).reversed()
+    @GetMapping("/events") fun events()=service.events()
     @PostMapping("/events") fun send(@RequestBody request:DemoEventRequest)=service.send(request)
 }
 
