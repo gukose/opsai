@@ -6,6 +6,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
 import java.sql.ResultSet
+import java.sql.Timestamp
 import java.time.Instant
 import java.util.UUID
 
@@ -48,7 +49,7 @@ class HousekeepingJdbcRepository(private val jdbc: NamedParameterJdbcTemplate) :
             values(:id,:hotelId,:workflowId,:inspector,:attempt,:result,:reason,:score,:started,:completed,:completed)""",
             mapOf("id" to inspection.id,"hotelId" to hotelId,"workflowId" to inspection.workflowId,"inspector" to inspection.inspectorUserId,
                 "attempt" to inspection.attempt,"result" to inspection.result.name,"reason" to inspection.rejectionReason,"score" to inspection.qualityScore,
-                "started" to inspection.startedAt,"completed" to inspection.completedAt))
+                "started" to inspection.startedAt?.let(Timestamp::from),"completed" to inspection.completedAt?.let(Timestamp::from)))
         inspection.answers.forEach { answer -> jdbc.update(
             "insert into housekeeping_inspection_answer(inspection_id,checklist_item_id,passed,note) values(:inspection,:item,:passed,:note)",
             mapOf("inspection" to inspection.id,"item" to answer.checklistItemId,"passed" to answer.passed,"note" to answer.note)) }
@@ -62,11 +63,11 @@ class HousekeepingJdbcRepository(private val jdbc: NamedParameterJdbcTemplate) :
     private fun HousekeepingWorkflow.params() = MapSqlParameterSource()
         .addValue("id",id).addValue("hotelId",hotelId).addValue("taskId",taskId).addValue("type",type.name).addValue("room",roomNumber)
         .addValue("status",status.name).addValue("inspectionRequired",inspectionRequired).addValue("key",idempotencyKey)
-        .addValue("acceptedAt",acceptedAt).addValue("startedAt",startedAt).addValue("pausedAt",pausedAt).addValue("resumedAt",resumedAt)
-        .addValue("cleaningCompletedAt",cleaningCompletedAt).addValue("inspectionStartedAt",inspectionStartedAt).addValue("inspectionCompletedAt",inspectionCompletedAt)
+        .addValue("acceptedAt",acceptedAt?.let(Timestamp::from)).addValue("startedAt",startedAt?.let(Timestamp::from)).addValue("pausedAt",pausedAt?.let(Timestamp::from)).addValue("resumedAt",resumedAt?.let(Timestamp::from))
+        .addValue("cleaningCompletedAt",cleaningCompletedAt?.let(Timestamp::from)).addValue("inspectionStartedAt",inspectionStartedAt?.let(Timestamp::from)).addValue("inspectionCompletedAt",inspectionCompletedAt?.let(Timestamp::from))
         .addValue("closedAt",closedAt).addValue("workingSeconds",workingSeconds).addValue("pausedSeconds",pausedSeconds)
-        .addValue("activeSegmentStartedAt",activeSegmentStartedAt).addValue("pauseSegmentStartedAt",pauseSegmentStartedAt)
-        .addValue("createdAt",createdAt).addValue("updatedAt",updatedAt)
+        .addValue("activeSegmentStartedAt",activeSegmentStartedAt?.let(Timestamp::from)).addValue("pauseSegmentStartedAt",pauseSegmentStartedAt?.let(Timestamp::from))
+        .addValue("createdAt",Timestamp.from(createdAt)).addValue("updatedAt",Timestamp.from(updatedAt))
         .addValue("templateId",templateId).addValue("templateVersion",templateVersion)
 
     private fun map(rs: ResultSet, ignored: Int) = HousekeepingWorkflow(
