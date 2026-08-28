@@ -56,9 +56,13 @@ class UniMockDeploymentConfigurationTest {
 
     @Test
     fun `console history migration is packaged in the UniMock migration location`() {
-        val migration = ClassPathResource("db/migration/V5__create_pms_demo_console_history.sql")
-        assertThat(migration.exists()).isTrue()
-        assertThat(migration.inputStream.bufferedReader().readText())
-            .contains("create table unimock.pms_demo_console_event")
+        val original = ClassPathResource("db/migration/V5__create_pms_demo_console_history.sql")
+        val history = ClassPathResource("db/migration/V6__create_pms_demo_console_history_in_unimock_schema.sql")
+        assertThat(original.exists()).isTrue()
+        assertThat(history.exists()).isTrue()
+        assertThat(original.inputStream.bufferedReader().readText())
+            .contains("create table pms_demo_console_event")
+        assertThat(history.inputStream.bufferedReader().readText())
+            .contains("unimock.pms_demo_console_event")
     }
 }

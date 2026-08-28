@@ -1,4 +1,4 @@
-create table pms_demo_console_event (
+create table if not exists unimock.pms_demo_console_event (
     id uuid primary key,
     event_id text not null unique,
     room_number text not null,
@@ -10,4 +10,4 @@ create table pms_demo_console_event (
     created_at timestamptz not null,
     updated_at timestamptz not null
 );
-create index idx_pms_demo_console_event_recent on pms_demo_console_event(created_at desc);
+create index if not exists idx_pms_demo_console_event_recent on unimock.pms_demo_console_event(created_at desc);
