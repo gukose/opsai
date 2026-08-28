@@ -53,4 +53,12 @@ class UniMockDeploymentConfigurationTest {
         assertThat(environment.getProperty("server.port")).isEqualTo("8090")
         assertThat(environment.getProperty("server.address")).isEqualTo("::")
     }
+
+    @Test
+    fun `console history migration is packaged in the UniMock migration location`() {
+        val migration = ClassPathResource("db/migration/V5__create_pms_demo_console_history.sql")
+        assertThat(migration.exists()).isTrue()
+        assertThat(migration.inputStream.bufferedReader().readText())
+            .contains("create table unimock.pms_demo_console_event")
+    }
 }
