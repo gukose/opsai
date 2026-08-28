@@ -4,9 +4,11 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Repository
 import java.time.Clock
 import java.time.Instant
+import java.sql.Timestamp
 import java.util.UUID
 
 data class DemoHistoryEvent(val eventId:String,val roomNumber:String,val toRoomNumber:String?,val eventType:String,val occurredAt:Instant,val deliveryStatus:String,val message:String?)
+internal fun historyTimestamp(value:Instant):Timestamp = Timestamp.from(value)
 
 @Repository
 class PmsDemoConsoleHistoryRepository(private val jdbc:NamedParameterJdbcTemplate,private val clock:Clock) {
@@ -16,6 +18,6 @@ class PmsDemoConsoleHistoryRepository(private val jdbc:NamedParameterJdbcTemplat
         jdbc.update("""insert into unimock.pms_demo_console_event(id,event_id,room_number,destination_room_number,event_type,occurred_at,delivery_status,message,created_at,updated_at)
             values(:id,:event,:room,:destination,:type,:occurred,:status,:message,:now,:now)
             on conflict(event_id) do update set delivery_status=excluded.delivery_status,message=excluded.message,updated_at=excluded.updated_at""",
-            mapOf("id" to UUID.randomUUID(),"event" to eventId,"room" to request.roomNumber,"destination" to request.toRoomNumber,"type" to request.eventType.name,"occurred" to occurredAt,"status" to status,"message" to message,"now" to now))
+            mapOf("id" to UUID.randomUUID(),"event" to eventId,"room" to request.roomNumber,"destination" to request.toRoomNumber,"type" to request.eventType.name,"occurred" to historyTimestamp(occurredAt),"status" to status,"message" to message,"now" to historyTimestamp(now)))
     }
 }
