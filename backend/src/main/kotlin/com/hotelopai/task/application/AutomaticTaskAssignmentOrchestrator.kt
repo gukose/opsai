@@ -60,6 +60,7 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
     private val observability: OperationalObservability = OperationalObservability.noop(),
     private val dataSource: DataSource
 ) : TaskCreationAssignmentOrchestrator, TaskAssignmentCandidateQuery {
+    init { logger.info("HOUSEKEEPING_AUTO_ASSIGN_VERSION=floor-affinity-v2") }
 
     @Transactional(readOnly = true)
     override fun candidates(task: Task, now: Instant): List<AssignmentCandidateView> {
@@ -178,11 +179,16 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         ) else null
 
         val floorAffinity = housekeepingFloorAffinity(task, employees)
-        val selectedEmployee = (decision?.candidates.orEmpty()
+        val rankedCandidates = decision?.candidates.orEmpty()
             .sortedWith(compareByDescending<AssignmentCandidate> { floorAffinity[it.employeeId] ?: 0 }
                 .thenBy { workload[it.employeeId] ?: 0 }
                 .thenBy { it.employeeId.toString() })
-            .firstOrNull()?.employeeId
+        val targetFloorId = targetFloor(task)
+        rankedCandidates.forEachIndexed { index, candidate ->
+            val employee = employees.firstOrNull { it.id == candidate.employeeId }
+            logger.info("event=housekeeping_auto_assignment_candidate roomNumber={} targetFloorId={} employeeId={} employeeNumber={} sameFloorActiveTaskCount={} activeWorkload={} activeShift={} rank={} selected={}", task.roomNumber, targetFloorId, candidate.employeeId, employee?.employeeNumber, floorAffinity[candidate.employeeId] ?: 0, workload[candidate.employeeId] ?: 0, candidate.employeeId in activeShiftIds, index + 1, index == 0)
+        }
+        val selectedEmployee = (rankedCandidates.firstOrNull()?.employeeId
             ?: decision?.assignment?.assigneeId?.let(UUID::fromString))
             ?.let { selectedId -> employees.firstOrNull { it.id == selectedId } }
             ?.takeIf { it.hotelId == task.hotelId }
@@ -224,6 +230,10 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         ) { rs, _ -> rs.getString(1) to rs.getInt(2) }
             .flatMap { (id, count) -> employees.filter { it.id.toString() == id || it.userId?.toString() == id }.map { it.id to count } }
             .toMap()
+    }
+
+    private fun targetFloor(task: Task): UUID? = task.roomNumber?.let {
+        jdbc.query("select floor_id from room_master where hotel_id=:hotel and room_number=:room", mapOf("hotel" to task.hotelId, "room" to it)) { rs, _ -> rs.getObject(1, UUID::class.java) }.firstOrNull()
     }
 
     private fun resolveRequirement(task: Task): Requirement {
