@@ -17,7 +17,8 @@ class PmsUpdateService(
     private val pmsDocumentRepository: PmsDocumentRepository,
     private val pmsVerificationRepository: PmsVerificationRepository,
     private val objectMapper: ObjectMapper,
-    private val clock: Clock
+    private val clock: Clock,
+    private val canonicalRoomState: CanonicalRoomStateStore
 ) {
     fun updateRoomStatus(
         roomNumber: String,
@@ -25,7 +26,12 @@ class PmsUpdateService(
         correlationId: String?
     ): PmsUpdateResponse {
         val startedAt = clock.instant()
-        val simulation = activeSimulation()
+        val simulation = pmsReadRepository.findActiveSimulationDocuments()
+        if (simulation == null) {
+            if (!CanonicalDemoRoomCatalog.contains(roomNumber)) throw PmsResourceNotFoundException("Room", roomNumber)
+            canonicalRoomState.set(roomNumber, request.status)
+            return PmsUpdateResponse(UUID.randomUUID(), roomNumber, "ROOM_STATUS_UPDATE", request.status)
+        }
         if (simulation.requireDocument("master/rooms.json").rooms().none { it.path("roomNumber").asText() == roomNumber } && !CanonicalDemoRoomCatalog.contains(roomNumber)) {
             throw PmsResourceNotFoundException("Room", roomNumber)
         }

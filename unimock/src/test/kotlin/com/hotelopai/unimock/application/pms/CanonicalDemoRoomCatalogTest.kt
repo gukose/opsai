@@ -9,4 +9,10 @@ class CanonicalDemoRoomCatalogTest {
         assertNotNull(CanonicalDemoRoomCatalog.room("205"))
         assertNull(CanonicalDemoRoomCatalog.room("999"))
     }
+
+    @Test fun `canonical room state is mutable without simulation`() {
+        val store = CanonicalRoomStateStore()
+        store.set("205", "CLEAN")
+        assertEquals("CLEAN", store.status("205"))
+    }
 }

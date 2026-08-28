@@ -9,7 +9,8 @@ import jakarta.annotation.PostConstruct
 @Service
 class PmsReadService(
     private val pmsReadRepository: PmsReadRepository,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    private val canonicalRoomState: CanonicalRoomStateStore
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -23,7 +24,8 @@ class PmsReadService(
         val simulationRoom = simulation?.rooms()?.firstOrNull { it.roomNumber == roomNumber }
         val canonicalRoom = CanonicalDemoRoomCatalog.room(roomNumber)
         log.info("UNIMOCK_ROOM_LOOKUP_SOURCE roomNumber={} simulationFound={} canonicalFound={}", roomNumber, simulationRoom != null, canonicalRoom != null)
-        return simulationRoom ?: canonicalRoom ?: throw PmsResourceNotFoundException("Room", roomNumber)
+        return simulationRoom ?: canonicalRoom?.let { it.copy(status = canonicalRoomState.status(roomNumber) ?: it.status) }
+            ?: throw PmsResourceNotFoundException("Room", roomNumber)
     }
 
     fun getRoomStatus(roomNumber: String): RoomStatusReadModel =
