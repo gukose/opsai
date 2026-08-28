@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
 import java.time.Instant
+import java.sql.Timestamp
 import java.util.UUID
 
 data class InterruptTaskCommand(
@@ -99,7 +100,7 @@ class JdbcTaskInterruptionStore(private val jdbc: NamedParameterJdbcTemplate) : 
                 "reason" to record.reason,
                 "source" to record.source.name,
                 "key" to idempotencyKey,
-                "pausedAt" to record.pausedAt
+                "pausedAt" to Timestamp.from(record.pausedAt)
             )
         )
     }
@@ -145,7 +146,7 @@ class JdbcTaskInterruptionStore(private val jdbc: NamedParameterJdbcTemplate) : 
            where id=:id and hotel_id=:hotel and status=:expected""",
         mapOf(
             "status" to status,
-            "resumedAt" to resumedAt,
+            "resumedAt" to resumedAt?.let(Timestamp::from),
             "id" to id,
             "hotel" to hotelId,
             "expected" to expectedStatus

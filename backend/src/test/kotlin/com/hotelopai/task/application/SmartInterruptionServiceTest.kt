@@ -68,7 +68,23 @@ class SmartInterruptionServiceTest {
         val sql=ArgumentCaptor.forClass(String::class.java)
         verify(jdbc).update(sql.capture(),parameters.capture())
         assertThat(sql.value).contains("reason,source,status")
+        assertThat(sql.value).contains(":key,:pausedAt,:pausedAt")
         assertThat(parameters.value["source"]).isEqualTo("FLASH_INTERRUPTION")
+        assertThat(parameters.value["pausedAt"]).isEqualTo(Timestamp.from(record.pausedAt))
+        assertThat(parameters.value["pausedAt"]).isInstanceOf(Timestamp::class.java)
+    }
+
+    @Test fun `JDBC resume transition binds resumedAt as Timestamp`() {
+        val jdbc=mock(NamedParameterJdbcTemplate::class.java)
+        val resumedAt=clock.instant().plusSeconds(60)
+
+        JdbcTaskInterruptionStore(jdbc).transition(UUID.randomUUID(),hotelId,"RESUMING","RESUMED",resumedAt)
+
+        @Suppress("UNCHECKED_CAST")
+        val parameters=ArgumentCaptor.forClass(Map::class.java) as ArgumentCaptor<Map<String,*>>
+        verify(jdbc).update(org.mockito.ArgumentMatchers.anyString(),parameters.capture())
+        assertThat(parameters.value["resumedAt"]).isEqualTo(Timestamp.from(resumedAt))
+        assertThat(parameters.value["resumedAt"]).isInstanceOf(Timestamp::class.java)
     }
 
     @Test fun `source column reads back as typed enum`() {
