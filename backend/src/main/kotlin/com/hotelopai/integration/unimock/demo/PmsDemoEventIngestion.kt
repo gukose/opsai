@@ -8,10 +8,6 @@ import com.hotelopai.housekeeping.domain.HousekeepingWorkflowType
 import com.hotelopai.shared.kernel.UuidV7Generator
 import com.hotelopai.task.application.CreateTaskCommand
 import com.hotelopai.task.application.TaskLifecycleService
-import com.hotelopai.task.application.TaskAssignmentCandidateQuery
-import com.hotelopai.task.application.AssignTaskCommand
-import com.hotelopai.task.application.AssignmentCommand
-import com.hotelopai.task.domain.TaskAssigneeType
 import com.hotelopai.task.domain.TaskIntentType
 import com.hotelopai.task.domain.TaskPriority
 import com.hotelopai.task.domain.TaskSource
@@ -112,7 +108,6 @@ class PmsDemoEventIngestionService(
     private val housekeeping:HousekeepingService,
     private val roomStates:RoomOperationalStateService,
     private val tasks:TaskLifecycleService,
-    private val candidateQuery:TaskAssignmentCandidateQuery,
     private val clock:Clock
 ) {
     fun rooms(hotelCode:String):List<PmsDemoRoomResponse> = jdbc.query("select room_number, case when active then 'ACTIVE' else 'INACTIVE' end from room_master where hotel_id=(select id from hotel where code=:code) order by room_number",mapOf("code" to hotelCode)) { rs,_ -> PmsDemoRoomResponse(rs.getString(1),rs.getString(2)) }
@@ -138,21 +133,19 @@ class PmsDemoEventIngestionService(
     }
 
     private fun applyRule(hotelId:UUID,request:PmsDemoEventRequest,now:Instant):Pair<String,UUID>? = when(request.eventType) {
-        PmsDemoEventType.CHECK_OUT,PmsDemoEventType.DEPARTURE -> housekeeping.create(CreateHousekeepingCommand(hotelId,request.roomNumber,HousekeepingWorkflowType.DEPARTURE_CLEANING,true,"pms:${request.eventId}")).also { autoAssign(hotelId,it.taskId) }.let { "HOUSEKEEPING_WORKFLOW" to it.id }
-        PmsDemoEventType.DIRTY -> housekeeping.create(CreateHousekeepingCommand(hotelId,request.roomNumber,HousekeepingWorkflowType.STAYOVER_CLEANING,false,"pms:${request.eventId}")).also { autoAssign(hotelId,it.taskId) }.let { "HOUSEKEEPING_WORKFLOW" to it.id }
-        PmsDemoEventType.VIP -> housekeeping.create(CreateHousekeepingCommand(hotelId,request.roomNumber,HousekeepingWorkflowType.VIP_PREPARATION,true,"pms:${request.eventId}")).also { autoAssign(hotelId,it.taskId) }.let { "HOUSEKEEPING_WORKFLOW" to it.id }
+        PmsDemoEventType.CHECK_OUT -> {
+            val workflow=housekeeping.create(CreateHousekeepingCommand(hotelId,request.roomNumber,HousekeepingWorkflowType.DEPARTURE_CLEANING,true,"pms:${request.eventId}"))
+            tasks.createTask(CreateTaskCommand(hotelId,TaskIntentType.MINIBAR,TaskSource.IMPORT,"Minibar Check","PMS CHECK_OUT minibar inspection for room ${request.roomNumber}",request.roomNumber,TaskPriority.HIGH,now.plus(Duration.ofHours(2))))
+            "HOUSEKEEPING_WORKFLOW" to workflow.id
+        }
+        PmsDemoEventType.DEPARTURE -> housekeeping.create(CreateHousekeepingCommand(hotelId,request.roomNumber,HousekeepingWorkflowType.DEPARTURE_CLEANING,true,"pms:${request.eventId}")).let { "HOUSEKEEPING_WORKFLOW" to it.id }
+        PmsDemoEventType.DIRTY -> housekeeping.create(CreateHousekeepingCommand(hotelId,request.roomNumber,HousekeepingWorkflowType.STAYOVER_CLEANING,false,"pms:${request.eventId}")).let { "HOUSEKEEPING_WORKFLOW" to it.id }
+        PmsDemoEventType.VIP -> housekeeping.create(CreateHousekeepingCommand(hotelId,request.roomNumber,HousekeepingWorkflowType.VIP_PREPARATION,true,"pms:${request.eventId}")).let { "HOUSEKEEPING_WORKFLOW" to it.id }
         PmsDemoEventType.CLEAN -> { roomStates.set(hotelId,request.roomNumber,RoomOperationalStatus.READY,"pms:${request.eventId}");null }
         PmsDemoEventType.OOO,PmsDemoEventType.OOS -> tasks.createTask(CreateTaskCommand(hotelId,TaskIntentType.MAINTENANCE,TaskSource.IMPORT,
             if(request.eventType==PmsDemoEventType.OOO) "Room out of order" else "Room out of service",
             request.reason?.takeIf(String::isNotBlank)?:"PMS reported ${request.eventType.name}",request.roomNumber,TaskPriority.HIGH,now.plus(Duration.ofHours(2)))).let { "TASK" to it.id }
         PmsDemoEventType.CHECK_IN,PmsDemoEventType.ARRIVAL,PmsDemoEventType.OCCUPIED,PmsDemoEventType.VACANT,PmsDemoEventType.ROOM_MOVE -> null
-    }
-
-    private fun autoAssign(hotelId:UUID, taskId:UUID) {
-        val task=tasks.getTaskForHotel(taskId.toString(),hotelId)
-        if (task.assignment != null) return
-        val candidate=candidateQuery.candidates(task,clock.instant()).firstOrNull { it.available }
-        if (candidate != null) tasks.assignTask(taskId.toString(),hotelId,AssignTaskCommand(AssignmentCommand(TaskAssigneeType.USER,candidate.assigneeId,candidate.displayName)))
     }
 
     private fun requireRoom(hotelId:UUID,room:String,message:String) { require(jdbc.queryForObject("select count(*) from room_master where hotel_id=:hotel and room_number=:room and active=true",mapOf("hotel" to hotelId,"room" to room),Long::class.java)==1L){message} }

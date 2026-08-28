@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController
 @Hidden
 @Profile("!prod & (demo | local | test)")
 @RequestMapping("/api/v1/internal/demo/reset/tasks")
-@PreAuthorize("@permissionGuard.hasRole('ADMIN') or (authentication.name == 'pms-demo-system' and hasAuthority('ROLE_PMS_INTEGRATION'))")
+@PreAuthorize("hasAuthority('ROLE_PMS_INTEGRATION') or @permissionGuard.hasRole('ADMIN')")
 class DemoTaskResetController(
     private val resetService: DemoTaskResetService,
     private val currentUserContextResolver: CurrentUserContextResolver
@@ -34,5 +34,7 @@ class DemoTaskResetController(
     }
 
     private fun isPmsDemoSystem(): Boolean =
-        SecurityContextHolder.getContext().authentication?.name == "pms-demo-system"
+        SecurityContextHolder.getContext().authentication?.let { auth ->
+            auth.name == "pms-demo-system" && auth.authorities.any { it.authority == "ROLE_PMS_INTEGRATION" }
+        } == true
 }
