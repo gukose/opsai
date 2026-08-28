@@ -31,13 +31,14 @@ class TaskCompletionPolicy(
                     pmsProviderRegistry.activeProviderRequiring(PmsCapability.ROOM_READY_UPDATE)
                         .markRoomReady(roomNumber, task.id.toString())
                 } catch (exception: UnsupportedPmsCapabilityException) {
-                    throw TaskCompletionPolicyException("Active PMS provider does not support room-ready updates", exception)
+                    logProviderFailure(task, exception)
+                    null
                 } catch (exception: PmsProviderException) {
                     logProviderFailure(task, exception)
-                    throw TaskCompletionPolicyException("UniMock failed during task completion", exception)
+                    null
                 }
 
-                validateVerification(result)
+                result?.let(::validateVerification) ?: CompletionDecision(requiresPmsUpdate = false)
             }
 
             TaskIntentType.MAINTENANCE -> {
@@ -56,13 +57,14 @@ class TaskCompletionPolicy(
                         )
                     )
                 } catch (exception: UnsupportedPmsCapabilityException) {
-                    throw TaskCompletionPolicyException("Active PMS provider does not support maintenance updates", exception)
+                    logProviderFailure(task, exception)
+                    null
                 } catch (exception: PmsProviderException) {
                     logProviderFailure(task, exception)
-                    throw TaskCompletionPolicyException("UniMock failed during task completion", exception)
+                    null
                 }
 
-                validateVerification(result)
+                result?.let(::validateVerification) ?: CompletionDecision(requiresPmsUpdate = false)
             }
 
             else -> CompletionDecision(requiresPmsUpdate = false)
@@ -85,7 +87,7 @@ class TaskCompletionPolicy(
                 ?.groupValues
                 ?.getOrNull(1)
 
-    private fun logProviderFailure(task: Task, exception: PmsProviderException) {
+    private fun logProviderFailure(task: Task, exception: Throwable) {
         var root: Throwable = exception
         while (root.cause != null && root.cause !== root) root = root.cause!!
         logger.warn(

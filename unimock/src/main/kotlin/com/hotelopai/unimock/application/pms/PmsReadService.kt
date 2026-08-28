@@ -12,11 +12,9 @@ class PmsReadService(
     fun listRooms(): List<RoomReadModel> = activeSimulation().rooms()
 
     fun getRoom(roomNumber: String): RoomReadModel =
-        activeSimulation().rooms().firstOrNotFound(
-            predicate = { it.roomNumber == roomNumber },
-            resourceType = "Room",
-            resourceId = roomNumber
-        )
+        activeSimulation().rooms().firstOrNull { it.roomNumber == roomNumber }
+            ?: CanonicalDemoRoomCatalog.room(roomNumber)
+            ?: throw PmsResourceNotFoundException("Room", roomNumber)
 
     fun getRoomStatus(roomNumber: String): RoomStatusReadModel =
         activeSimulation().roomStatuses().firstOrNotFound(

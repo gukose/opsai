@@ -26,7 +26,9 @@ class PmsUpdateService(
     ): PmsUpdateResponse {
         val startedAt = clock.instant()
         val simulation = activeSimulation()
-        simulation.requireRoom(roomNumber)
+        if (simulation.requireDocument("master/rooms.json").rooms().none { it.path("roomNumber").asText() == roomNumber } && !CanonicalDemoRoomCatalog.contains(roomNumber)) {
+            throw PmsResourceNotFoundException("Room", roomNumber)
+        }
 
         val roomStatuses = simulation.requireObjectDocument("operations/room-status.json")
         val status = upsertRoomStatus(roomStatuses, roomNumber, request.status)
