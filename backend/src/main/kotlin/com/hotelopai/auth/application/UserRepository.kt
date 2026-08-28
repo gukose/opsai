@@ -11,4 +11,6 @@ interface UserRepository {
     fun findByHotelId(hotelId: UUID): List<User>
 
     fun findByHotelIdAndEmail(hotelId: UUID, email: String): User?
+
+    fun findByMembershipHotelIdAndEmail(hotelId: UUID, email: String): User?
 }

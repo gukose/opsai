@@ -42,7 +42,7 @@ class AuthController(
     fun me(@AuthenticationPrincipal jwt: Jwt): CurrentUserResponse =
         CurrentUserResponse.from(
             authenticationApplicationService.currentUser(
-                CurrentUserQuery(userId = claimSubjectUuid(jwt))
+                CurrentUserQuery(userId = claimSubjectUuid(jwt), hotelId = claimUuid(jwt, "hotelId"))
             )
         )
 

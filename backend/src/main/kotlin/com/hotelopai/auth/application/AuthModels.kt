@@ -26,7 +26,8 @@ data class LogoutCommand(
 )
 
 data class CurrentUserQuery(
-    val userId: UUID
+    val userId: UUID,
+    val hotelId: UUID
 )
 
 data class AuthSessionResult(

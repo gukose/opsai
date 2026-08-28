@@ -37,6 +37,7 @@ import { BottomNavigationKey } from "../Navigation/BottomNavigation";
 import { KnowledgeAssistantScreen } from "../Knowledge/KnowledgeAssistantScreen";
 import { VoiceRecorderPanel } from "../Voice/VoiceRecorderPanel";
 import { resolveResponsiveLayout } from "../../layout/responsiveLayout";
+import { AdministrationScreen } from "../Admin/AdministrationScreen";
 
 type AssistantHomeScreenProps = {
   accessToken: string | null;
@@ -329,6 +330,8 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
               onLogout?.();
             }}
           />
+        ) : activeSection === "operations" ? (
+          <AdministrationScreen accessToken={accessToken} currentUser={currentUser} refreshAccessToken={refreshAccessToken} />
         ) : (
           <TaskEmptyState
             title="Operations"

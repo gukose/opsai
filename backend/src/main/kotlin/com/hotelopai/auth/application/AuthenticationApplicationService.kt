@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
 import java.util.UUID
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 
 @Service
 @Transactional
@@ -26,13 +27,16 @@ class AuthenticationApplicationService(
     private val refreshTokenCodec: RefreshTokenCodec,
     private val accessTokenService: AccessTokenService,
     private val authSessionPolicy: AuthSessionPolicy,
-    private val clock: Clock
+    private val clock: Clock,
+    private val jdbc: NamedParameterJdbcTemplate
 ) {
     fun login(command: LoginCommand): AuthSessionResult {
         val now = PersistenceInstant.now(clock)
         val hotel = hotelRepository.findByCode(command.hotelCode.trim())
             ?: throw InvalidCredentialsException()
-        val user = userRepository.findByHotelIdAndEmail(hotel.id, EmailAddress.of(command.email).value)
+        val email=EmailAddress.of(command.email).value
+        val user = userRepository.findByHotelIdAndEmail(hotel.id, email)
+            ?: userRepository.findByMembershipHotelIdAndEmail(hotel.id,email)
             ?: throw InvalidCredentialsException()
 
         validateLoginEligibility(user, hotel)
@@ -67,7 +71,8 @@ class AuthenticationApplicationService(
 
     fun currentUser(query: CurrentUserQuery): CurrentUserResult {
         val user = userRepository.findById(query.userId) ?: throw InvalidAccessSessionException()
-        val hotel = hotelRepository.findById(user.hotelId) ?: throw InvalidAccessSessionException()
+        val hotel = hotelRepository.findById(query.hotelId) ?: throw InvalidAccessSessionException()
+        requireMembership(user.id,hotel.id)
         validateActiveUserAndHotel(user, hotel)
         return buildCurrentUser(user, hotel)
     }
@@ -146,9 +151,11 @@ class AuthenticationApplicationService(
         user: User,
         hotel: com.hotelopai.hotel.domain.Hotel
     ): CurrentUserResult {
-        val roles = user.roleIds.map { roleId ->
+        val membershipRoleIds=jdbc.query("""select uhr.role_id from user_hotel_membership m join user_hotel_role uhr on uhr.membership_id=m.id and uhr.hotel_id=m.hotel_id where m.user_id=:user and m.hotel_id=:hotel and m.active=true""",mapOf("user" to user.id,"hotel" to hotel.id)){rs,_->rs.getObject(1,UUID::class.java)}.toSet()
+        val effectiveRoleIds=(if(membershipRoleIds.isEmpty()&&user.hotelId==hotel.id)user.roleIds else membershipRoleIds)
+        val roles = effectiveRoleIds.map { roleId ->
             requireNotNull(roleRepository.findById(roleId)) { "Role not found: $roleId" }
-        }.filter { it.hotelId == user.hotelId }
+        }.filter { it.hotelId == hotel.id }
             .sortedBy { it.code }
         val permissions = roles.asSequence()
             .flatMap { it.permissionIds.asSequence() }
@@ -159,11 +166,11 @@ class AuthenticationApplicationService(
             .sortedBy { it.code }
 
         val employee = user.employeeId?.let(employeeRepository::findById)
-            ?.takeIf { it.hotelId == user.hotelId }
+            ?.takeIf { it.hotelId == hotel.id }
 
         return CurrentUserResult(
             userId = user.id,
-            hotelId = user.hotelId,
+            hotelId = hotel.id,
             employeeId = employee?.id ?: user.employeeId,
             email = user.email.value,
             displayName = user.displayName,
@@ -187,6 +194,7 @@ class AuthenticationApplicationService(
 
     private fun validateLoginEligibility(user: User, hotel: com.hotelopai.hotel.domain.Hotel) {
         validateActiveUserAndHotel(user, hotel)
+        requireMembership(user.id, hotel.id)
     }
 
     private fun validateActiveUserAndHotel(user: User, hotel: com.hotelopai.hotel.domain.Hotel) {
@@ -196,6 +204,7 @@ class AuthenticationApplicationService(
         if (hotel.status != com.hotelopai.hotel.domain.HotelStatus.ACTIVE) {
             throw InvalidCredentialsException()
         }
+        requireMembership(user.id, hotel.id)
     }
 
     private fun toAccessTokenContext(
@@ -211,10 +220,12 @@ class AuthenticationApplicationService(
             displayName = currentUser.displayName,
             hotelName = currentUser.hotelName,
             sessionId = sessionId,
-            roleIds = user.roleIds,
+            roleIds = currentUser.roles.map { it.roleId }.toSet(),
             roleCodes = currentUser.roles.map { it.code }.toSet(),
             permissionIds = currentUser.permissions.map { it.permissionId }.toSet(),
             permissionCodes = currentUser.permissions.map { it.code }.toSet(),
             canonicalEmployeeUserId = currentUser.employeeId?.let(employeeRepository::findById)?.userId
         )
+
+    private fun requireMembership(userId:UUID,hotelId:UUID){val count=jdbc.queryForObject("select count(*) from user_hotel_membership where user_id=:user and hotel_id=:hotel and active=true and (start_date is null or start_date<=current_date) and (end_date is null or end_date>=current_date)",mapOf("user" to userId,"hotel" to hotelId),Long::class.java)?:0;if(count==0L)throw InvalidAccessSessionException()}
 }

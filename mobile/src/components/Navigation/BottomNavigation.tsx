@@ -9,6 +9,8 @@ import { ComponentType } from "react";
 import { LucideProps } from "lucide-react-native";
 
 import { getCurrentUserDisplayName } from "../../auth/currentUserHelpers";
+import { getCurrentUserPermissionCodes } from "../../auth/currentUserHelpers";
+import { canOpenAdministration } from "../Admin/adminLogic";
 import { CurrentUserSnapshot } from "../../session/sessionTypes";
 import { colors, spacing, typography } from "../../theme/tokens";
 import { resolveResponsiveLayout } from "../../layout/responsiveLayout";
@@ -38,7 +40,7 @@ export function BottomNavigation({ activeKey, currentUser, onSelect }: BottomNav
   const { width } = useWindowDimensions();
   const desktop = resolveResponsiveLayout(width).mode === "desktop";
   const displayName = getCurrentUserDisplayName(currentUser ?? null);
-  const visibleItems = items;
+  const visibleItems = items.filter((item) => item.key !== "operations" || canOpenAdministration(getCurrentUserPermissionCodes(currentUser ?? null)));
 
   return (
     <View style={[styles.nav, desktop ? styles.navDesktop : null]}>

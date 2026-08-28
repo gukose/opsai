@@ -66,7 +66,13 @@ class AuthSeedDataService(
         val skill = ensureSkill(hotel.id)
         ensureAdminUser(hotel.id, role.id, department.id, skill.id)
         ensureOperationalDemoWorkforce(hotel.id, role.id)
+        ensureHotelMemberships(hotel.id)
     }
+
+    private fun ensureHotelMemberships(hotelId:UUID){jdbc.update("""insert into user_hotel_membership(id,user_id,hotel_id,department_id,active,created_at,updated_at)
+        select gen_random_uuid(),u.id,u.hotel_id,e.department_id,true,now(),now() from app_user u left join employee e on e.id=u.employee_id where u.hotel_id=:hotel
+        on conflict(user_id,hotel_id) do update set active=true""",mapOf("hotel" to hotelId));jdbc.update("""insert into user_hotel_role(id,membership_id,role_id,hotel_id,created_at)
+        select gen_random_uuid(),m.id,ur.role_id,m.hotel_id,now() from user_hotel_membership m join user_role ur on ur.user_id=m.user_id join role r on r.id=ur.role_id and r.hotel_id=m.hotel_id where m.hotel_id=:hotel on conflict(membership_id,role_id) do nothing""",mapOf("hotel" to hotelId))}
 
     private fun ensureOperationalDemoWorkforce(hotelId: UUID, roleId: UUID) {
         val technicalDepartment = ensureOperationalDepartment(hotelId, "MAINTENANCE", "Technical")
@@ -253,6 +259,29 @@ class AuthSeedDataService(
         private const val ADMIN_EMPLOYEE_NUMBER = "EMP-ADMIN"
 
         private val AUTH_PERMISSION_SEEDS = listOf(
+            PermissionSeed(PermissionCodes.PLATFORM_HOTEL_MANAGE, "Manage platform hotels"),
+            PermissionSeed(PermissionCodes.HOTEL_VIEW, "View hotels"),
+            PermissionSeed(PermissionCodes.HOTEL_MANAGE, "Manage hotel settings"),
+            PermissionSeed(PermissionCodes.BUILDING_VIEW, "View buildings"),
+            PermissionSeed(PermissionCodes.BUILDING_MANAGE, "Manage buildings"),
+            PermissionSeed(PermissionCodes.FLOOR_VIEW, "View floors"),
+            PermissionSeed(PermissionCodes.FLOOR_MANAGE, "Manage floors"),
+            PermissionSeed(PermissionCodes.ROOM_VIEW, "View rooms"),
+            PermissionSeed(PermissionCodes.ROOM_CREATE, "Create rooms"),
+            PermissionSeed(PermissionCodes.ROOM_UPDATE, "Update rooms"),
+            PermissionSeed(PermissionCodes.ROOM_DELETE, "Deactivate rooms"),
+            PermissionSeed(PermissionCodes.DEPARTMENT_VIEW, "View departments"),
+            PermissionSeed(PermissionCodes.DEPARTMENT_MANAGE, "Manage departments"),
+            PermissionSeed(PermissionCodes.USER_VIEW, "View users"),
+            PermissionSeed(PermissionCodes.USER_CREATE, "Create users"),
+            PermissionSeed(PermissionCodes.USER_UPDATE, "Update users"),
+            PermissionSeed(PermissionCodes.USER_ASSIGN, "Assign users"),
+            PermissionSeed(PermissionCodes.ROLE_VIEW, "View roles"),
+            PermissionSeed(PermissionCodes.ROLE_MANAGE, "Manage roles"),
+            PermissionSeed(PermissionCodes.SKILL_VIEW, "View skills"),
+            PermissionSeed(PermissionCodes.SKILL_MANAGE, "Manage skills"),
+            PermissionSeed(PermissionCodes.SHIFT_VIEW, "View shifts"),
+            PermissionSeed(PermissionCodes.SHIFT_MANAGE, "Manage shifts"),
             PermissionSeed(PermissionCodes.AUTH_LOGIN, "Login to Hotel OpAI"),
             PermissionSeed(PermissionCodes.AUTH_MANAGE, "Manage authentication sessions"),
             PermissionSeed(PermissionCodes.AUTH_VIEW, "View current user session"),

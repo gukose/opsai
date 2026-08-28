@@ -1,0 +1,8 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {AdminApi} from "./AdminApi.ts";
+
+test("role permission save uses replacement endpoint and persisted ids",async()=>{const calls=[];const api=new AdminApi(fakeClient(calls));await api.saveRolePermissions("hotel-b","role-1",["permission-1","permission-2"]);assert.equal(calls[0].method,"PUT");assert.equal(calls[0].path,"/api/v1/internal/admin/hotels/hotel-b/roles/role-1/permissions");assert.deepEqual(calls[0].body,{permissionIds:["permission-1","permission-2"]})});
+test("onboarding uses one transactional backend request",async()=>{const calls=[];const api=new AdminApi(fakeClient(calls));await api.onboard({code:"BER_1",name:"Berlin",timezone:"Europe/Berlin",departments:[],buildings:[],rooms:[],skills:[],shifts:[],administratorUserId:"user-1"});assert.equal(calls.length,1);assert.equal(calls[0].path,"/api/v1/internal/admin/hotels/onboard");assert.equal(calls[0].body.administratorUserId,"user-1")});
+test("hotel-specific employee updates retain explicit selected hotel",async()=>{const calls=[];const api=new AdminApi(fakeClient(calls));await api.updateMembership("hotel-a","membership-1",{displayName:"Jane",departmentId:null,active:false});assert.match(calls[0].path,/hotels\/hotel-a\/memberships\/membership-1$/);assert.equal(calls[0].body.active,false)});
+function fakeClient(calls){return{call:async(_method,operation)=>{const sdk={request:async options=>{calls.push(options);return{data:undefined,status:200,headers:new Headers(),apiVersion:"v1"}}};return(await operation(sdk,new AbortController().signal)).data}}}

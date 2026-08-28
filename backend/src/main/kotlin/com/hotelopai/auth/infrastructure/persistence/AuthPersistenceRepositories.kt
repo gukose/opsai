@@ -87,6 +87,9 @@ class JpaUserRepositoryAdapter(
 
     override fun findByHotelIdAndEmail(hotelId: UUID, email: String): User? =
         userJpaRepository.findByHotelIdAndEmail(hotelId, email)?.let(UserPersistenceMapper::toDomain)
+
+    override fun findByMembershipHotelIdAndEmail(hotelId:UUID,email:String):User? =
+        userJpaRepository.findMembershipUser(hotelId,email)?.let(UserPersistenceMapper::toDomain)
 }
 
 @Repository

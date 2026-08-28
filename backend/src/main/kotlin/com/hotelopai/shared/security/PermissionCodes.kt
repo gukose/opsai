@@ -1,6 +1,29 @@
 package com.hotelopai.shared.security
 
 object PermissionCodes {
+    const val PLATFORM_HOTEL_MANAGE = "PLATFORM_HOTEL_MANAGE"
+    const val HOTEL_VIEW = "HOTEL_VIEW"
+    const val HOTEL_MANAGE = "HOTEL_MANAGE"
+    const val BUILDING_VIEW = "BUILDING_VIEW"
+    const val BUILDING_MANAGE = "BUILDING_MANAGE"
+    const val FLOOR_VIEW = "FLOOR_VIEW"
+    const val FLOOR_MANAGE = "FLOOR_MANAGE"
+    const val ROOM_VIEW = "ROOM_VIEW"
+    const val ROOM_CREATE = "ROOM_CREATE"
+    const val ROOM_UPDATE = "ROOM_UPDATE"
+    const val ROOM_DELETE = "ROOM_DELETE"
+    const val DEPARTMENT_VIEW = "DEPARTMENT_VIEW"
+    const val DEPARTMENT_MANAGE = "DEPARTMENT_MANAGE"
+    const val USER_VIEW = "USER_VIEW"
+    const val USER_CREATE = "USER_CREATE"
+    const val USER_UPDATE = "USER_UPDATE"
+    const val USER_ASSIGN = "USER_ASSIGN"
+    const val ROLE_VIEW = "ROLE_VIEW"
+    const val ROLE_MANAGE = "ROLE_MANAGE"
+    const val SKILL_VIEW = "SKILL_VIEW"
+    const val SKILL_MANAGE = "SKILL_MANAGE"
+    const val SHIFT_VIEW = "SHIFT_VIEW"
+    const val SHIFT_MANAGE = "SHIFT_MANAGE"
     const val AUTH_LOGIN = "AUTH_LOGIN"
     const val AUTH_MANAGE = "AUTH_MANAGE"
     const val AUTH_VIEW = "AUTH_VIEW"
@@ -47,6 +70,9 @@ object PermissionCodes {
 }
 
 object PermissionExpressions {
+    const val PLATFORM_HOTEL_MANAGE = "@permissionGuard.hasAnyPermission('${PermissionCodes.PLATFORM_HOTEL_MANAGE}')"
+    const val HOTEL_VIEW = "@permissionGuard.hasAnyPermission('${PermissionCodes.HOTEL_VIEW}')"
+    const val HOTEL_MANAGE = "@permissionGuard.hasAnyPermission('${PermissionCodes.HOTEL_MANAGE}')"
     const val AUTH_VIEW = "@permissionGuard.hasAnyPermission('${PermissionCodes.AUTH_VIEW}')"
 
     const val TASK_READ = "@permissionGuard.hasAnyPermission('${PermissionCodes.TASK_READ}')"
