@@ -65,7 +65,18 @@ class PmsReadController(
 }
 
 private fun com.hotelopai.unimock.application.pms.RoomReadModel.toResponse() =
-    RoomResponse(roomNumber, roomTypeCode, floorCode, status, isOutOfOrder)
+    RoomResponse(
+        roomId = "DEMO-ROOM-$roomNumber",
+        roomNumber = roomNumber,
+        roomTypeId = roomTypeCode,
+        roomTypeName = roomTypeCode,
+        floor = floorCode,
+        occupied = status.equals("OCCUPIED", true),
+        status = if (isOutOfOrder) "OOO" else status,
+        roomTypeCode = roomTypeCode,
+        floorCode = floorCode,
+        isOutOfOrder = isOutOfOrder
+    )
 
 private fun com.hotelopai.unimock.application.pms.RoomStatusReadModel.toResponse() =
     RoomStatusResponse(roomNumber, status, updatedAt)

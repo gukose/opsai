@@ -4,11 +4,16 @@ import java.time.Instant
 import java.util.UUID
 
 data class RoomResponse(
+    val roomId: String,
     val roomNumber: String,
-    val roomTypeCode: String,
-    val floorCode: String,
-    val status: String,
-    val isOutOfOrder: Boolean
+    val roomTypeId: String? = null,
+    val roomTypeName: String? = null,
+    val floor: String? = null,
+    val occupied: Boolean = false,
+    val status: String? = null,
+    val roomTypeCode: String? = null,
+    val floorCode: String? = null,
+    val isOutOfOrder: Boolean = false
 )
 
 data class RoomStatusResponse(
