@@ -25,6 +25,9 @@ import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter
 import org.springframework.boot.web.servlet.FilterRegistrationBean
 import com.hotelopai.integration.unimock.demo.PmsDemoIntegrationAuthenticationFilter
+import com.hotelopai.integration.unimock.demo.PmsDemoEventProperties
+import com.hotelopai.integration.unimock.demo.PMS_DEMO_SECURITY_VERSION
+import org.slf4j.LoggerFactory
 import org.springframework.security.web.AuthenticationEntryPoint
 import org.springframework.security.web.access.AccessDeniedHandler
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter
@@ -37,6 +40,7 @@ import java.time.Clock
 class AuthSecurityConfiguration(
     private val authSecurityProperties: AuthSecurityProperties
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
     @Bean
     fun clock(): Clock = Clock.systemUTC()
 
@@ -51,7 +55,17 @@ class AuthSecurityConfiguration(
 
     @Bean
     @Order(0)
-    fun pmsDemoSecurityFilterChain(http: HttpSecurity, pmsDemoFilter: PmsDemoIntegrationAuthenticationFilter): SecurityFilterChain {
+    fun pmsDemoSecurityFilterChain(
+        http: HttpSecurity,
+        pmsDemoFilter: PmsDemoIntegrationAuthenticationFilter,
+        pmsDemoProperties: PmsDemoEventProperties
+    ): SecurityFilterChain {
+        log.info(
+            "PMS_DEMO_SECURITY_VERSION={} dedicated PMS SecurityFilterChain created order=0 eventsEnabled={} sharedKeyConfigured={}",
+            PMS_DEMO_SECURITY_VERSION,
+            pmsDemoProperties.enabled,
+            pmsDemoProperties.sharedKey.length >= 12
+        )
         http
             .securityMatcher(
                 "/api/v1/integrations/pms/unimock/demo-events",
@@ -64,8 +78,11 @@ class AuthSecurityConfiguration(
     }
 
     @Bean
-    fun pmsDemoFilterServletRegistration(pmsDemoFilter: PmsDemoIntegrationAuthenticationFilter): FilterRegistrationBean<PmsDemoIntegrationAuthenticationFilter> =
-        FilterRegistrationBean<PmsDemoIntegrationAuthenticationFilter>(pmsDemoFilter).apply { isEnabled = false }
+    fun pmsDemoFilterServletRegistration(pmsDemoFilter: PmsDemoIntegrationAuthenticationFilter): FilterRegistrationBean<PmsDemoIntegrationAuthenticationFilter> {
+        val registration = FilterRegistrationBean<PmsDemoIntegrationAuthenticationFilter>(pmsDemoFilter).apply { isEnabled = false }
+        log.info("PMS_DEMO_SECURITY_VERSION={} PMS filter automatic servlet registration disabled", PMS_DEMO_SECURITY_VERSION)
+        return registration
+    }
 
     @Bean
     @Order(1)

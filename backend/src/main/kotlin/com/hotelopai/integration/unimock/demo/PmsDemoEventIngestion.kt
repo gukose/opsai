@@ -36,6 +36,8 @@ import java.time.Instant
 import java.util.UUID
 import org.slf4j.LoggerFactory
 
+internal const val PMS_DEMO_SECURITY_VERSION = "v2-chain-filter"
+
 enum class PmsDemoEventType { CHECK_IN,CHECK_OUT,ARRIVAL,DEPARTURE,DIRTY,CLEAN,OCCUPIED,VACANT,VIP,ROOM_MOVE,OOO,OOS }
 data class PmsDemoEventRequest(val eventId:String,val hotelCode:String,val roomNumber:String,val eventType:PmsDemoEventType,val occurredAt:Instant,val toRoomNumber:String?=null,val guestName:String?=null,val vipCategory:String?=null,val reason:String?=null)
 data class PmsDemoEventResponse(val eventId:String,val roomNumber:String,val eventType:PmsDemoEventType,val occurredAt:Instant,val status:String,val duplicate:Boolean,val resultType:String?=null,val resultId:UUID?=null)
@@ -68,13 +70,22 @@ class PmsDemoEventController(private val service:PmsDemoEventIngestionService,pr
 @Order(Ordered.HIGHEST_PRECEDENCE)
 class PmsDemoIntegrationAuthenticationFilter(private val properties:PmsDemoEventProperties):OncePerRequestFilter() {
     private val log=LoggerFactory.getLogger(javaClass)
+    init {
+        log.info(
+            "PMS_DEMO_SECURITY_VERSION={} PMS filter bean created eventsEnabled={} sharedKeyConfigured={}",
+            PMS_DEMO_SECURITY_VERSION,
+            properties.enabled,
+            properties.sharedKey.length >= 12
+        )
+    }
     override fun shouldNotFilter(request:HttpServletRequest)=!((request.requestURI==EVENTS_PATH && request.method=="POST") || (request.requestURI==ROOMS_PATH && request.method=="GET"))
     override fun doFilterInternal(request:HttpServletRequest,response:HttpServletResponse,chain:FilterChain) {
         val key=request.getHeader("X-Demo-Pms-Key")
+        log.info("PMS_SECURITY_FILTER_ENTER method={} path={} keyPresent={}",request.method,request.requestURI,!key.isNullOrBlank())
         val valid=properties.enabled && properties.sharedKey.length>=12 && MessageDigest.isEqual(properties.sharedKey.toByteArray(),key.orEmpty().toByteArray())
-        log.info("PMS demo security filter path={} keyPresent={} keyValid={}",request.requestURI,!key.isNullOrBlank(),valid)
         if(!valid) { response.sendError(HttpStatus.UNAUTHORIZED.value(),"PMS demo event authentication failed"); return }
         SecurityContextHolder.getContext().authentication=UsernamePasswordAuthenticationToken("pms-demo-system",null,listOf(SimpleGrantedAuthority("ROLE_PMS_INTEGRATION")))
+        log.info("PMS_SECURITY_FILTER_AUTHENTICATED principal=pms-demo-system")
         chain.doFilter(request,response)
     }
     companion object { private const val EVENTS_PATH="/api/v1/integrations/pms/unimock/demo-events"; private const val ROOMS_PATH="$EVENTS_PATH/rooms" }
