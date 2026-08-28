@@ -16,9 +16,19 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Service
+import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
+import org.springframework.core.annotation.Order
+import org.springframework.core.Ordered
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
+import org.springframework.security.core.authority.SimpleGrantedAuthority
+import org.springframework.security.core.context.SecurityContextHolder
+import org.springframework.web.filter.OncePerRequestFilter
+import jakarta.servlet.FilterChain
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import java.security.MessageDigest
 import java.time.Clock
 import java.time.Duration
@@ -51,6 +61,21 @@ class PmsDemoEventController(private val service:PmsDemoEventIngestionService,pr
         return try { service.ingest(request).also { log.info("PMS demo request completed eventId={} status={}",request.eventId,it.status) } } catch(e:IllegalArgumentException) { log.info("PMS demo request completed eventId={} status=400",request.eventId); throw ResponseStatusException(HttpStatus.BAD_REQUEST,e.message) }
     }
     private fun authenticate(key:String?) { if(properties.sharedKey.length<12||!MessageDigest.isEqual(properties.sharedKey.toByteArray(),key.orEmpty().toByteArray())) throw ResponseStatusException(HttpStatus.UNAUTHORIZED,"PMS demo event authentication failed") }
+}
+
+/** Establishes integration authentication before Bearer/JWT processing for only the PMS demo endpoints. */
+@Component
+@Order(Ordered.HIGHEST_PRECEDENCE)
+class PmsDemoIntegrationAuthenticationFilter(private val properties:PmsDemoEventProperties):OncePerRequestFilter() {
+    override fun shouldNotFilter(request:HttpServletRequest)=!((request.requestURI==EVENTS_PATH && request.method=="POST") || (request.requestURI==ROOMS_PATH && request.method=="GET"))
+    override fun doFilterInternal(request:HttpServletRequest,response:HttpServletResponse,chain:FilterChain) {
+        val key=request.getHeader("X-Demo-Pms-Key")
+        val valid=properties.enabled && properties.sharedKey.length>=12 && MessageDigest.isEqual(properties.sharedKey.toByteArray(),key.orEmpty().toByteArray())
+        if(!valid) { response.sendError(HttpStatus.UNAUTHORIZED.value(),"PMS demo event authentication failed"); return }
+        SecurityContextHolder.getContext().authentication=UsernamePasswordAuthenticationToken("pms-demo-system",null,listOf(SimpleGrantedAuthority("ROLE_PMS_INTEGRATION")))
+        chain.doFilter(request,response)
+    }
+    companion object { private const val EVENTS_PATH="/api/v1/integrations/pms/unimock/demo-events"; private const val ROOMS_PATH="$EVENTS_PATH/rooms" }
 }
 
 @Service

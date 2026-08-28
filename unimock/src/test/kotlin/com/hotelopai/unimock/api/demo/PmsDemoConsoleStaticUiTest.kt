@@ -12,5 +12,10 @@ class PmsDemoConsoleStaticUiTest {
         assertTrue(html.contains("Recent Events"))
         assertTrue(script.contains("ROOM_MOVE"))
         assertTrue(script.contains("lastPayload&&submit(lastPayload)"))
+        assertTrue(script.contains("roomsLoading=true"))
+        assertTrue(script.contains("historyLoading=false"))
+        assertTrue(script.contains("sending=false"))
+        assertTrue(script.contains("finally{sending=false;updateSendState()}"))
+        assertTrue(script.contains("send.textContent=sending?'Sending…':'Send PMS Event'"))
     }
 }
