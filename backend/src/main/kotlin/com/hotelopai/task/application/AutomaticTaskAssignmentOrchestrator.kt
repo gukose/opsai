@@ -78,6 +78,14 @@ object NoOpTaskCreationAssignmentOrchestrator : TaskCreationAssignmentOrchestrat
         AutomaticAssignmentResult(null, "ORCHESTRATION_DISABLED")
 }
 
+fun interface AutomaticFlashInterruptionHandler {
+    fun assigned(task: Task, selectedEmployeeId: UUID?, now: Instant)
+}
+
+object NoOpAutomaticFlashInterruptionHandler : AutomaticFlashInterruptionHandler {
+    override fun assigned(task: Task, selectedEmployeeId: UUID?, now: Instant) = Unit
+}
+
 @Service
 class PersistedWorkforceTaskAssignmentOrchestrator(
     private val assignmentService: DeterministicAssignmentService,

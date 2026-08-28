@@ -13,6 +13,7 @@ import com.hotelopai.task.application.TaskStateHistoryEntry
 import com.hotelopai.task.application.TaskStateHistoryRepository
 import com.hotelopai.task.domain.Task
 import com.hotelopai.task.domain.TaskAssigneeType
+import com.hotelopai.task.domain.TaskStatus
 import jakarta.persistence.criteria.Predicate
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
@@ -46,6 +47,11 @@ class TaskPersistenceRepository(
 
     override fun findAllByHotelId(hotelId: UUID): List<Task> =
         taskJpaRepository.findAllByHotelIdOrderByUpdatedAtDesc(hotelId).map(TaskPersistenceMapper::toDomain)
+
+    override fun findActiveAssignedTask(hotelId: UUID, assigneeIds: Set<String>, excludingTaskId: UUID): Task? =
+        taskJpaRepository.findActiveAssignedTask(
+            hotelId, assigneeIds, excludingTaskId, setOf(TaskStatus.STARTED, TaskStatus.IN_PROGRESS)
+        ).firstOrNull()?.let(TaskPersistenceMapper::toDomain)
 
     override fun findPage(request: TaskPageRequest): TaskPage<Task> {
         val page = taskJpaRepository.findAll(

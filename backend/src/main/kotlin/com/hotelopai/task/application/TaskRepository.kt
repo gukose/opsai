@@ -19,6 +19,13 @@ interface TaskRepository {
     fun findAllByHotelId(hotelId: UUID): List<Task> =
         findAll().filter { it.hotelId == hotelId }
 
+    fun findActiveAssignedTask(hotelId: UUID, assigneeIds: Set<String>, excludingTaskId: UUID): Task? =
+        findAll().firstOrNull {
+            it.hotelId == hotelId && it.id != excludingTaskId &&
+                it.status in setOf(TaskStatus.STARTED, TaskStatus.IN_PROGRESS) &&
+                it.assignment?.assigneeId in assigneeIds
+        }
+
     fun findPage(request: TaskPageRequest): TaskPage<Task>
 
     fun findPage(query: TaskSearchQuery): TaskPage<Task> {

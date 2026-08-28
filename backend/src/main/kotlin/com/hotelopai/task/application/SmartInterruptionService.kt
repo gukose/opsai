@@ -3,6 +3,7 @@ package com.hotelopai.task.application
 import com.hotelopai.observability.OperationalObservability
 import com.hotelopai.shared.kernel.UuidV7Generator
 import com.hotelopai.task.domain.TaskAssigneeType
+import com.hotelopai.task.domain.Task
 import com.hotelopai.task.domain.TaskPriority
 import com.hotelopai.task.domain.TaskStatus
 import com.hotelopai.task.domain.TaskTransition
@@ -22,7 +23,8 @@ data class InterruptTaskCommand(
     val interruptingTaskId: UUID,
     val reason: String,
     val idempotencyKey: String,
-    val autoStart: Boolean = true
+    val autoStart: Boolean = true,
+    val employeeAssigneeId: String = employeeId.toString()
 )
 
 enum class InterruptionSource { MANUAL, FLASH_INTERRUPTION }
@@ -54,7 +56,8 @@ data class ActiveTaskInterruption(
     val pausedTaskStatus: TaskStatus?,
     val pausedAssigneeType: TaskAssigneeType?,
     val pausedAssigneeId: String?,
-    val interruptingTaskStatus: TaskStatus?
+    val interruptingTaskStatus: TaskStatus?,
+    val employeeUserId: UUID? = null
 )
 
 interface TaskInterruptionStore {
@@ -62,6 +65,7 @@ interface TaskInterruptionStore {
     fun findByIdempotencyKey(hotelId: UUID, key: String): TaskInterruptionRecord?
     fun insert(record: TaskInterruptionRecord, idempotencyKey: String)
     fun activeForEmployee(hotelId: UUID, employeeId: UUID): List<ActiveTaskInterruption>
+    fun findActiveByInterruptingTaskId(hotelId: UUID, interruptingTaskId: UUID): TaskInterruptionRecord? = null
     fun transition(id: UUID, hotelId: UUID, expectedStatus: String, status: String, resumedAt: Instant?): Boolean
 }
 
@@ -103,8 +107,10 @@ class JdbcTaskInterruptionStore(private val jdbc: NamedParameterJdbcTemplate) : 
     override fun activeForEmployee(hotelId: UUID, employeeId: UUID): List<ActiveTaskInterruption> =
         jdbc.query(
             """select i.*,paused.status paused_status,paused.assignee_type paused_assignee_type,
-                      paused.assignee_id paused_assignee_id,interrupting.status interrupting_status
+                      paused.assignee_id paused_assignee_id,interrupting.status interrupting_status,
+                      employee.user_id employee_user_id
                from task_interruption i
+               left join employee on employee.id=i.employee_id and employee.hotel_id=i.hotel_id
                left join task paused on paused.id=i.paused_task_id and paused.hotel_id=i.hotel_id
                left join task interrupting on interrupting.id=i.interrupting_task_id and interrupting.hotel_id=i.hotel_id
                where i.hotel_id=:hotel and i.employee_id=:employee and i.status='ACTIVE'
@@ -117,9 +123,16 @@ class JdbcTaskInterruptionStore(private val jdbc: NamedParameterJdbcTemplate) : 
                 pausedTaskStatus = rs.getString("paused_status")?.let(TaskStatus::valueOf),
                 pausedAssigneeType = rs.getString("paused_assignee_type")?.let(TaskAssigneeType::valueOf),
                 pausedAssigneeId = rs.getString("paused_assignee_id"),
-                interruptingTaskStatus = rs.getString("interrupting_status")?.let(TaskStatus::valueOf)
+                interruptingTaskStatus = rs.getString("interrupting_status")?.let(TaskStatus::valueOf),
+                employeeUserId = rs.getObject("employee_user_id", UUID::class.java)
             )
         }
+
+    override fun findActiveByInterruptingTaskId(hotelId: UUID, interruptingTaskId: UUID): TaskInterruptionRecord? =
+        jdbc.query(
+            "select * from task_interruption where hotel_id=:hotel and interrupting_task_id=:task and status='ACTIVE' and source='FLASH_INTERRUPTION' for update",
+            mapOf("hotel" to hotelId, "task" to interruptingTaskId)
+        ) { rs, _ -> taskInterruptionRecord(rs) }.firstOrNull()
 
     override fun transition(
         id: UUID,
@@ -171,7 +184,7 @@ class SmartInterruptionService(
         val urgent = repository.findByIdAndHotelId(command.interruptingTaskId, command.hotelId)
             ?: throw TaskNotFoundException(command.interruptingTaskId)
         require(active.status in setOf(TaskStatus.STARTED, TaskStatus.IN_PROGRESS)) { "Previous task is not active" }
-        require(active.assignment?.assigneeType == TaskAssigneeType.USER && active.assignment.assigneeId == command.employeeId.toString()) {
+        require(active.assignment?.assigneeType == TaskAssigneeType.USER && active.assignment.assigneeId == command.employeeAssigneeId) {
             "Previous task is not assigned to the expected employee"
         }
         require(urgent.priority in setOf(TaskPriority.HIGH, TaskPriority.URGENT)) { "Interrupting task is not high priority" }
@@ -201,6 +214,12 @@ class SmartInterruptionService(
         store.insert(record, command.idempotencyKey)
         metrics.incrementCounter("hotelopai.task.interruption.total", "operation" to "interrupt", "outcome" to "success")
         return record.result()
+    }
+
+    @Transactional
+    fun interruptingTaskCompleted(task: Task) {
+        val interruption = store.findActiveByInterruptingTaskId(task.hotelId, task.id) ?: return
+        if (interruption.source == InterruptionSource.FLASH_INTERRUPTION) reEvaluateEmployee(interruption.hotelId, interruption.employeeId, clock.instant())
     }
 
     @Transactional
@@ -246,7 +265,7 @@ class SmartInterruptionService(
 
     private fun eligible(candidate: ActiveTaskInterruption, taskHistory: List<TaskStateHistoryEntry>): Boolean {
         if (candidate.pausedTaskStatus != TaskStatus.WAITING) return false
-        if (candidate.pausedAssigneeType != TaskAssigneeType.USER || candidate.pausedAssigneeId != candidate.record.employeeId.toString()) return false
+        if (candidate.pausedAssigneeType != TaskAssigneeType.USER || candidate.pausedAssigneeId !in setOfNotNull(candidate.record.employeeId.toString(), candidate.employeeUserId?.toString())) return false
         return taskHistory.none { entry ->
             entry.occurredAt.isAfter(candidate.record.pausedAt) && entry.operation in MANUAL_INVALIDATING_ACTIONS
         }

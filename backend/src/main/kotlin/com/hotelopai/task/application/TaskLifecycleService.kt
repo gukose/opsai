@@ -31,8 +31,9 @@ class TaskLifecycleService @Autowired constructor(
     private val observability: OperationalObservability = OperationalObservability.noop(),
     private val clock: Clock = Clock.systemUTC(),
     private val completionObservers: List<TaskCompletionObserver> = emptyList(),
-    private val taskCreationAssignmentOrchestrator: TaskCreationAssignmentOrchestrator = NoOpTaskCreationAssignmentOrchestrator
-    , private val minibarReadinessService: MinibarReadinessService? = null
+    private val taskCreationAssignmentOrchestrator: TaskCreationAssignmentOrchestrator = NoOpTaskCreationAssignmentOrchestrator,
+    private val minibarReadinessService: MinibarReadinessService? = null,
+    private val automaticFlashInterruptionHandler: AutomaticFlashInterruptionHandler = NoOpAutomaticFlashInterruptionHandler
 ) : TaskApplicationPort {
     constructor(taskRepository: TaskRepository) : this(
         taskRepository = taskRepository,
@@ -101,6 +102,8 @@ class TaskLifecycleService @Autowired constructor(
                     automatic.reasonCode != "ORCHESTRATION_DISABLED" ->
                         taskRepository.save(saved.remainUnassigned(automatic.reasonCode, persistedNow))
                     else -> saved
+                }.also { assigned ->
+                    if (automatic.assignment != null) automaticFlashInterruptionHandler.assigned(assigned, automatic.selectedEmployeeId, persistedNow)
                 }
             }
             taskNotificationPublisher.taskCreated(created, persistedNow)
