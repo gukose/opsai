@@ -22,6 +22,9 @@ import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
 import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.security.web.SecurityFilterChain
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter
+import org.springframework.boot.web.servlet.FilterRegistrationBean
+import com.hotelopai.integration.unimock.demo.PmsDemoIntegrationAuthenticationFilter
 import org.springframework.security.web.AuthenticationEntryPoint
 import org.springframework.security.web.access.AccessDeniedHandler
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter
@@ -48,16 +51,21 @@ class AuthSecurityConfiguration(
 
     @Bean
     @Order(0)
-    fun pmsDemoSecurityFilterChain(http: HttpSecurity): SecurityFilterChain {
+    fun pmsDemoSecurityFilterChain(http: HttpSecurity, pmsDemoFilter: PmsDemoIntegrationAuthenticationFilter): SecurityFilterChain {
         http
             .securityMatcher(
                 "/api/v1/integrations/pms/unimock/demo-events",
                 "/api/v1/integrations/pms/unimock/demo-events/rooms"
             )
             .csrf { it.disable() }
+            .addFilterBefore(pmsDemoFilter, BearerTokenAuthenticationFilter::class.java)
             .authorizeHttpRequests { it.anyRequest().permitAll() }
         return http.build()
     }
+
+    @Bean
+    fun pmsDemoFilterServletRegistration(pmsDemoFilter: PmsDemoIntegrationAuthenticationFilter): FilterRegistrationBean<PmsDemoIntegrationAuthenticationFilter> =
+        FilterRegistrationBean<PmsDemoIntegrationAuthenticationFilter>(pmsDemoFilter).apply { isEnabled = false }
 
     @Bean
     @Order(1)

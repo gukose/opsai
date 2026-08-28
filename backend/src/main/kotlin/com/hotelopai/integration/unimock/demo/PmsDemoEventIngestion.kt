@@ -67,10 +67,12 @@ class PmsDemoEventController(private val service:PmsDemoEventIngestionService,pr
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 class PmsDemoIntegrationAuthenticationFilter(private val properties:PmsDemoEventProperties):OncePerRequestFilter() {
+    private val log=LoggerFactory.getLogger(javaClass)
     override fun shouldNotFilter(request:HttpServletRequest)=!((request.requestURI==EVENTS_PATH && request.method=="POST") || (request.requestURI==ROOMS_PATH && request.method=="GET"))
     override fun doFilterInternal(request:HttpServletRequest,response:HttpServletResponse,chain:FilterChain) {
         val key=request.getHeader("X-Demo-Pms-Key")
         val valid=properties.enabled && properties.sharedKey.length>=12 && MessageDigest.isEqual(properties.sharedKey.toByteArray(),key.orEmpty().toByteArray())
+        log.info("PMS demo security filter path={} keyPresent={} keyValid={}",request.requestURI,!key.isNullOrBlank(),valid)
         if(!valid) { response.sendError(HttpStatus.UNAUTHORIZED.value(),"PMS demo event authentication failed"); return }
         SecurityContextHolder.getContext().authentication=UsernamePasswordAuthenticationToken("pms-demo-system",null,listOf(SimpleGrantedAuthority("ROLE_PMS_INTEGRATION")))
         chain.doFilter(request,response)
