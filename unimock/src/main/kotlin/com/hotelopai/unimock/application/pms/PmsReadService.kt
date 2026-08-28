@@ -3,18 +3,28 @@ package com.hotelopai.unimock.application.pms
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.hotelopai.unimock.application.simulation.SimulationNotLoadedException
 import org.springframework.stereotype.Service
+import org.slf4j.LoggerFactory
+import jakarta.annotation.PostConstruct
 
 @Service
 class PmsReadService(
     private val pmsReadRepository: PmsReadRepository,
     private val objectMapper: ObjectMapper
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
+
+    @PostConstruct
+    fun logRoomContractVersion() = log.info("UNIMOCK_ROOM_CONTRACT_VERSION=canonical-room-fallback-v1")
+
     fun listRooms(): List<RoomReadModel> = activeSimulation().rooms()
 
-    fun getRoom(roomNumber: String): RoomReadModel =
-        activeSimulation().rooms().firstOrNull { it.roomNumber == roomNumber }
-            ?: CanonicalDemoRoomCatalog.room(roomNumber)
-            ?: throw PmsResourceNotFoundException("Room", roomNumber)
+    fun getRoom(roomNumber: String): RoomReadModel {
+        val simulation = pmsReadRepository.findActiveSimulationDocuments()
+        val simulationRoom = simulation?.rooms()?.firstOrNull { it.roomNumber == roomNumber }
+        val canonicalRoom = CanonicalDemoRoomCatalog.room(roomNumber)
+        log.info("UNIMOCK_ROOM_LOOKUP_SOURCE roomNumber={} simulationFound={} canonicalFound={}", roomNumber, simulationRoom != null, canonicalRoom != null)
+        return simulationRoom ?: canonicalRoom ?: throw PmsResourceNotFoundException("Room", roomNumber)
+    }
 
     fun getRoomStatus(roomNumber: String): RoomStatusReadModel =
         activeSimulation().roomStatuses().firstOrNotFound(

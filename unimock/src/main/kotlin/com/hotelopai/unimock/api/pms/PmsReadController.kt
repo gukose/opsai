@@ -5,19 +5,23 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
+import org.slf4j.LoggerFactory
 
 @RestController
 @RequestMapping("/api/pms")
 class PmsReadController(
     private val pmsReadService: PmsReadService
 ) {
+    private val log = LoggerFactory.getLogger(javaClass)
     @GetMapping("/rooms")
     fun listRooms(): List<RoomResponse> =
         pmsReadService.listRooms().map { it.toResponse() }
 
     @GetMapping("/rooms/{roomNumber}")
-    fun getRoom(@PathVariable roomNumber: String): RoomResponse =
-        pmsReadService.getRoom(roomNumber).toResponse()
+    fun getRoom(@PathVariable roomNumber: String): RoomResponse {
+        log.info("UNIMOCK_ROOM_REQUEST controller=PmsReadController path=/api/pms/rooms/{} roomNumber={}", roomNumber, roomNumber)
+        return pmsReadService.getRoom(roomNumber).toResponse()
+    }
 
     @GetMapping("/rooms/{roomNumber}/status")
     fun getRoomStatus(@PathVariable roomNumber: String): RoomStatusResponse =

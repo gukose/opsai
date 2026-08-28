@@ -276,6 +276,9 @@ class RestUniMockClient(
 
     private fun logRequest(correlationId: String, method: String, path: String) {
         val uri = URI.create(resolveUrl(path))
+        if (method == "GET" && path.startsWith("/rooms/")) {
+            logger.info("UNIMOCK_ROOM_LOOKUP host={} method=GET path={} roomNumber={}", uri.host, path, path.removePrefix("/rooms/").substringBefore('/'))
+        }
         logger.info(
             "event=unimock_request outcome=start correlationId={} provider=internal-demo host={} port={} method={} path={} connectTimeoutMs={} requestTimeoutMs={}",
             correlationId, uri.host, resolvedPort(uri), method, path,
