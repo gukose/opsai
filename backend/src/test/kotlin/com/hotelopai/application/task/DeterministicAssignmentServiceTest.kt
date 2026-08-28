@@ -85,6 +85,17 @@ class DeterministicAssignmentServiceTest {
     }
 
     @Test
+    fun `home area is the primary floor affinity signal`() {
+        val hotelId = UuidV7Generator.generate()
+        val departmentId = UuidV7Generator.generate()
+        val floorThree = employee(hotelId, "E-003", "Floor 3", departmentId, emptySet()).copy(homeArea = "3")
+        val floorOne = employee(hotelId, "E-001", "Floor 1", departmentId, emptySet()).copy(homeArea = "1")
+        val service = DefaultDeterministicAssignmentService(FakeEmployeeRepository(listOf(floorOne, floorThree)))
+        val assignment = service.assign(AssignmentCriteria(hotelId = hotelId, departmentId = departmentId, preferredArea = "3"), Instant.parse("2026-07-08T10:00:00Z"))
+        assertEquals(floorThree.id.toString(), assignment?.assigneeId)
+    }
+
+    @Test
     fun `equal top scores require supervisor instead of employee number tie break`() {
         val hotelId = UuidV7Generator.generate()
         val departmentId = UuidV7Generator.generate()

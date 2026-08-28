@@ -90,7 +90,7 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
                 workloadByEmployeeId = workloads,
                 maximumWorkload = MAXIMUM_ACTIVE_WORKLOAD,
                 activeTaskEmployeeIds = activeTaskIds,
-                preferredArea = task.roomNumber,
+                preferredArea = targetFloorNumber(task),
                 unavailableEmployeeIds = excluded
             ),
             now
@@ -172,15 +172,17 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
                 workloadByEmployeeId = workload,
                 maximumWorkload = MAXIMUM_ACTIVE_WORKLOAD,
                 activeTaskEmployeeIds = activeTaskIds,
-                preferredArea = task.roomNumber,
+                preferredArea = targetFloorNumber(task),
                 unavailableEmployeeIds = supervisorEmployeeIds
             ),
             now
         ) else null
 
         val floorAffinity = housekeepingFloorAffinity(task, employees)
+        val targetFloorNumber = targetFloorNumber(task)
         val rankedCandidates = decision?.candidates.orEmpty()
-            .sortedWith(compareByDescending<AssignmentCandidate> { floorAffinity[it.employeeId] ?: 0 }
+            .sortedWith(compareByDescending<AssignmentCandidate> { employees.firstOrNull { e -> e.id == it.employeeId }?.homeArea?.equals(targetFloorNumber, true) == true }
+                .thenByDescending { floorAffinity[it.employeeId] ?: 0 }
                 .thenBy { workload[it.employeeId] ?: 0 }
                 .thenBy { it.employeeId.toString() })
         val targetFloorId = targetFloor(task)
@@ -234,6 +236,10 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
 
     private fun targetFloor(task: Task): UUID? = task.roomNumber?.let {
         jdbc.query("select floor_id from room_master where hotel_id=:hotel and room_number=:room", mapOf("hotel" to task.hotelId, "room" to it)) { rs, _ -> rs.getObject(1, UUID::class.java) }.firstOrNull()
+    }
+
+    private fun targetFloorNumber(task: Task): String? = task.roomNumber?.let {
+        jdbc.query("select floor_number from room_master r join hotel_floor f on f.id=r.floor_id where r.hotel_id=:hotel and r.room_number=:room", mapOf("hotel" to task.hotelId, "room" to it)) { rs, _ -> rs.getInt(1).toString() }.firstOrNull()
     }
 
     private fun resolveRequirement(task: Task): Requirement {
