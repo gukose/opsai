@@ -89,11 +89,13 @@ class AuthSecurityConfiguration(
     fun securityFilterChain(
         http: HttpSecurity,
         jwtDecoder: JwtDecoder,
+        pmsDemoFilter: PmsDemoIntegrationAuthenticationFilter,
         authenticationEntryPoint: AuthenticationEntryPoint,
         accessDeniedHandler: AccessDeniedHandler
     ): SecurityFilterChain {
         http
             .csrf { it.disable() }
+            .addFilterBefore(pmsDemoFilter, BearerTokenAuthenticationFilter::class.java)
             .cors { }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .exceptionHandling {

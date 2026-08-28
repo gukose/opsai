@@ -9,6 +9,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
+import org.mockito.Mockito.never
 import org.mockito.Mockito.`when`
 import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.context.annotation.Bean
@@ -17,6 +18,7 @@ import org.springframework.security.access.AccessDeniedException
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.authentication.TestingAuthenticationToken
+import org.springframework.security.core.authority.SimpleGrantedAuthority
 import java.util.UUID
 
 class DemoTaskResetControllerSecurityTest {
@@ -40,6 +42,27 @@ class DemoTaskResetControllerSecurityTest {
         `when`(service.resetTasks(hotelId)).thenReturn(DemoTaskResetResult(2, 4, 0))
         assertThat(controller.resetTasks()).isEqualTo(DemoTaskResetResult(2, 4, 0))
         verify(service).resetTasks(hotelId)
+        context.close()
+    }
+
+    @Test
+    fun `PMS integration principal can invoke only the configured demo reset path`() {
+        val context = testContext("test")
+        val controller = context.getBean(DemoTaskResetController::class.java)
+        val guard = context.getBean(PermissionGuard::class.java)
+        val service = context.getBean(DemoTaskResetService::class.java)
+        `when`(guard.hasRole("ADMIN")).thenReturn(false)
+        SecurityContextHolder.getContext().authentication = TestingAuthenticationToken(
+            "pms-demo-system", "n/a", listOf(SimpleGrantedAuthority("ROLE_PMS_INTEGRATION"))
+        )
+        `when`(service.configuredDemoStatus()).thenReturn(DemoTaskResetStatus("hotel-opai-demo", 14))
+        `when`(service.resetConfiguredDemoTasks()).thenReturn(DemoTaskResetResult(14, 30, 0))
+
+        assertThat(controller.status()).isEqualTo(DemoTaskResetStatus("hotel-opai-demo", 14))
+        assertThat(controller.resetTasks()).isEqualTo(DemoTaskResetResult(14, 30, 0))
+        verify(service).configuredDemoStatus()
+        verify(service).resetConfiguredDemoTasks()
+        verify(context.getBean(CurrentUserContextResolver::class.java), never()).current()
         context.close()
     }
 

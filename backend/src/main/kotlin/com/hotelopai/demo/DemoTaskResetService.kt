@@ -32,6 +32,13 @@ class DemoTaskResetService(
     fun resetTasks(requestingHotelId: UUID): DemoTaskResetResult {
         val hotelId = demoHotelId()
         requireDemoHotelAccess(requestingHotelId, hotelId)
+        return resetDemoTasks(hotelId)
+    }
+
+    @Transactional
+    fun resetConfiguredDemoTasks(): DemoTaskResetResult = resetDemoTasks(demoHotelId())
+
+    private fun resetDemoTasks(hotelId: UUID): DemoTaskResetResult {
         val taskIds = taskIds(hotelId)
         if (taskIds.isEmpty()) {
             audit(0, 0)
@@ -163,8 +170,13 @@ class DemoTaskResetService(
     fun status(requestingHotelId: UUID): DemoTaskResetStatus {
         val hotelId = demoHotelId()
         requireDemoHotelAccess(requestingHotelId, hotelId)
-        return DemoTaskResetStatus(DEMO_HOTEL_CODE, taskCount(hotelId))
+        return configuredDemoStatus(hotelId)
     }
+
+    @Transactional(readOnly = true)
+    fun configuredDemoStatus(): DemoTaskResetStatus = configuredDemoStatus(demoHotelId())
+
+    private fun configuredDemoStatus(hotelId: UUID) = DemoTaskResetStatus(DEMO_HOTEL_CODE, taskCount(hotelId))
 
     private fun requireDemoHotelAccess(requestingHotelId: UUID, demoHotelId: UUID) {
         if (requestingHotelId != demoHotelId) throw AccessDeniedException("Demo reset is restricted to the demo hotel")
