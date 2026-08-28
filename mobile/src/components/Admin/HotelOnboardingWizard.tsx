@@ -157,7 +157,11 @@ export function HotelOnboardingWizard({
           </View>
         ))}
       </View>
-      <ScrollView contentContainerStyle={styles.body}>
+      <ScrollView
+        style={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.body}
+      >
         {step === 0 ? (
           <>
             <Field
@@ -350,5 +354,6 @@ const styles = StyleSheet.create({
   },
   done: { opacity: 0.7 },
   stepText: { fontSize: 9, fontWeight: "800", color: colors.nav },
-  body: { gap: spacing.sm, paddingBottom: spacing.md, maxHeight: 500 },
+  scroll: { flexShrink: 1, minHeight: 0 },
+  body: { gap: spacing.sm, paddingBottom: spacing.md },
 });

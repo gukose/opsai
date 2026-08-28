@@ -300,7 +300,7 @@ export function AdministrationScreen({
             Refreshing {selectedHotel?.name ?? "hotel"}…
           </Text>
         ) : null}
-        {section === "hotels" ? (
+        {busy && section !== "hotels" ? null : section === "hotels" ? (
           <HotelsPanel hotels={hotels} canManage={platform} />
         ) : (
           <>
@@ -515,6 +515,9 @@ function RoomsPanel({
           </Text>
         </Pressable>
       ))}
+      {!rooms.length ? (
+        <Text style={adminStyles.help}>No rooms match the current filters.</Text>
+      ) : null}
     </AdminCard>
   );
 }
@@ -545,6 +548,9 @@ function EmployeesPanel({
           </Text>
         </Pressable>
       ))}
+      {!items.length ? (
+        <Text style={adminStyles.help}>No employees found.</Text>
+      ) : null}
     </AdminCard>
   );
 }
@@ -588,6 +594,9 @@ function GenericPanel({
           </Text>
         </Pressable>
       ))}
+      {!items.length ? (
+        <Text style={adminStyles.help}>No {label(section).toLowerCase()} configured.</Text>
+      ) : null}
     </AdminCard>
   );
 }
@@ -927,6 +936,12 @@ function businessError(value: string) {
     return "This value already exists, is referenced, or belongs to another hotel.";
   if (value.includes("HTTP 403"))
     return "You do not have permission for this action in the selected hotel.";
+  if (
+    value.includes("HTTP 500") ||
+    value.includes("BadSqlGrammar") ||
+    value.includes("could not determine data type")
+  )
+    return "This administration data could not be loaded. Please try again or contact support.";
   return value;
 }
 const styles = StyleSheet.create({

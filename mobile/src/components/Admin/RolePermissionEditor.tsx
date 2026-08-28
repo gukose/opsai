@@ -57,7 +57,7 @@ export function RolePermissionEditor(props: {
       title={role ? `Role · ${role.name}` : "Role"}
       onClose={onClose}
     >
-      <ScrollView contentContainerStyle={styles.body}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.body}>
         {busy ? (
           <Text style={adminStyles.help}>Loading permission catalog…</Text>
         ) : null}
@@ -67,7 +67,7 @@ export function RolePermissionEditor(props: {
             style={[styles.group, group.platform && styles.platform]}
           >
             <View style={styles.groupHeader}>
-              <View>
+              <View style={styles.groupHeading}>
                 <Text style={styles.groupTitle}>{group.name}</Text>
                 {group.platform ? (
                   <Text style={styles.platformText}>
@@ -149,6 +149,7 @@ function message(e: unknown) {
   return e instanceof Error ? e.message : "Permission request failed";
 }
 const styles = StyleSheet.create({
+  scroll: { flexShrink: 1, minHeight: 0 },
   body: { gap: spacing.md, paddingBottom: spacing.md },
   group: {
     borderWidth: 1,
@@ -166,6 +167,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   groupTitle: { fontSize: 12, fontWeight: "900", color: colors.text },
+  groupHeading: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
   platformText: { fontSize: 9, fontWeight: "800", color: "#92400e" },
   permission: {
     flexDirection: "row",

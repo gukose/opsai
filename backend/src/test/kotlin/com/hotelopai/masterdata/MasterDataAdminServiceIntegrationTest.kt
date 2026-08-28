@@ -35,6 +35,9 @@ class MasterDataAdminServiceIntegrationTest : PostgresIntegrationTestSupport() {
         assertEquals(1,service.rooms(a.id,"101",buildingA.id,floorA.id,"standard",true,0,100).totalItems)
         assertEquals(0,service.rooms(a.id,null,buildingB.id,null,null,null,0,100).totalItems)
         assertEquals(1,service.rooms(b.id,null,null,null,null,null,0,100).totalItems)
+        assertEquals(listOf(floorA.id),service.floors(a.id,null).map { it.id })
+        assertEquals(listOf(floorA.id),service.floors(a.id,buildingA.id).map { it.id })
+        assertTrue(service.floors(a.id,buildingB.id).isEmpty())
 
         assertThrows<MasterDataConflict> { service.createRoom(a.id, buildingA.id, floorA.id, "101", null, actor) }
         assertThrows<MasterDataNotFound> { service.createRoom(a.id, buildingB.id, floorB.id, "102", null, actor) }
@@ -49,6 +52,23 @@ class MasterDataAdminServiceIntegrationTest : PostgresIntegrationTestSupport() {
         val page=service.rooms(hotel.id,null,null,null,null,null,0,100)
         assertTrue(page.items.isEmpty())
         assertEquals(0,page.totalItems)
+    }
+
+    @Test
+    fun `default admin list requests are safe for every hotel scoped section`() {
+        val actor=existingUser()
+        val hotel=service.createHotel("MH_LISTS","List Hotel","UTC",null,actor)
+
+        assertTrue(service.hotelsFor(actor,true).any { it.id==hotel.id })
+        assertTrue(service.namedList("department",hotel.id).isEmpty())
+        assertTrue(service.buildings(hotel.id).isEmpty())
+        assertTrue(service.floors(hotel.id,null).isEmpty())
+        assertTrue(service.rooms(hotel.id,null,null,null,null,null,0,25).items.isEmpty())
+        assertTrue(service.memberships(hotel.id).isEmpty())
+        assertTrue(service.namedList("role",hotel.id).isEmpty())
+        assertTrue(service.namedList("skill",hotel.id).isEmpty())
+        assertTrue(service.shifts(hotel.id).isEmpty())
+        assertTrue(service.shiftAssignments(hotel.id,null,null,null).isEmpty())
     }
 
     @Test

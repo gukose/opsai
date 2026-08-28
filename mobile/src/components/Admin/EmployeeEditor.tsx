@@ -128,7 +128,11 @@ export function EmployeeEditor(props: {
       title={employee ? employee.displayName : "Employee"}
       onClose={onClose}
     >
-      <ScrollView contentContainerStyle={styles.body}>
+      <ScrollView
+        style={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.body}
+      >
         <Text style={styles.context}>{hotelName}</Text>
         <Text style={adminStyles.label}>Global identity / login</Text>
         <Text style={adminStyles.rowDetail}>{employee?.email}</Text>
@@ -172,7 +176,7 @@ export function EmployeeEditor(props: {
           <TextInput
             value={shiftDate}
             onChangeText={setShiftDate}
-            style={[adminStyles.input, { minWidth: 110 }]}
+            style={adminStyles.input}
           />
           <AdminButton
             label="Assign shift"
@@ -273,6 +277,7 @@ function message(e: unknown) {
   return e instanceof Error ? e.message : "Employee update failed";
 }
 const styles = StyleSheet.create({
+  scroll: { flexShrink: 1, minHeight: 0 },
   body: { gap: spacing.sm, paddingBottom: spacing.md },
   context: { fontSize: 12, fontWeight: "900", color: colors.green },
   choice: {

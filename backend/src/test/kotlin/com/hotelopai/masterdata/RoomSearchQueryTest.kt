@@ -1,11 +1,26 @@
 package com.hotelopai.masterdata
 
 import com.hotelopai.masterdata.application.RoomSearchQuery
+import com.hotelopai.masterdata.application.HotelScopedWhere
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import java.util.UUID
 
 class RoomSearchQueryTest {
+    @Test
+    fun `hotel scoped optional predicates omit null values and retain JDBC types`() {
+        val hotel=UUID.randomUUID()
+        val building=UUID.randomUUID()
+        val query=HotelScopedWhere(hotel).equal("building","building_id",null)
+        assertThat(query.sql).isEqualTo("hotel_id=:hotel")
+        assertThat(query.parameters.hasValue("building")).isFalse()
+
+        query.equal("building","building_id",building)
+        assertThat(query.sql).isEqualTo("hotel_id=:hotel and building_id=:building")
+        assertThat(query.parameters.getValue("hotel")).isEqualTo(hotel)
+        assertThat(query.parameters.getValue("building")).isEqualTo(building)
+    }
+
     @Test
     fun `unfiltered room query contains no untyped null sentinel parameters`() {
         val query=RoomSearchQuery(UUID.randomUUID(),null,null,null,null,null,0,100)

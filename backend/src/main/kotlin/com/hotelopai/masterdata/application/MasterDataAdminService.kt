@@ -82,7 +82,13 @@ class MasterDataAdminService(private val jdbc: NamedParameterJdbcTemplate, priva
     @Transactional fun updateBuilding(hotelId:UUID,id:UUID,code:String,name:String,active:Boolean,actor:UUID):BuildingView=guarded{ updateNamed("building",hotelId,id,code,name,null,active,actor);building(hotelId,id)}
 
     @Transactional fun createFloor(hotelId:UUID,buildingId:UUID,number:Int,name:String?,actor:UUID):FloorView=guarded{requireActive(hotelId);building(hotelId,buildingId);val id=newId();stampInsert("hotel_floor",id,hotelId,actor,"building_id,floor_number,name",mapOf("building_id" to buildingId,"floor_number" to number,"name" to name));floor(hotelId,id)}
-    @Transactional(readOnly=true) fun floors(hotelId:UUID,buildingId:UUID?)=jdbc.query("select * from hotel_floor where hotel_id=:hotel and (:building is null or building_id=:building) order by floor_number",mapOf("hotel" to hotelId,"building" to buildingId)){r,_->FloorView(r.uuid("id"),r.uuid("building_id"),r.getInt("floor_number"),r.getString("name"),r.getBoolean("active"))}
+    @Transactional(readOnly=true)
+    fun floors(hotelId:UUID,buildingId:UUID?):List<FloorView> {
+        val query=HotelScopedWhere(hotelId).equal("building","building_id",buildingId)
+        return jdbc.query("select * from hotel_floor where ${query.sql} order by floor_number",query.parameters){r,_->
+            FloorView(r.uuid("id"),r.uuid("building_id"),r.getInt("floor_number"),r.getString("name"),r.getBoolean("active"))
+        }
+    }
     @Transactional(readOnly=true) fun floor(hotelId:UUID,id:UUID)=jdbc.query("select * from hotel_floor where hotel_id=:hotel and id=:id",mapOf("hotel" to hotelId,"id" to id)){r,_->FloorView(r.uuid("id"),r.uuid("building_id"),r.getInt("floor_number"),r.getString("name"),r.getBoolean("active"))}.firstOrNull()?:throw MasterDataNotFound("Floor not found")
     @Transactional fun updateFloor(hotelId:UUID,id:UUID,buildingId:UUID,number:Int,name:String?,active:Boolean,actor:UUID):FloorView=guarded{building(hotelId,buildingId);if(jdbc.update("update hotel_floor set building_id=:building,floor_number=:number,name=:name,active=:active,updated_at=:now,updated_by=:actor where id=:id and hotel_id=:hotel",mapOf("hotel" to hotelId,"id" to id,"building" to buildingId,"number" to number,"name" to name,"active" to active,"now" to clock.instant(),"actor" to actor.toString()))==0)throw MasterDataNotFound("Floor not found");floor(hotelId,id)}
 
@@ -123,7 +129,16 @@ class MasterDataAdminService(private val jdbc: NamedParameterJdbcTemplate, priva
     @Transactional fun assignRole(hotelId:UUID,membershipId:UUID,roleId:UUID,actor:UUID){membership(hotelId,membershipId);named("role",hotelId,roleId);guarded{jdbc.update("insert into user_hotel_role(id,membership_id,role_id,hotel_id,created_at,created_by) values(:id,:membership,:role,:hotel,:now,:actor)",mapOf("id" to newId(),"membership" to membershipId,"role" to roleId,"hotel" to hotelId,"now" to clock.instant(),"actor" to actor.toString()))}}
     @Transactional fun assignSkill(hotelId:UUID,membershipId:UUID,skillId:UUID,level:String?,actor:UUID){membership(hotelId,membershipId);named("skill",hotelId,skillId);val normalized=level?.uppercase();require(normalized==null||normalized in setOf("BEGINNER","INTERMEDIATE","ADVANCED","EXPERT"));guarded{val now=clock.instant();jdbc.update("insert into user_hotel_skill(id,membership_id,skill_id,hotel_id,skill_level,active,created_at,created_by,updated_at,updated_by) values(:id,:membership,:skill,:hotel,:level,true,:now,:actor,:now,:actor)",mapOf("id" to newId(),"membership" to membershipId,"skill" to skillId,"hotel" to hotelId,"level" to normalized,"now" to now,"actor" to actor.toString()))}}
     @Transactional fun assignShift(hotelId:UUID,membershipId:UUID,shiftId:UUID,date:LocalDate,actor:UUID):ShiftAssignmentView=guarded{membership(hotelId,membershipId);shift(hotelId,shiftId);val id=newId();val now=clock.instant();jdbc.update("insert into user_shift_assignment(id,membership_id,hotel_id,shift_id,shift_date,active,created_at,created_by,updated_at,updated_by) values(:id,:membership,:hotel,:shift,:date,true,:now,:actor,:now,:actor)",mapOf("id" to id,"membership" to membershipId,"hotel" to hotelId,"shift" to shiftId,"date" to date,"now" to now,"actor" to actor.toString()));ShiftAssignmentView(id,membershipId,shiftId,date,true)}
-    @Transactional(readOnly=true) fun shiftAssignments(hotelId:UUID,date:LocalDate?,membershipId:UUID?,shiftId:UUID?)=jdbc.query("select * from user_shift_assignment where hotel_id=:hotel and (:date is null or shift_date=:date) and (:membership is null or membership_id=:membership) and (:shift is null or shift_id=:shift) order by shift_date",mapOf("hotel" to hotelId,"date" to date,"membership" to membershipId,"shift" to shiftId)){r,_->ShiftAssignmentView(r.uuid("id"),r.uuid("membership_id"),r.uuid("shift_id"),r.getObject("shift_date",LocalDate::class.java),r.getBoolean("active"))}
+    @Transactional(readOnly=true)
+    fun shiftAssignments(hotelId:UUID,date:LocalDate?,membershipId:UUID?,shiftId:UUID?):List<ShiftAssignmentView> {
+        val query=HotelScopedWhere(hotelId)
+            .equal("date","shift_date",date)
+            .equal("membership","membership_id",membershipId)
+            .equal("shift","shift_id",shiftId)
+        return jdbc.query("select * from user_shift_assignment where ${query.sql} order by shift_date",query.parameters){r,_->
+            ShiftAssignmentView(r.uuid("id"),r.uuid("membership_id"),r.uuid("shift_id"),r.getObject("shift_date",LocalDate::class.java),r.getBoolean("active"))
+        }
+    }
 
     @Transactional fun importRooms(hotelId:UUID,csv:String,actor:UUID):RoomImportResult{requireActive(hotelId);val lines=csv.lineSequence().filter(String::isNotBlank).toList();require(lines.isNotEmpty()&&lines.first().replace(" ","").equals("building,floor,roomNumber,roomType",true)){"CSV header must be building,floor,roomNumber,roomType"};val rows=mutableListOf<ImportRowResult>();var imported=0;var duplicate=0;var invalid=0;lines.drop(1).forEachIndexed{i,line->val cells=line.split(',').map(String::trim);try{require(cells.size==4);val building=buildings(hotelId).firstOrNull{it.code.equals(cells[0],true)}?:error("Unknown building");val floor=floors(hotelId,building.id).firstOrNull{it.floorNumber==cells[1].toInt()}?:error("Unknown floor");createRoom(hotelId,building.id,floor.id,cells[2],cells[3].takeIf(String::isNotBlank),actor);imported++;rows+=ImportRowResult(i+2,"IMPORTED")}catch(e:MasterDataConflict){duplicate++;rows+=ImportRowResult(i+2,"DUPLICATE",e.message)}catch(e:RuntimeException){invalid++;rows+=ImportRowResult(i+2,"INVALID",e.message)}};return RoomImportResult(lines.size-1,imported,duplicate,invalid,rows)}
 
@@ -149,24 +164,31 @@ internal data class RoomSearchQuery(
     val size:Int
 ) {
     private val normalizedQuery=query?.trim()?.takeIf(String::isNotEmpty)
-    private val predicates=buildList {
-        add("hotel_id=:hotel")
-        if(normalizedQuery!=null) add("lower(room_number) like lower(:roomSearch)")
-        if(buildingId!=null) add("building_id=:building")
-        if(floorId!=null) add("floor_id=:floor")
-        if(!roomType.isNullOrBlank()) add("room_type=:type")
-        if(active!=null) add("active=:active")
-    }
-    val where=predicates.joinToString(" and ")
-    val parameters=MapSqlParameterSource()
-        .addValue("hotel",hotelId)
+    private val scoped=HotelScopedWhere(hotelId)
+        .predicate("roomSearch","lower(room_number) like lower(:roomSearch)",normalizedQuery?.let { "%$it%" })
+        .equal("building","building_id",buildingId)
+        .equal("floor","floor_id",floorId)
+        .equal("type","room_type",roomType?.trim()?.takeIf(String::isNotEmpty)?.uppercase())
+        .equal("active","active",active)
+    val where=scoped.sql
+    val parameters=scoped.parameters
         .addValue("limit",size)
         .addValue("offset",page*size)
-        .also { values ->
-            normalizedQuery?.let { values.addValue("roomSearch","%${it.lowercase()}%") }
-            buildingId?.let { values.addValue("building",it) }
-            floorId?.let { values.addValue("floor",it) }
-            roomType?.trim()?.takeIf(String::isNotEmpty)?.let { values.addValue("type",it.uppercase()) }
-            active?.let { values.addValue("active",it) }
+}
+
+/** Small internal pattern for mandatory hotel scope plus typed, bound optional predicates. */
+internal class HotelScopedWhere(hotelId:UUID) {
+    private val predicates=mutableListOf("hotel_id=:hotel")
+    val parameters=MapSqlParameterSource("hotel",hotelId)
+    val sql:String get()=predicates.joinToString(" and ")
+
+    fun equal(parameter:String,column:String,value:Any?):HotelScopedWhere =
+        predicate(parameter,"$column=:$parameter",value)
+
+    fun predicate(parameter:String,sql:String,value:Any?):HotelScopedWhere = apply {
+        if(value!=null) {
+            predicates+=sql
+            parameters.addValue(parameter,value)
         }
+    }
 }
