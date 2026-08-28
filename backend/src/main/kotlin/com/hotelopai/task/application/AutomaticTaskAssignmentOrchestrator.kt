@@ -177,8 +177,13 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
             now
         ) else null
 
-        val selectedEmployee = decision?.assignment?.assigneeId
-            ?.let(UUID::fromString)
+        val floorAffinity = housekeepingFloorAffinity(task, employees)
+        val selectedEmployee = (decision?.candidates.orEmpty()
+            .sortedWith(compareByDescending<AssignmentCandidate> { floorAffinity[it.employeeId] ?: 0 }
+                .thenBy { workload[it.employeeId] ?: 0 }
+                .thenBy { it.employeeId.toString() })
+            .firstOrNull()?.employeeId
+            ?: decision?.assignment?.assigneeId?.let(UUID::fromString))
             ?.let { selectedId -> employees.firstOrNull { it.id == selectedId } }
             ?.takeIf { it.hotelId == task.hotelId }
         val assignment = selectedEmployee?.let { employee ->
@@ -205,6 +210,20 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
             "reason_code" to result.reasonCode.lowercase()
         )
         return result
+    }
+
+    private fun housekeepingFloorAffinity(task: Task, employees: List<Employee>): Map<UUID, Int> {
+        if (task.intentType != TaskIntentType.HOUSEKEEPING || task.roomNumber.isNullOrBlank() || employees.isEmpty()) return emptyMap()
+        return jdbc.query(
+            """select t.assignee_id, count(*)::int
+               from task t join room_master r on r.hotel_id=t.hotel_id and r.room_number=t.room_number
+               where t.hotel_id=:hotel and r.floor_id=(select floor_id from room_master where hotel_id=:hotel and room_number=:room)
+                 and t.status in ('ASSIGNED','STARTED','IN_PROGRESS','WAITING','OVERDUE')
+               group by t.assignee_id""",
+            mapOf("hotel" to task.hotelId, "room" to task.roomNumber)
+        ) { rs, _ -> rs.getString(1) to rs.getInt(2) }
+            .flatMap { (id, count) -> employees.filter { it.id.toString() == id || it.userId?.toString() == id }.map { it.id to count } }
+            .toMap()
     }
 
     private fun resolveRequirement(task: Task): Requirement {
