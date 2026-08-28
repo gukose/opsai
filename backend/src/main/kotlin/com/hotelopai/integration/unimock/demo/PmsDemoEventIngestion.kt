@@ -33,6 +33,7 @@ import java.security.MessageDigest
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.sql.Timestamp
 import java.util.UUID
 import org.slf4j.LoggerFactory
 
@@ -113,12 +114,12 @@ class PmsDemoEventIngestionService(
         val inboxId=UuidV7Generator.generate(now)
         val inserted=jdbc.update("""insert into pms_demo_event_inbox(id,hotel_id,provider_event_id,event_type,room_number,destination_room_number,status,occurred_at,created_at)
             values(:id,:hotel,:event,:type,:room,:destination,'PROCESSING',:occurred,:now) on conflict(hotel_id,provider_event_id) do nothing""",
-            mapOf("id" to inboxId,"hotel" to hotelId,"event" to request.eventId,"type" to request.eventType.name,"room" to request.roomNumber,"destination" to request.toRoomNumber,"occurred" to request.occurredAt,"now" to now))
+            mapOf("id" to inboxId,"hotel" to hotelId,"event" to request.eventId,"type" to request.eventType.name,"room" to request.roomNumber,"destination" to request.toRoomNumber,"occurred" to Timestamp.from(request.occurredAt),"now" to Timestamp.from(now)))
         if(inserted==0) return existing(hotelId,request.eventId)!!.copy(duplicate=true)
 
         val result=applyRule(hotelId,request,now)
         jdbc.update("update pms_demo_event_inbox set status='PROCESSED',result_type=:resultType,result_id=:resultId,processed_at=:now where id=:id",
-            mapOf("id" to inboxId,"resultType" to result?.first,"resultId" to result?.second,"now" to clock.instant()))
+            mapOf("id" to inboxId,"resultType" to result?.first,"resultId" to result?.second,"now" to Timestamp.from(clock.instant())))
         return PmsDemoEventResponse(request.eventId,request.roomNumber,request.eventType,request.occurredAt,"PROCESSED",false,result?.first,result?.second)
     }
 

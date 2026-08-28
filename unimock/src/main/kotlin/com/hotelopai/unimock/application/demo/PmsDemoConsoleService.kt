@@ -45,7 +45,15 @@ class HotelOpAiDemoEventClient(private val properties:UniMockProperties,private 
             .body(payload).retrieve()
             .onStatus(HttpStatusCode::isError) { _,response ->
                 val node=runCatching { objectMapper.readTree(response.body) }.getOrNull()
-                throw DemoEventDeliveryException(node?.path("detail")?.asText()?.takeIf(String::isNotBlank) ?: "Event could not be delivered")
+                val detail=node?.path("detail")?.asText()?.takeIf(String::isNotBlank)
+                val message=when {
+                    response.statusCode.value()==401 -> "Hotel OpAI integration authentication failed"
+                    response.statusCode.is4xxClientError -> detail ?: "Hotel OpAI rejected the PMS event"
+                    response.statusCode.is5xxServerError -> "Hotel OpAI failed to process the PMS event."
+                    else -> detail ?: "Event could not be delivered"
+                }
+                log.warn("PMS demo delivery failed eventId={} status={} category={}",payload["eventId"],response.statusCode.value(),when { response.statusCode.value()==401 -> "AUTHENTICATION"; response.statusCode.is4xxClientError -> "VALIDATION"; response.statusCode.is5xxServerError -> "HOTEL_OPAI_PROCESSING"; else -> "HTTP" })
+                throw DemoEventDeliveryException(message)
             }.body(DemoEventResult::class.java) ?: throw DemoEventDeliveryException("Event could not be delivered")
     }
 }
