@@ -20,7 +20,7 @@ class RoomSearchQueryTest {
         val query=RoomSearchQuery(UUID.randomUUID()," 10 ",building,floor,"standard",true,1,25)
         assertThat(query.where).contains(
             "hotel_id=:hotel",
-            "lower(room_number) like :roomSearch",
+            "lower(room_number) like lower(:roomSearch)",
             "building_id=:building",
             "floor_id=:floor",
             "room_type=:type",
@@ -29,5 +29,33 @@ class RoomSearchQueryTest {
         assertThat(query.parameters.getValue("roomSearch")).isEqualTo("%10%")
         assertThat(query.parameters.getValue("type")).isEqualTo("STANDARD")
         assertThat(query.parameters.getValue("offset")).isEqualTo(25)
+    }
+
+    @Test
+    fun `each optional room filter adds only its own bound predicate`() {
+        val hotel=UUID.randomUUID()
+        val building=UUID.randomUUID()
+        val floor=UUID.randomUUID()
+        val cases=listOf(
+            RoomSearchQuery(hotel,"101",null,null,null,null,0,25) to "lower(room_number) like lower(:roomSearch)",
+            RoomSearchQuery(hotel,null,building,null,null,null,0,25) to "building_id=:building",
+            RoomSearchQuery(hotel,null,null,floor,null,null,0,25) to "floor_id=:floor",
+            RoomSearchQuery(hotel,null,null,null,"DELUXE",null,0,25) to "room_type=:type",
+            RoomSearchQuery(hotel,null,null,null,null,true,0,25) to "active=:active",
+            RoomSearchQuery(hotel,null,null,null,null,false,0,25) to "active=:active"
+        )
+        cases.forEach { (query,predicate) ->
+            assertThat(query.where).isEqualTo("hotel_id=:hotel and $predicate")
+            assertThat(query.where).doesNotContain("is null")
+        }
+    }
+
+    @Test
+    fun `list and count query use the identical dynamic where clause`() {
+        val query=RoomSearchQuery(UUID.randomUUID(),"10",UUID.randomUUID(),null,"standard",false,0,25)
+        val list="select * from room_master where ${query.where} order by room_number limit :limit offset :offset"
+        val count="select count(*) from room_master where ${query.where}"
+        assertThat(list.substringAfter(" where ").substringBefore(" order by")).isEqualTo(query.where)
+        assertThat(count.substringAfter(" where ")).isEqualTo(query.where)
     }
 }

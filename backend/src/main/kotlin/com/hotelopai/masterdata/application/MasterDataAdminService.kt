@@ -151,7 +151,7 @@ internal data class RoomSearchQuery(
     private val normalizedQuery=query?.trim()?.takeIf(String::isNotEmpty)
     private val predicates=buildList {
         add("hotel_id=:hotel")
-        if(normalizedQuery!=null) add("lower(room_number) like :roomSearch")
+        if(normalizedQuery!=null) add("lower(room_number) like lower(:roomSearch)")
         if(buildingId!=null) add("building_id=:building")
         if(floorId!=null) add("floor_id=:floor")
         if(!roomType.isNullOrBlank()) add("room_type=:type")
