@@ -17,13 +17,10 @@ import java.time.ZoneOffset
 import java.util.UUID
 
 class PmsDemoConsoleServiceTest {
-    private val reads=mock(PmsReadService::class.java)
     private val updates=mock(PmsUpdateService::class.java)
     private val delivery=FakeDelivery()
     private val now=Instant.parse("2026-08-28T10:15:30Z")
-    private val service=PmsDemoConsoleService(reads,updates,UniMockProperties(demoConsole=UniMockProperties.DemoConsole(hotelCode="DEMO")),delivery,Clock.fixed(now,ZoneOffset.UTC))
-
-    init { `when`(reads.listRooms()).thenReturn(listOf(room("205"),room("207"),room("310"))) }
+    private val service=PmsDemoConsoleService(updates,UniMockProperties(demoConsole=UniMockProperties.DemoConsole(hotelCode="DEMO")),delivery,Clock.fixed(now,ZoneOffset.UTC))
 
     @Test fun `DIRTY payload follows Hotel OpAI contract and records processed history`() {
         val result=DemoEventResult("EVENT-1","205",DemoEventType.DIRTY,now,"PROCESSED")
@@ -55,7 +52,6 @@ class PmsDemoConsoleServiceTest {
         assertNull(delivery.payload)
     }
 
-    private fun room(number:String)=RoomReadModel(number,"STANDARD",number.first().toString(),"CLEAN",false)
     private fun stubHistory(id:String,type:DemoEventType,room:String,status:String,message:String?) {
         val event=EventPushRequest(id,type.name,now.toString(),room,null,status,message)
         `when`(updates.pushEvent(event,"demo-console")).thenReturn(PmsUpdateResponse(UUID.randomUUID(),id,"EVENT_PUSH","CREATED"))
@@ -63,5 +59,6 @@ class PmsDemoConsoleServiceTest {
     private class FakeDelivery:DemoEventDeliveryPort {
         var result:DemoEventResult?=null;var error:RuntimeException?=null;var payload:Map<String,Any?>?=null
         override fun deliver(payload:Map<String,Any?>):DemoEventResult { this.payload=payload;error?.let{throw it};return requireNotNull(result) }
+        override fun rooms()=listOf(DemoRoom("205","CLEAN"),DemoRoom("207","CLEAN"),DemoRoom("310","CLEAN"))
     }
 }

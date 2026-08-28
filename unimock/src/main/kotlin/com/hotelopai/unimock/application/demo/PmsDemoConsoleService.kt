@@ -15,15 +15,21 @@ import java.util.UUID
 enum class DemoEventType { CHECK_IN,CHECK_OUT,ARRIVAL,DEPARTURE,DIRTY,CLEAN,OCCUPIED,VACANT,VIP,ROOM_MOVE,OOO,OOS }
 data class DemoEventRequest(val eventId:String?=null,val roomNumber:String,val eventType:DemoEventType,val toRoomNumber:String?=null,val guestName:String?=null,val vipCategory:String?=null,val reason:String?=null)
 data class DemoEventResult(val eventId:String,val roomNumber:String,val eventType:DemoEventType,val occurredAt:Instant,val status:String,val duplicate:Boolean=false,val message:String?=null)
+data class DemoRoom(val roomNumber:String,val status:String)
 
 class DemoEventDeliveryException(message:String):RuntimeException(message)
 
-interface DemoEventDeliveryPort { fun deliver(payload:Map<String,Any?>):DemoEventResult }
+interface DemoEventDeliveryPort { fun rooms():List<DemoRoom>; fun deliver(payload:Map<String,Any?>):DemoEventResult }
 
 @Service
 class HotelOpAiDemoEventClient(private val properties:UniMockProperties,private val objectMapper:ObjectMapper):DemoEventDeliveryPort {
+    override fun rooms():List<DemoRoom> {
+        require(properties.demoConsole.hotelOpaiBaseUrl.isNotBlank()) { "Hotel OpAI delivery is not configured" }
+        return RestClient.create(properties.demoConsole.hotelOpaiBaseUrl).get().uri("/api/v1/integrations/pms/unimock/demo-events/rooms")
+            .header("X-Demo-Pms-Key",properties.demoConsole.sharedKey).retrieve().body(Array<DemoRoom>::class.java)?.toList() ?: emptyList()
+    }
     override fun deliver(payload:Map<String,Any?>):DemoEventResult {
-        require(properties.demoConsole.sharedKey.length>=12) { "Demo console delivery is not configured" }
+        require(properties.demoConsole.hotelOpaiBaseUrl.isNotBlank() && properties.demoConsole.sharedKey.length>=12) { "Hotel OpAI delivery is not configured" }
         return RestClient.create(properties.demoConsole.hotelOpaiBaseUrl).post()
             .uri("/api/v1/integrations/pms/unimock/demo-events")
             .header("X-Demo-Pms-Key",properties.demoConsole.sharedKey)
@@ -37,13 +43,12 @@ class HotelOpAiDemoEventClient(private val properties:UniMockProperties,private 
 
 @Service
 class PmsDemoConsoleService(
-    private val reads:PmsReadService,
     private val updates:PmsUpdateService,
     private val properties:UniMockProperties,
     private val delivery:DemoEventDeliveryPort,
     private val clock:Clock
 ) {
-    fun rooms()=reads.listRooms().sortedBy { it.roomNumber }
+    fun rooms()=delivery.rooms().sortedBy { it.roomNumber }
 
     fun send(request:DemoEventRequest):DemoEventResult {
         require(rooms().any { it.roomNumber==request.roomNumber }) { "Room does not exist" }

@@ -7,3 +7,5 @@ ops:
         password: ${OPS_AI_UNIMOCK_DB_PASSWORD:hotelopai}
         driver-class-name: ${OPS_AI_UNIMOCK_DB_DRIVER_CLASS_NAME:org.postgresql.Driver}
         maximum-pool-size: ${OPS_AI_UNIMOCK_DB_MAXIMUM_POOL_SIZE:5}
+      demo-console:
+        hotel-opai-base-url: ${OPS_AI_HOTEL_OPAI_BASE_URL:http://localhost:8080}

@@ -9,6 +9,8 @@ Store values in Railway or EAS; never in Git or Expo public configuration.
 - `OPS_AI_AUTH_JWT_SECRET`: high-entropy signing secret.
 - `OPS_AI_DEMO_BOOTSTRAP_ENABLED`: enables idempotent bootstrap.
 - `OPS_AI_UNIMOCK_BASE_URL`: use Railway reference variables, normally `http://${{unimock.RAILWAY_PRIVATE_DOMAIN}}:${{unimock.PORT}}` when the service is named `unimock`.
+- `OPS_AI_HOTEL_OPAI_BASE_URL`: UniMock-only private Railway URL for Hotel OpAI (for example `http://${{backend.RAILWAY_PRIVATE_DOMAIN}}:${{backend.PORT}}`); never expose this value to browser code.
+- `OPS_AI_PMS_DEMO_SHARED_KEY`: matching 12+ character secret configured on both services for the UniMock PMS demo adapter.
 - `OPS_AI_DB_MAXIMUM_POOL_SIZE`, `OPS_AI_DB_MINIMUM_IDLE`: optional Hikari limits.
 
 ## Supabase PostgreSQL
