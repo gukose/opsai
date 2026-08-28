@@ -50,6 +50,13 @@ class PmsReadApiIntegrationTest : UnimockPostgresIntegrationTestSupport() {
     }
 
     @Test
+    fun `canonical demo room 205 is available through provider lookup`() {
+        mockMvc.perform(get("/api/pms/rooms/205"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.roomNumber").value("205"))
+    }
+
+    @Test
     fun `get room status`() {
         mockMvc.perform(get("/api/pms/rooms/101/status"))
             .andExpect(status().isOk)
