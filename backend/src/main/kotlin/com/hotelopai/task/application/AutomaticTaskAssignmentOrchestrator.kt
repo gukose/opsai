@@ -42,6 +42,33 @@ data class AssignmentCandidateView(
     val score: Int
 )
 
+internal fun rankMinibarCandidates(
+    candidates: List<AssignmentCandidate>,
+    employees: List<Employee>,
+    targetFloor: String?,
+    minibarSkillId: UUID?,
+    activeFloorAssignments: Map<UUID, Int>,
+    workload: Map<UUID, Int>
+): List<AssignmentCandidate> {
+    val employeesById = employees.associateBy(Employee::id)
+    fun tier(candidate: AssignmentCandidate): Int {
+        val employee = employeesById[candidate.employeeId] ?: return 0
+        val sameHomeFloor = targetFloor != null && employee.homeArea?.equals(targetFloor, true) == true
+        return when {
+            sameHomeFloor && employee.primaryRoleCode.equals("HOUSEKEEPER", true) && minibarSkillId != null && minibarSkillId in employee.skillIds -> 4
+            sameHomeFloor && employee.primaryRoleCode.equals("HOUSEKEEPER", true) -> 3
+            (activeFloorAssignments[employee.id] ?: 0) > 0 -> 2
+            else -> 0
+        }
+    }
+    return candidates.sortedWith(
+        compareByDescending<AssignmentCandidate>(::tier)
+            .thenByDescending { it.score }
+            .thenBy { workload[it.employeeId] ?: 0 }
+            .thenBy { it.employeeId.toString() }
+    )
+}
+
 fun interface TaskAssignmentCandidateQuery {
     fun candidates(task: Task, now: Instant): List<AssignmentCandidateView>
 }
@@ -147,10 +174,11 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         val activeTaskIds = loadedEmployees.activeTaskEmployeeIds
         val skillLevels = loadedEmployees.employeeSkillLevels
 
+        val rankingSkillId = requirement.requiredSkillId.takeUnless { task.intentType == TaskIntentType.MINIBAR }
         val reason = noCandidateReason(
             employees = assignableEmployees,
             departmentId = requirement.departmentId,
-            requiredSkillId = requirement.requiredSkillId,
+            requiredSkillId = rankingSkillId,
             requiredSkillKnown = requirement.requiredSkillKnown,
             departmentKnown = requirement.departmentKnown,
             skillResolutionRequired = requirement.skillResolutionRequired,
@@ -162,10 +190,10 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         val decision = if (reason == null) assignmentService.evaluate(
             AssignmentCriteria(
                 hotelId = task.hotelId,
-                requiredSkillId = requirement.requiredSkillId,
+                requiredSkillId = rankingSkillId,
                 departmentId = requirement.departmentId,
                 minimumSkillLevel = 1,
-                strictRequiredSkill = requirement.requiredSkillCode != null,
+                strictRequiredSkill = requirement.requiredSkillCode != null && task.intentType != TaskIntentType.MINIBAR,
                 employeeSkillLevels = skillLevels,
                 activeShiftEmployeeIds = activeShiftIds,
                 requireActiveShift = true,
@@ -180,7 +208,9 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
 
         val floorAffinity = housekeepingFloorAffinity(task, employees)
         val targetFloorNumber = targetFloorNumber(task)
-        val rankedCandidates = decision?.candidates.orEmpty()
+        val rankedCandidates = if (task.intentType == TaskIntentType.MINIBAR) {
+            rankMinibarCandidates(decision?.candidates.orEmpty(), employees, targetFloorNumber, requirement.requiredSkillId, floorAffinity, workload)
+        } else decision?.candidates.orEmpty()
             .sortedWith(compareByDescending<AssignmentCandidate> { employees.firstOrNull { e -> e.id == it.employeeId }?.homeArea?.equals(targetFloorNumber, true) == true }
                 .thenByDescending { floorAffinity[it.employeeId] ?: 0 }
                 .thenBy { workload[it.employeeId] ?: 0 }
@@ -189,12 +219,22 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         rankedCandidates.forEachIndexed { index, candidate ->
             val employee = employees.firstOrNull { it.id == candidate.employeeId }
             logger.info("event=housekeeping_auto_assignment_candidate roomNumber={} targetFloorId={} employeeId={} employeeNumber={} sameFloorActiveTaskCount={} activeWorkload={} activeShift={} rank={} selected={}", task.roomNumber, targetFloorId, candidate.employeeId, employee?.employeeNumber, floorAffinity[candidate.employeeId] ?: 0, workload[candidate.employeeId] ?: 0, candidate.employeeId in activeShiftIds, index + 1, index == 0)
+            if (task.intentType == TaskIntentType.MINIBAR) logger.info(
+                "MINIBAR_ASSIGNMENT_DECISION room={} floor={} candidateEmployeeId={} candidateHomeArea={} candidateRole={} sameFloor={} activeShift={} workload={} selected={}",
+                task.roomNumber, targetFloorNumber, candidate.employeeId, employee?.homeArea, employee?.primaryRoleCode,
+                employee?.homeArea?.equals(targetFloorNumber, true) == true, candidate.employeeId in activeShiftIds,
+                workload[candidate.employeeId] ?: 0, index == 0
+            )
         }
         val selectedEmployee = (rankedCandidates.firstOrNull()?.employeeId
             ?: decision?.assignment?.assigneeId?.let(UUID::fromString))
             ?.let { selectedId -> employees.firstOrNull { it.id == selectedId } }
             ?.takeIf { it.hotelId == task.hotelId }
         val assignment = selectedEmployee?.let { employee ->
+            if (task.intentType == TaskIntentType.MINIBAR) logger.info(
+                "MINIBAR_ASSIGNMENT_SELECTED room={} floor={} employeeId={} homeArea={} role={}",
+                task.roomNumber, targetFloorNumber, employee.id, employee.homeArea, employee.primaryRoleCode
+            )
             TaskAssignment(
                 assigneeType = TaskAssigneeType.USER,
                 assigneeId = (employee.userId ?: employee.id).toString(),
@@ -221,7 +261,7 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
     }
 
     private fun housekeepingFloorAffinity(task: Task, employees: List<Employee>): Map<UUID, Int> {
-        if (task.intentType != TaskIntentType.HOUSEKEEPING || task.roomNumber.isNullOrBlank() || employees.isEmpty()) return emptyMap()
+        if (task.intentType !in setOf(TaskIntentType.HOUSEKEEPING, TaskIntentType.MINIBAR) || task.roomNumber.isNullOrBlank() || employees.isEmpty()) return emptyMap()
         return jdbc.query(
             """select t.assignee_id, count(*)::int
                from task t join room_master r on r.hotel_id=t.hotel_id and r.room_number=t.room_number
