@@ -24,6 +24,7 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.UUID
+import org.slf4j.LoggerFactory
 
 enum class PmsDemoEventType { CHECK_IN,CHECK_OUT,ARRIVAL,DEPARTURE,DIRTY,CLEAN,OCCUPIED,VACANT,VIP,ROOM_MOVE,OOO,OOS }
 data class PmsDemoEventRequest(val eventId:String,val hotelCode:String,val roomNumber:String,val eventType:PmsDemoEventType,val occurredAt:Instant,val toRoomNumber:String?=null,val guestName:String?=null,val vipCategory:String?=null,val reason:String?=null)
@@ -37,15 +38,17 @@ data class PmsDemoEventProperties(val enabled:Boolean=false,val sharedKey:String
 @RequestMapping("/api/v1/integrations/pms/unimock/demo-events")
 @EnableConfigurationProperties(PmsDemoEventProperties::class)
 class PmsDemoEventController(private val service:PmsDemoEventIngestionService,private val properties:PmsDemoEventProperties) {
+    private val log=LoggerFactory.getLogger(javaClass)
     @GetMapping("/rooms")
     fun rooms(@RequestHeader("X-Demo-Pms-Key",required=false) key:String?):List<PmsDemoRoomResponse> { if(!properties.enabled) throw ResponseStatusException(HttpStatus.NOT_FOUND,"PMS demo events are not enabled"); authenticate(key); return service.rooms(properties.hotelCode) }
 
     @PostMapping
     fun ingest(@RequestHeader("X-Demo-Pms-Key",required=false) key:String?,@RequestBody request:PmsDemoEventRequest):PmsDemoEventResponse {
+        log.info("PMS demo request path={} eventId={} hotelCode={} demoKeyPresent={}","/api/v1/integrations/pms/unimock/demo-events",request.eventId,request.hotelCode,!key.isNullOrBlank())
         if(!properties.enabled) throw ResponseStatusException(HttpStatus.NOT_FOUND,"PMS demo events are not enabled")
-        authenticate(key)
+        try { authenticate(key) } catch (e:ResponseStatusException) { log.warn("PMS demo shared-key validation failed eventId={} status={}",request.eventId,e.statusCode.value()); throw e }
         if (request.hotelCode != properties.hotelCode) throw ResponseStatusException(HttpStatus.BAD_REQUEST,"Invalid demo hotel")
-        return try { service.ingest(request) } catch(e:IllegalArgumentException) { throw ResponseStatusException(HttpStatus.BAD_REQUEST,e.message) }
+        return try { service.ingest(request).also { log.info("PMS demo request completed eventId={} status={}",request.eventId,it.status) } } catch(e:IllegalArgumentException) { log.info("PMS demo request completed eventId={} status=400",request.eventId); throw ResponseStatusException(HttpStatus.BAD_REQUEST,e.message) }
     }
     private fun authenticate(key:String?) { if(properties.sharedKey.length<12||!MessageDigest.isEqual(properties.sharedKey.toByteArray(),key.orEmpty().toByteArray())) throw ResponseStatusException(HttpStatus.UNAUTHORIZED,"PMS demo event authentication failed") }
 }

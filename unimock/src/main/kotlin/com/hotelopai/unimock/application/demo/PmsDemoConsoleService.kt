@@ -9,6 +9,7 @@ import java.time.Clock
 import java.time.Instant
 import java.net.URI
 import java.util.UUID
+import org.slf4j.LoggerFactory
 
 enum class DemoEventType { CHECK_IN,CHECK_OUT,ARRIVAL,DEPARTURE,DIRTY,CLEAN,OCCUPIED,VACANT,VIP,ROOM_MOVE,OOO,OOS }
 data class DemoEventRequest(val eventId:String?=null,val roomNumber:String,val eventType:DemoEventType,val toRoomNumber:String?=null,val guestName:String?=null,val vipCategory:String?=null,val reason:String?=null)
@@ -27,6 +28,7 @@ interface DemoEventDeliveryPort { fun rooms():List<DemoRoom>; fun deliver(payloa
 
 @Service
 class HotelOpAiDemoEventClient(private val properties:UniMockProperties,private val objectMapper:ObjectMapper):DemoEventDeliveryPort {
+    private val log=LoggerFactory.getLogger(javaClass)
     private fun target(path:String):URI {
         return demoTargetUri(properties.demoConsole.hotelOpaiBaseUrl,path)
     }
@@ -37,6 +39,7 @@ class HotelOpAiDemoEventClient(private val properties:UniMockProperties,private 
     }
     override fun deliver(payload:Map<String,Any?>):DemoEventResult {
         require(properties.demoConsole.hotelOpaiBaseUrl.isNotBlank() && properties.demoConsole.sharedKey.length>=12) { "Hotel OpAI delivery is not configured" }
+        log.info("PMS demo delivery target=/api/v1/integrations/pms/unimock/demo-events eventId={} demoKeyConfigured={}",payload["eventId"],properties.demoConsole.sharedKey.isNotBlank())
         return RestClient.create().post().uri(target("/api/v1/integrations/pms/unimock/demo-events"))
             .header("X-Demo-Pms-Key",properties.demoConsole.sharedKey)
             .body(payload).retrieve()

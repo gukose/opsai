@@ -47,6 +47,19 @@ class AuthSecurityConfiguration(
         }
 
     @Bean
+    @Order(0)
+    fun pmsDemoSecurityFilterChain(http: HttpSecurity): SecurityFilterChain {
+        http
+            .securityMatcher(
+                "/api/v1/integrations/pms/unimock/demo-events",
+                "/api/v1/integrations/pms/unimock/demo-events/rooms"
+            )
+            .csrf { it.disable() }
+            .authorizeHttpRequests { it.anyRequest().permitAll() }
+        return http.build()
+    }
+
+    @Bean
     @Order(1)
     fun securityFilterChain(
         http: HttpSecurity,
