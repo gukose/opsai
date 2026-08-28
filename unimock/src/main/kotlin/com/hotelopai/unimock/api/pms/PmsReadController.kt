@@ -85,4 +85,4 @@ private fun com.hotelopai.unimock.application.pms.GuestReadModel.toResponse() =
     GuestResponse(guestId, firstName, lastName)
 
 private fun com.hotelopai.unimock.application.pms.EventReadModel.toResponse() =
-    EventResponse(eventId, type, occurredAt)
+    EventResponse(eventId, type, occurredAt, roomNumber, toRoomNumber, deliveryStatus, message)

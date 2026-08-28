@@ -126,7 +126,7 @@ export function RoomCsvImportPanel({
           disabled={!canConfirmCsvImport(preview) || busy}
           onPress={() => setConfirmed(true)}
         />
-      )}{" "}
+      )}
       {error ? <Text style={adminStyles.error}>{error}</Text> : null}
       {result ? (
         <Text style={adminStyles.rowDetail}>

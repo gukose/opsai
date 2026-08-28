@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  LayoutChangeEvent,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -136,6 +137,10 @@ export function AdministrationScreen({
     [buildingFilter, setBuildingFilter] = useState(""),
     [floorFilter, setFloorFilter] = useState("");
   const requestRef = useRef(0);
+  const sectionNavigationRef = useRef<ScrollView>(null);
+  const sectionTabLayouts = useRef<Record<Section, { x: number; width: number }>>(
+    {} as Record<Section, { x: number; width: number }>,
+  );
   const platform = hasPermission(currentUser, "PLATFORM_HOTEL_MANAGE");
   const can = (permission: string) => platform || data.permissionCodes.includes(permission);
   const selectedHotel = hotels.find((h) => h.id === hotelId);
@@ -235,7 +240,7 @@ export function AdministrationScreen({
         .includes(search.toLowerCase()),
   );
   return (
-    <View style={styles.screen}>
+    <View testID="administration-screen" style={styles.screen}>
       <View style={[styles.header, layout.phone && styles.headerPhone]}>
         <View style={styles.headerCopy}>
           <Text style={styles.title}>Administration</Text>
@@ -266,25 +271,41 @@ export function AdministrationScreen({
           </Pressable>
         ))}
       </ScrollView>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.tabs}
-        contentContainerStyle={styles.horizontalContent}
-      >
-        {visibleSections.map((s) => (
-          <Pressable
-            key={s}
-            onPress={() => {
-              setSection(s);
-              setSearch("");
-            }}
-            style={[styles.tab, s === section && styles.tabActive]}
-          >
-            <Text style={styles.tabText}>{label(s)}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
+      <View testID="admin-section-navigation-frame" style={styles.tabStrip}>
+        <ScrollView
+          ref={sectionNavigationRef}
+          testID="admin-section-navigation"
+          horizontal
+          directionalLockEnabled
+          showsHorizontalScrollIndicator={false}
+          style={styles.tabs}
+          contentContainerStyle={styles.horizontalContent}
+        >
+          {visibleSections.map((s) => (
+            <Pressable
+              key={s}
+              onLayout={(event: LayoutChangeEvent) => {
+                sectionTabLayouts.current[s] = event.nativeEvent.layout;
+              }}
+              onPress={() => {
+                setSection(s);
+                setSearch("");
+                const tab = sectionTabLayouts.current[s];
+                if (tab)
+                  sectionNavigationRef.current?.scrollTo({
+                    x: Math.max(0, tab.x - spacing.lg),
+                    animated: true,
+                  });
+              }}
+              style={[styles.tab, s === section && styles.tabActive]}
+            >
+              <Text numberOfLines={1} style={styles.tabText}>
+                {label(s)}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
       <ScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[
@@ -347,7 +368,7 @@ export function AdministrationScreen({
                 data={data}
                 onRole={setSelectedRole}
               />
-            )}{" "}
+            )}
             {section === "rooms" && can("ROOM_CREATE") ? (
               <RoomCsvImportPanel
                 busy={busy}
@@ -945,7 +966,14 @@ function businessError(value: string) {
   return value;
 }
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
+  screen: {
+    flex: 1,
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    overflow: "hidden",
+    backgroundColor: colors.background,
+  },
   header: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
@@ -982,14 +1010,29 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 11, fontWeight: "800", color: colors.nav },
   chipCode: { fontSize: 8, color: colors.textMuted },
   tabs: {
+    width: "100%",
+    flexGrow: 0,
     maxHeight: 43,
+  },
+  tabStrip: {
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    overflow: "hidden",
     borderBottomWidth: 1,
     borderColor: colors.divider,
   },
-  tab: { paddingHorizontal: 10, paddingVertical: 10 },
+  tab: { flexShrink: 0, paddingHorizontal: 10, paddingVertical: 10 },
   tabActive: { borderBottomWidth: 2, borderColor: colors.green },
   tabText: { fontSize: 10, fontWeight: "900", color: colors.nav },
-  content: { padding: spacing.lg, gap: spacing.md, paddingBottom: 80 },
+  content: {
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    padding: spacing.lg,
+    gap: spacing.md,
+    paddingBottom: 80,
+  },
   contentPhone: { paddingHorizontal: spacing.md },
   dialogBody: { gap: spacing.sm, paddingBottom: spacing.lg },
   context: {

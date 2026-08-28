@@ -9,6 +9,7 @@ Use this file as the repository source of truth for future development tasks. Do
 - `sdk/typescript` is a private generated client consumed by `mobile` through a local file dependency. `docs/api/openapi-v1.yaml` is its contract source; never hand-edit `sdk/typescript/src/generated/**`.
 - Backend code is feature-first under `com.hotelopai.<feature>`, normally split into `api`, `application`, `domain`, and `infrastructure`. Controllers call application services, application code depends on ports/interfaces, and infrastructure implements adapters. Domain code is framework-free. ArchUnit enforces these boundaries and feature-cycle rules.
 - Cross-cutting code lives under `shared`, `config`, `observability`, `scheduler`, and `outbox`. External systems are behind provider/port abstractions; deterministic internal providers are the safe defaults and external providers are generally disabled/profile-gated.
+- UniMock hosts the business-facing PMS Demo Console at `/`. It validates canonical seeded rooms, records recent delivery history, and forwards events through a demo-key-protected Hotel OpAI integration endpoint; Hotel OpAI deduplicates provider event IDs before delegating actionable events to the existing housekeeping, room-state, and task engines.
 
 ## Backend and API conventions
 

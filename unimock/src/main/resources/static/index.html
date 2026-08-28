@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PMS Demo Console</title><link rel="stylesheet" href="/demo-console.css"></head>
+<body><main>
+  <header><div><span class="eyebrow">UniMock</span><h1>PMS Demo Console</h1><p>Send a hotel event through the real PMS integration path.</p></div><span class="badge">Grand Hotel Demo</span></header>
+  <section class="panel"><form id="event-form">
+    <div class="grid"><label>Room<select id="room" required></select></label><label>Event type<select id="event-type" required></select></label></div>
+    <div id="event-fields" class="grid"></div>
+    <details><summary>Event ID (for duplicate-event demonstrations)</summary><label>Event ID<input id="event-id" placeholder="Generated automatically"></label></details>
+    <button id="send" type="submit">Send PMS Event</button><p id="form-error" class="error" role="alert"></p>
+  </form></section>
+  <section id="result" class="panel result" hidden><h2>Event sent successfully</h2><dl></dl><button id="resend" class="secondary">Resend same event ID</button></section>
+  <section class="panel"><div class="section-title"><h2>Recent Events</h2><button id="refresh" class="link">Refresh</button></div><div id="history" class="history"><p class="muted">Loading…</p></div></section>
+</main><script src="/demo-console.js"></script></body></html>

@@ -38,7 +38,11 @@ data class MaintenanceUpdateRequest(
 data class EventPushRequest(
     val eventId: String? = null,
     val type: String,
-    val occurredAt: String? = null
+    val occurredAt: String? = null,
+    val roomNumber: String? = null,
+    val toRoomNumber: String? = null,
+    val deliveryStatus: String? = null,
+    val message: String? = null
 )
 
 data class PmsVerificationLogEntry(

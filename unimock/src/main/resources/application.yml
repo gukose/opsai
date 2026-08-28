@@ -25,6 +25,10 @@ ops:
     unimock:
       seed:
         path: ${OPS_AI_UNIMOCK_SEED_PATH:classpath:/simulation/grand-hotel}
+      demo-console:
+        hotel-opai-base-url: ${OPS_AI_BACKEND_BASE_URL:http://localhost:8080}
+        hotel-code: ${OPS_AI_DEMO_HOTEL_CODE:hotel-opai-demo}
+        shared-key: ${OPS_AI_PMS_DEMO_SHARED_KEY:}
 
 server:
   # Railway private networking is IPv6. The IPv6 wildcard also accepts the

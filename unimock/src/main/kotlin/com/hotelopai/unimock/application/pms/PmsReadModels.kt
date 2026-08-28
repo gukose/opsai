@@ -64,7 +64,11 @@ data class GuestReadModel(
 data class EventReadModel(
     val eventId: String,
     val type: String,
-    val occurredAt: String
+    val occurredAt: String,
+    val roomNumber: String? = null,
+    val toRoomNumber: String? = null,
+    val deliveryStatus: String? = null,
+    val message: String? = null
 )
 
 data class RoomsDocument(val rooms: List<RoomReadModel>)

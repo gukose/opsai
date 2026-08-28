@@ -56,7 +56,11 @@ data class GuestResponse(
 data class EventResponse(
     val eventId: String,
     val type: String,
-    val occurredAt: String
+    val occurredAt: String,
+    val roomNumber: String? = null,
+    val toRoomNumber: String? = null,
+    val deliveryStatus: String? = null,
+    val message: String? = null
 )
 
 data class PmsUpdateResponse(

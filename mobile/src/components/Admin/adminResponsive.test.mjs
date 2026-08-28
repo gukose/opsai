@@ -25,12 +25,30 @@ test("Administration components retain narrow-screen overflow protections", () =
   const csv = readFileSync(new URL("./RoomCsvImportPanel.tsx", import.meta.url), "utf8");
 
   assert.ok((screen.match(/horizontal/g) ?? []).length >= 2, "hotel and section selectors scroll horizontally");
+  assert.match(screen, /testID="admin-section-navigation"[\s\S]*?horizontal/);
+  assert.match(screen, /sectionNavigationRef\.current\?\.scrollTo/);
+  assert.match(screen, /tabStrip:[\s\S]*?width: "100%"[\s\S]*?overflow: "hidden"/);
+  assert.match(screen, /screen:[\s\S]*?maxWidth: "100%"[\s\S]*?overflow: "hidden"/);
   assert.match(ui, /width: "100%"/);
   assert.match(ui, /KeyboardAvoidingView/);
   assert.match(onboarding, /keyboardShouldPersistTaps="handled"/);
   assert.match(employee, /style=\{styles\.scroll\}/);
   assert.match(role, /style=\{styles\.scroll\}/);
   assert.match(csv, /maxHeight: 120/);
+});
+
+test("Administration JSX contains no accidental conditional space separators", () => {
+  const files = [
+    "AdministrationScreen.tsx",
+    "RoomCsvImportPanel.tsx",
+    "HotelOnboardingWizard.tsx",
+    "EmployeeEditor.tsx",
+    "RolePermissionEditor.tsx",
+  ];
+  for (const file of files) {
+    const source = readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
+    assert.doesNotMatch(source, /\)\}\{" "\}/, file);
+  }
 });
 
 test("Administration hides database details behind a business error", () => {

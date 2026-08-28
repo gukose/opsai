@@ -235,6 +235,10 @@ class PmsUpdateService(
                 put("eventId", eventId)
                 put("type", request.type)
                 put("occurredAt", request.occurredAt ?: clock.instant().toString())
+                request.roomNumber?.let { put("roomNumber", it) }
+                request.toRoomNumber?.let { put("toRoomNumber", it) }
+                request.deliveryStatus?.let { put("deliveryStatus", it) }
+                request.message?.let { put("message", it) }
             }
         )
         pmsDocumentRepository.replaceDocument(simulation.simulationId, "operations/events.json", events)

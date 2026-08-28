@@ -48,6 +48,9 @@ ops:
         timeout: PT30S
     pms:
       active-provider: internal-demo
+      demo-events:
+        enabled: ${OPS_AI_PMS_DEMO_EVENTS_ENABLED:true}
+        shared-key: ${OPS_AI_PMS_DEMO_SHARED_KEY:}
       providers:
         internal-demo:
           enabled: true
