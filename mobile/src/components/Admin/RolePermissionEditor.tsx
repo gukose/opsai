@@ -159,6 +159,7 @@ const styles = StyleSheet.create({
   platform: { borderColor: colors.amber, backgroundColor: "#fffbeb" },
   groupHeader: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 8,

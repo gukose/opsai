@@ -41,6 +41,7 @@ class DemoProfileStartupIntegrationTest : PostgresIntegrationTestSupport() {
 
         // Application startup bootstrapped the initially empty Testcontainers database.
         assertThat(count("employee", hotelId, "status='ACTIVE'")).isEqualTo(35L)
+        assertThat(count("room_master",hotelId)).isEqualTo(100L)
 
         // Simulate canonical rows left by an older deployment, including version zero.
         jdbc.update("update employee set display_name='Old Name',status='INACTIVE',operational_status='OFFLINE',version=0 where hotel_id=:hotel and employee_number='EMP0014'", mapOf("hotel" to hotelId))
@@ -61,6 +62,7 @@ class DemoProfileStartupIntegrationTest : PostgresIntegrationTestSupport() {
         val shifts = count("workforce_shift", hotelId)
         bootstrap.bootstrap()
         bootstrap.bootstrap()
+        assertThat(count("room_master",hotelId)).isEqualTo(100L)
 
         val seededEmails = users.findByHotelId(hotelId).filter { it.status == com.hotelopai.auth.domain.UserStatus.ACTIVE }.map { it.email.value }
         assertThat(seededEmails).hasSize(42)

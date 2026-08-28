@@ -88,7 +88,17 @@ class MasterDataAdminService(private val jdbc: NamedParameterJdbcTemplate, priva
 
     @Transactional fun createRoom(hotelId:UUID,buildingId:UUID,floorId:UUID,number:String,type:String?,actor:UUID):RoomView=guarded{requireActive(hotelId); val floor=floor(hotelId,floorId);require(floor.buildingId==buildingId){"Floor does not belong to building"};val id=newId();stampInsert("room_master",id,hotelId,actor,"building_id,floor_id,room_number,room_type",mapOf("building_id" to buildingId,"floor_id" to floorId,"room_number" to number.trim(),"room_type" to type?.trim()?.uppercase()));room(hotelId,id)}
     @Transactional(readOnly=true) fun room(hotelId:UUID,id:UUID)=jdbc.query("select * from room_master where hotel_id=:hotel and id=:id",mapOf("hotel" to hotelId,"id" to id)){r,_->RoomView(r.uuid("id"),r.uuid("building_id"),r.uuid("floor_id"),r.getString("room_number"),r.getString("room_type"),r.getBoolean("active"))}.firstOrNull()?:throw MasterDataNotFound("Room not found")
-    @Transactional(readOnly=true) fun rooms(hotelId:UUID,q:String?,buildingId:UUID?,floorId:UUID?,type:String?,active:Boolean?,page:Int,size:Int):PageView<RoomView>{val p=page.coerceAtLeast(0);val s=size.coerceIn(1,100);val params=mapOf("hotel" to hotelId,"q" to q?.trim()?.takeIf(String::isNotEmpty),"building" to buildingId,"floor" to floorId,"type" to type?.uppercase(),"active" to active,"limit" to s,"offset" to p*s);val where="hotel_id=:hotel and (:q is null or lower(room_number) like lower('%'||:q||'%')) and (:building is null or building_id=:building) and (:floor is null or floor_id=:floor) and (:type is null or room_type=:type) and (:active is null or active=:active)";val items=jdbc.query("select * from room_master where $where order by room_number limit :limit offset :offset",params){r,_->RoomView(r.uuid("id"),r.uuid("building_id"),r.uuid("floor_id"),r.getString("room_number"),r.getString("room_type"),r.getBoolean("active"))};val total=jdbc.queryForObject("select count(*) from room_master where $where",params,Long::class.java)?:0;return PageView(items,p,s,total)}
+    @Transactional(readOnly=true)
+    fun rooms(hotelId:UUID,q:String?,buildingId:UUID?,floorId:UUID?,type:String?,active:Boolean?,page:Int,size:Int):PageView<RoomView> {
+        val p=page.coerceAtLeast(0)
+        val s=size.coerceIn(1,100)
+        val search=RoomSearchQuery(hotelId,q,buildingId,floorId,type,active,p,s)
+        val items=jdbc.query("select * from room_master where ${search.where} order by room_number limit :limit offset :offset",search.parameters){r,_->
+            RoomView(r.uuid("id"),r.uuid("building_id"),r.uuid("floor_id"),r.getString("room_number"),r.getString("room_type"),r.getBoolean("active"))
+        }
+        val total=jdbc.queryForObject("select count(*) from room_master where ${search.where}",search.parameters,Long::class.java)?:0
+        return PageView(items,p,s,total)
+    }
     @Transactional fun updateRoom(hotelId:UUID,id:UUID,buildingId:UUID,floorId:UUID,number:String,type:String?,active:Boolean,actor:UUID):RoomView=guarded{val f=floor(hotelId,floorId);require(f.buildingId==buildingId){"Floor does not belong to building"};if(jdbc.update("update room_master set building_id=:building,floor_id=:floor,room_number=:number,room_type=:type,active=:active,updated_at=:now,updated_by=:actor where id=:id and hotel_id=:hotel",mapOf("hotel" to hotelId,"id" to id,"building" to buildingId,"floor" to floorId,"number" to number.trim(),"type" to type?.uppercase(),"active" to active,"now" to clock.instant(),"actor" to actor.toString()))==0)throw MasterDataNotFound("Room not found");room(hotelId,id)}
 
     @Transactional fun createNamed(kind:String,hotelId:UUID,code:String,name:String,description:String?,actor:UUID):NamedView=guarded{require(kind in setOf("department","skill","role"));requireActive(hotelId);val id=newId();val now=clock.instant();val descriptionColumn=if(kind=="department")"" else ",description";val descriptionValue=if(kind=="department")"" else ",:description";jdbc.update("insert into $kind(id,hotel_id,version,created_at,created_by,updated_at,updated_by,code,name$descriptionColumn,is_active) values(:id,:hotel,0,:now,:actor,:now,:actor,:code,:name$descriptionValue,true)",mapOf("id" to id,"hotel" to hotelId,"now" to now,"actor" to actor.toString(),"code" to normalized(code),"name" to name.trim(),"description" to description));named(kind,hotelId,id)}
@@ -126,4 +136,37 @@ class MasterDataAdminService(private val jdbc: NamedParameterJdbcTemplate, priva
     private fun shiftRow(r:java.sql.ResultSet)=ShiftView(r.uuid("id"),r.getString("code"),r.getString("name"),r.getObject("start_time",LocalTime::class.java),r.getObject("end_time",LocalTime::class.java),r.getBoolean("active"),!r.getObject("end_time",LocalTime::class.java).isAfter(r.getObject("start_time",LocalTime::class.java)))
     private fun java.sql.ResultSet.uuid(name:String)=getObject(name,UUID::class.java)
     private fun <T> guarded(block:()->T):T=try{block()}catch(e:DataIntegrityViolationException){throw MasterDataConflict("Duplicate or cross-hotel relationship")}
+}
+
+internal data class RoomSearchQuery(
+    val hotelId:UUID,
+    val query:String?,
+    val buildingId:UUID?,
+    val floorId:UUID?,
+    val roomType:String?,
+    val active:Boolean?,
+    val page:Int,
+    val size:Int
+) {
+    private val normalizedQuery=query?.trim()?.takeIf(String::isNotEmpty)
+    private val predicates=buildList {
+        add("hotel_id=:hotel")
+        if(normalizedQuery!=null) add("lower(room_number) like :roomSearch")
+        if(buildingId!=null) add("building_id=:building")
+        if(floorId!=null) add("floor_id=:floor")
+        if(!roomType.isNullOrBlank()) add("room_type=:type")
+        if(active!=null) add("active=:active")
+    }
+    val where=predicates.joinToString(" and ")
+    val parameters=MapSqlParameterSource()
+        .addValue("hotel",hotelId)
+        .addValue("limit",size)
+        .addValue("offset",page*size)
+        .also { values ->
+            normalizedQuery?.let { values.addValue("roomSearch","%${it.lowercase()}%") }
+            buildingId?.let { values.addValue("building",it) }
+            floorId?.let { values.addValue("floor",it) }
+            roomType?.trim()?.takeIf(String::isNotEmpty)?.let { values.addValue("type",it.uppercase()) }
+            active?.let { values.addValue("active",it) }
+        }
 }

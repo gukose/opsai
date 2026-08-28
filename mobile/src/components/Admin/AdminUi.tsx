@@ -1,5 +1,13 @@
 import { ReactNode } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { colors, radius, spacing, typography } from "../../theme/tokens";
 export function AdminButton({
   label,
@@ -66,20 +74,25 @@ export function AdminModal({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <View style={styles.backdrop}>
-        <View style={styles.modal}>
+      <KeyboardAvoidingView
+        style={styles.backdrop}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <View style={styles.modal} testID="admin-scrollable-modal">
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{title}</Text>
             <AdminButton label="Close" tone="secondary" onPress={onClose} />
           </View>
-          {children}
+          <View style={styles.modalContent}>{children}</View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 export const adminStyles = StyleSheet.create({
   input: {
+    width: "100%",
+    minWidth: 0,
     borderWidth: 1,
     borderColor: colors.cardBorder,
     borderRadius: radius.md,
@@ -91,12 +104,13 @@ export const adminStyles = StyleSheet.create({
   },
   label: { fontSize: 10, fontWeight: "800", color: colors.textMuted },
   row: {
+    minWidth: 0,
     paddingVertical: 9,
     borderBottomWidth: 1,
     borderColor: colors.divider,
   },
-  rowTitle: { fontSize: 12, fontWeight: "800", color: colors.text },
-  rowDetail: { fontSize: 10, color: colors.textMuted, marginTop: 2 },
+  rowTitle: { fontSize: 12, fontWeight: "800", color: colors.text, flexShrink: 1 },
+  rowDetail: { fontSize: 10, color: colors.textMuted, marginTop: 2, flexShrink: 1 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   error: {
     padding: 8,
@@ -115,6 +129,8 @@ export const adminStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   button: {
     alignSelf: "flex-start",
+    minHeight: 40,
+    justifyContent: "center",
     backgroundColor: colors.green,
     borderRadius: radius.md,
     paddingHorizontal: 14,
@@ -130,6 +146,8 @@ const styles = StyleSheet.create({
   buttonText: { color: "white", fontSize: 11, fontWeight: "900" },
   secondaryText: { color: colors.nav },
   card: {
+    width: "100%",
+    minWidth: 0,
     borderWidth: 1,
     borderColor: colors.cardBorder,
     borderRadius: radius.lg,
@@ -148,6 +166,9 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(7,18,36,.32)",
   },
   modal: {
+    width: "100%",
+    maxWidth: 720,
+    alignSelf: "center",
     maxHeight: "92%",
     backgroundColor: colors.background,
     borderTopLeftRadius: radius.xl,
@@ -159,8 +180,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: spacing.md,
+    flexShrink: 0,
   },
+  modalContent: { flexShrink: 1, minHeight: 0 },
   modalTitle: {
+    flex: 1,
+    flexShrink: 1,
     fontSize: typography.title,
     fontWeight: "900",
     color: colors.text,

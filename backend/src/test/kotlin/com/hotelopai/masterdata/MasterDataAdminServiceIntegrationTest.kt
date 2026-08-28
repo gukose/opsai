@@ -31,10 +31,24 @@ class MasterDataAdminServiceIntegrationTest : PostgresIntegrationTestSupport() {
         service.createRoom(a.id, buildingA.id, floorA.id, "101", "STANDARD", actor)
         service.createRoom(b.id, buildingB.id, floorB.id, "101", "STANDARD", actor)
 
+        assertEquals(1,service.rooms(a.id,null,null,null,null,null,0,100).totalItems)
+        assertEquals(1,service.rooms(a.id,"101",buildingA.id,floorA.id,"standard",true,0,100).totalItems)
+        assertEquals(0,service.rooms(a.id,null,buildingB.id,null,null,null,0,100).totalItems)
+        assertEquals(1,service.rooms(b.id,null,null,null,null,null,0,100).totalItems)
+
         assertThrows<MasterDataConflict> { service.createRoom(a.id, buildingA.id, floorA.id, "101", null, actor) }
         assertThrows<MasterDataNotFound> { service.createRoom(a.id, buildingB.id, floorB.id, "102", null, actor) }
         service.updateHotel(a.id, a.name, a.timezone, null, false, actor)
         assertThrows<InactiveHotel> { service.createBuilding(a.id, "ANNEX", "Annex", actor) }
+    }
+
+    @Test
+    fun `empty hotel returns an empty room page`() {
+        val actor=existingUser()
+        val hotel=service.createHotel("MH_EMPTY","Empty Hotel","UTC",null,actor)
+        val page=service.rooms(hotel.id,null,null,null,null,null,0,100)
+        assertTrue(page.items.isEmpty())
+        assertEquals(0,page.totalItems)
     }
 
     @Test

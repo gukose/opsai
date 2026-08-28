@@ -105,6 +105,7 @@ class DemoBootstrapService(
         if (!properties.enabled) return
         val started = System.nanoTime()
         val hotel = phase("hotel") { hotels.findByCode(HOTEL_CODE) ?: hotels.save(Hotel(code = HOTEL_CODE, name = "Hotel OpAI Demo")) }
+        phase("room-master") { ensureCanonicalRoomMaster(hotel.id) }
         val allPermissionIds = phase("permissions") {
             val existing = permissions.findAll().associateBy { it.code }.toMutableMap()
             REQUIRED_PERMISSIONS.forEach { code ->
@@ -144,7 +145,7 @@ class DemoBootstrapService(
         // already bootstrapped demo (the marker only governs sample tasks).
         phase("inventory") { seedInventory(hotel.id, Instant.now()) }
         phase("dataset") { seedDatasetOnce(hotel.id) }
-        logger.info("event=demo_bootstrap phase=complete totalMs={} transactionCount={} employeeCount={}", elapsedMs(started), 12, staff.size)
+        logger.info("event=demo_bootstrap phase=complete totalMs={} transactionCount={} employeeCount={}", elapsedMs(started), 13, staff.size)
     }
 
     private fun <T> phase(name: String, block: () -> T): T {
@@ -160,6 +161,37 @@ class DemoBootstrapService(
         val existing = departments.findByHotelId(hotelId).associateBy { it.code }
         return listOf("MANAGEMENT", "SALES_MARKETING", "FINANCE", "HOUSEKEEPING", "MAINTENANCE", "FRONT_OFFICE", "GUEST_RELATIONS", "FOOD_BEVERAGE", "SECURITY", "IT_SYSTEMS")
             .associateWith { code -> existing[code] ?: departments.save(Department(hotelId = hotelId, code = code, name = code.replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase))) }
+    }
+
+    /** Keeps the demo PMS fixture and Administration on the same canonical room identities. */
+    private fun ensureCanonicalRoomMaster(hotelId: UUID) {
+        val now=Timestamp.from(Instant.now())
+        jdbc.update(
+            """insert into building(id,hotel_id,code,name,active,created_at,updated_at)
+               values(:id,:hotel,'MAIN','Main Building',true,:now,:now)
+               on conflict(hotel_id,code) do nothing""",
+            mapOf("id" to UuidV7Generator.generate(),"hotel" to hotelId,"now" to now)
+        )
+        val buildingId=jdbc.queryForObject("select id from building where hotel_id=:hotel and code='MAIN'",mapOf("hotel" to hotelId),UUID::class.java)!!
+        (1..5).forEach { floor ->
+            jdbc.update(
+                """insert into hotel_floor(id,hotel_id,building_id,floor_number,name,active,created_at,updated_at)
+                   values(:id,:hotel,:building,:floor,:name,true,:now,:now)
+                   on conflict(building_id,floor_number) do nothing""",
+                mapOf("id" to UuidV7Generator.generate(),"hotel" to hotelId,"building" to buildingId,"floor" to floor,"name" to "Floor $floor","now" to now)
+            )
+            val floorId=jdbc.queryForObject("select id from hotel_floor where building_id=:building and floor_number=:floor",mapOf("building" to buildingId,"floor" to floor),UUID::class.java)!!
+            (1..20).forEach { index ->
+                val number="${floor}${index.toString().padStart(2,'0')}"
+                val type=when(index) { in 1..12 -> "STANDARD"; in 13..17 -> "DELUXE"; in 18..19 -> "JUNIOR_SUITE"; else -> "EXECUTIVE_SUITE" }
+                jdbc.update(
+                    """insert into room_master(id,hotel_id,building_id,floor_id,room_number,room_type,active,created_at,updated_at)
+                       values(:id,:hotel,:building,:floor,:number,:type,true,:now,:now)
+                       on conflict(hotel_id,room_number) do nothing""",
+                    mapOf("id" to UuidV7Generator.generate(),"hotel" to hotelId,"building" to buildingId,"floor" to floorId,"number" to number,"type" to type,"now" to now)
+                )
+            }
+        }
     }
 
     private fun ensureSkills(hotelId: UUID): Map<String, Skill> {

@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import {
@@ -29,6 +30,7 @@ import { EmployeeEditor } from "./EmployeeEditor";
 import { HotelOnboardingWizard } from "./HotelOnboardingWizard";
 import { RolePermissionEditor } from "./RolePermissionEditor";
 import { RoomCsvImportPanel } from "./RoomCsvImportPanel";
+import { adminLayoutForWidth } from "./adminResponsive";
 
 type Section =
   | "hotels"
@@ -105,6 +107,8 @@ export function AdministrationScreen({
   currentUser: CurrentUserSnapshot | null;
   refreshAccessToken?: () => Promise<string | null>;
 }) {
+  const { width } = useWindowDimensions();
+  const layout = adminLayoutForWidth(width);
   const api = useMemo(
     () =>
       new AdminApi(
@@ -232,8 +236,8 @@ export function AdministrationScreen({
   );
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <View>
+      <View style={[styles.header, layout.phone && styles.headerPhone]}>
+        <View style={styles.headerCopy}>
           <Text style={styles.title}>Administration</Text>
           <Text style={styles.subtitle}>
             {selectedHotel
@@ -249,6 +253,7 @@ export function AdministrationScreen({
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.selector}
+        contentContainerStyle={styles.horizontalContent}
       >
         {hotels.map((h) => (
           <Pressable
@@ -265,6 +270,7 @@ export function AdministrationScreen({
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.tabs}
+        contentContainerStyle={styles.horizontalContent}
       >
         {visibleSections.map((s) => (
           <Pressable
@@ -279,7 +285,13 @@ export function AdministrationScreen({
           </Pressable>
         ))}
       </ScrollView>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={[
+          styles.content,
+          layout.phone && styles.contentPhone,
+        ]}
+      >
         {error ? (
           <Text style={adminStyles.error}>{businessError(error)}</Text>
         ) : null}
@@ -701,6 +713,10 @@ function AddDialog({
       title={`Add ${singular(section)}`}
       onClose={onClose}
     >
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.dialogBody}
+      >
       {parents.length ? (
         <Filter values={parents} selected={parent} onSelect={setParent} />
       ) : null}
@@ -751,6 +767,7 @@ function AddDialog({
         }
         onPress={() => void save()}
       />
+      </ScrollView>
     </AdminModal>
   );
 }
@@ -815,6 +832,10 @@ function RoomEditor({
       title={`Room ${room?.roomNumber ?? ""}`}
       onClose={onClose}
     >
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.dialogBody}
+      >
       <Filter
         values={buildings}
         selected={buildingId}
@@ -880,6 +901,7 @@ function RoomEditor({
         disabled={!canUpdate || !floorId || !number}
         onPress={() => void save()}
       />
+      </ScrollView>
     </AdminModal>
   );
 }
@@ -917,12 +939,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
+  headerPhone: { alignItems: "stretch", flexDirection: "column" },
+  headerCopy: { flex: 1, minWidth: 0 },
   title: { fontSize: typography.title, fontWeight: "900", color: colors.text },
   subtitle: { fontSize: typography.body, color: colors.textMuted },
   selector: {
     maxHeight: 54,
-    paddingHorizontal: spacing.lg,
     marginTop: spacing.md,
+  },
+  horizontalContent: {
+    paddingHorizontal: spacing.lg,
+    paddingRight: spacing.xl,
   },
   chip: {
     paddingHorizontal: 12,
@@ -941,7 +968,6 @@ const styles = StyleSheet.create({
   chipCode: { fontSize: 8, color: colors.textMuted },
   tabs: {
     maxHeight: 43,
-    paddingHorizontal: spacing.lg,
     borderBottomWidth: 1,
     borderColor: colors.divider,
   },
@@ -949,6 +975,8 @@ const styles = StyleSheet.create({
   tabActive: { borderBottomWidth: 2, borderColor: colors.green },
   tabText: { fontSize: 10, fontWeight: "900", color: colors.nav },
   content: { padding: spacing.lg, gap: spacing.md, paddingBottom: 80 },
+  contentPhone: { paddingHorizontal: spacing.md },
+  dialogBody: { gap: spacing.sm, paddingBottom: spacing.lg },
   context: {
     borderLeftWidth: 3,
     borderColor: colors.green,
