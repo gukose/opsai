@@ -86,7 +86,18 @@ class AuthSecurityConfiguration(
             .authorizeHttpRequests {
                 it.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 it.requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/refresh").permitAll()
-                it.requestMatchers("/api/v1/integrations/**").permitAll()
+                // PMS demo traffic authenticates with X-Demo-Pms-Key in its controller;
+                // keep this exception limited to the two demo endpoints. Legacy PMS
+                // webhooks retain their own ingress authentication/filter.
+                it.requestMatchers(
+                    HttpMethod.GET,
+                    "/api/v1/integrations/pms/unimock/demo-events/rooms"
+                ).permitAll()
+                it.requestMatchers(
+                    HttpMethod.POST,
+                    "/api/v1/integrations/pms/unimock/demo-events",
+                    "/api/v1/integrations/pms/*/webhooks"
+                ).permitAll()
                 it.requestMatchers(
                     HttpMethod.GET,
                     "/v3/api-docs",
