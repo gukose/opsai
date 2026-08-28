@@ -4,6 +4,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Service
 import java.time.Clock
 import java.time.Instant
+import java.sql.Timestamp
 import java.util.UUID
 
 enum class RoomOperationalStatus { DIRTY, CLEANING, INSPECTION_REQUIRED, REWORK, READY }
@@ -28,7 +29,7 @@ class RoomOperationalStateService(
                values(:hotel,:room,:status,'HOUSEKEEPING',:source,:now)
                on conflict(hotel_id,room_number) do update set status=excluded.status,source_type=excluded.source_type,
                source_reference=excluded.source_reference,updated_at=excluded.updated_at""",
-            mapOf("hotel" to hotelId, "room" to roomNumber, "status" to status.name, "source" to sourceReference, "now" to now)
+            mapOf("hotel" to hotelId, "room" to roomNumber, "status" to status.name, "source" to sourceReference, "now" to Timestamp.from(now))
         )
         return RoomOperationalState(hotelId, roomNumber, status, now)
     }
