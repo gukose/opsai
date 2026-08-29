@@ -7,6 +7,7 @@ import java.util.UUID
 interface HousekeepingRepository {
     fun insert(workflow: HousekeepingWorkflow): HousekeepingWorkflow
     fun findByIdAndHotelId(id: UUID, hotelId: UUID): HousekeepingWorkflow?
+    fun findForUpdate(id: UUID, hotelId: UUID): HousekeepingWorkflow? = findByIdAndHotelId(id, hotelId)
     fun findByIdempotencyKey(hotelId: UUID, key: String): HousekeepingWorkflow?
     fun save(workflow: HousekeepingWorkflow): HousekeepingWorkflow
     fun list(hotelId: UUID): List<HousekeepingWorkflow>

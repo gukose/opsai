@@ -25,6 +25,10 @@ class HousekeepingJdbcRepository(private val jdbc: NamedParameterJdbcTemplate) :
         "select * from housekeeping_workflow where id=:id and hotel_id=:hotelId", mapOf("id" to id, "hotelId" to hotelId), ::map
     ).firstOrNull()
 
+    override fun findForUpdate(id: UUID, hotelId: UUID): HousekeepingWorkflow? = jdbc.query(
+        "select * from housekeeping_workflow where id=:id and hotel_id=:hotelId for update", mapOf("id" to id, "hotelId" to hotelId), ::map
+    ).firstOrNull()
+
     override fun findByIdempotencyKey(hotelId: UUID, key: String): HousekeepingWorkflow? = jdbc.query(
         "select * from housekeeping_workflow where hotel_id=:hotelId and idempotency_key=:key", mapOf("hotelId" to hotelId, "key" to key), ::map
     ).firstOrNull()
@@ -55,10 +59,19 @@ class HousekeepingJdbcRepository(private val jdbc: NamedParameterJdbcTemplate) :
             mapOf("inspection" to inspection.id,"item" to answer.checklistItemId,"passed" to answer.passed,"note" to answer.note)) }
     }
 
-    override fun inspections(workflowId: UUID, hotelId: UUID): List<HousekeepingInspection> = jdbc.query(
+    override fun inspections(workflowId: UUID, hotelId: UUID): List<HousekeepingInspection> {
+        val base = jdbc.query(
         "select * from housekeeping_inspection where workflow_id=:workflowId and hotel_id=:hotelId order by attempt",
         mapOf("workflowId" to workflowId,"hotelId" to hotelId)
-    ) { rs, _ -> HousekeepingInspection(rs.uuid("id"), workflowId, rs.uuid("inspector_user_id"), rs.getInt("attempt"), InspectionResult.valueOf(rs.getString("result")), rs.getString("rejection_reason"), rs.getObject("quality_score") as? Int, emptyList(), rs.instant("started_at")!!, rs.instant("completed_at")!!) }
+        ) { rs, _ -> HousekeepingInspection(rs.uuid("id"), workflowId, rs.uuid("inspector_user_id"), rs.getInt("attempt"), InspectionResult.valueOf(rs.getString("result")), rs.getString("rejection_reason"), rs.getObject("quality_score") as? Int, emptyList(), rs.instant("started_at")!!, rs.instant("completed_at")!!) }
+        if (base.isEmpty()) return base
+        val answers = jdbc.query(
+            "select inspection_id,checklist_item_id,passed,note from housekeeping_inspection_answer where inspection_id in (:ids)",
+            mapOf("ids" to base.map { it.id })
+        ) { rs, _ -> rs.uuid("inspection_id") to InspectionAnswer(rs.uuid("checklist_item_id"), rs.getBoolean("passed"), rs.getString("note")) }
+            .groupBy({ it.first }, { it.second })
+        return base.map { it.copy(answers = answers[it.id].orEmpty()) }
+    }
 
     private fun HousekeepingWorkflow.params() = MapSqlParameterSource()
         .addValue("id",id).addValue("hotelId",hotelId).addValue("taskId",taskId).addValue("type",type.name).addValue("room",roomNumber)

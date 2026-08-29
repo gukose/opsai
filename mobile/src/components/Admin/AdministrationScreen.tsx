@@ -22,6 +22,7 @@ import {
   ShiftDto,
 } from "../../api/admin/AdminApi";
 import { createMobileHotelOpAiClient } from "../../api/hotelOpAiClient";
+import { InspectionsScreen } from "../Housekeeping/InspectionsScreen";
 import { hasPermission } from "../../auth/currentUserHelpers";
 import { CurrentUserSnapshot } from "../../session/sessionTypes";
 import { colors, radius, spacing, typography } from "../../theme/tokens";
@@ -133,6 +134,7 @@ export function AdministrationScreen({
       null,
     ),
     [selectedRoom, setSelectedRoom] = useState<RoomDto | null>(null);
+  const [inspectionsOpen, setInspectionsOpen] = useState(false);
   const [search, setSearch] = useState(""),
     [buildingFilter, setBuildingFilter] = useState(""),
     [floorFilter, setFloorFilter] = useState("");
@@ -252,6 +254,9 @@ export function AdministrationScreen({
         </View>
         {platform ? (
           <AdminButton label="Onboard hotel" onPress={() => setWizard(true)} />
+        ) : null}
+        {hasPermission(currentUser, "HOUSEKEEPING_INSPECTION") ? (
+          <AdminButton label="Inspections" onPress={() => setInspectionsOpen(true)} />
         ) : null}
       </View>
       <ScrollView
@@ -443,6 +448,12 @@ export function AdministrationScreen({
         onClose={() => setSelectedRoom(null)}
         onSaved={() => void loadHotel(hotelId)}
       />
+      {inspectionsOpen ? (
+        <View style={styles.inspectionOverlay}>
+          <Pressable style={styles.inspectionBack} onPress={() => setInspectionsOpen(false)}><Text style={styles.tabText}>← Administration</Text></Pressable>
+          <InspectionsScreen accessToken={accessToken} currentUser={currentUser} refreshAccessToken={refreshAccessToken} />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -1042,4 +1053,6 @@ const styles = StyleSheet.create({
   },
   contextTitle: { fontSize: 13, fontWeight: "900", color: colors.text },
   contextText: { fontSize: 9, color: colors.textMuted },
+  inspectionOverlay: { position: "absolute", inset: 0, backgroundColor: colors.background, zIndex: 20 },
+  inspectionBack: { padding: spacing.lg, borderBottomWidth: 1, borderColor: colors.divider },
 });

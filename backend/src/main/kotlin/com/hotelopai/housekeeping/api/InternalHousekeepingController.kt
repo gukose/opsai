@@ -15,6 +15,8 @@ data class InspectHousekeepingRequest(val result:InspectionResult,val rejectionR
 @RestController
 @RequestMapping("/api/v1/internal/housekeeping")
 class InternalHousekeepingController(private val service:HousekeepingService,private val current:CurrentUserContextResolver) {
+    @GetMapping("/inspections/pending") @PreAuthorize(PermissionExpressions.HOUSEKEEPING_INSPECTION)
+    fun pending()=service.list(current.current().hotelId).filter { it.status==HousekeepingStatus.INSPECTION }
     @GetMapping @PreAuthorize(PermissionExpressions.HOUSEKEEPING_OPERATIONS)
     fun list()=service.list(current.current().hotelId)
     @PostMapping @PreAuthorize(PermissionExpressions.HOUSEKEEPING_OPERATIONS)
@@ -28,8 +30,9 @@ class InternalHousekeepingController(private val service:HousekeepingService,pri
     @PostMapping("/{id}/resume") @PreAuthorize(PermissionExpressions.HOUSEKEEPING_OPERATIONS) fun resume(@PathVariable id:UUID)=service.resume(id,current.current().hotelId)
     @PostMapping("/{id}/finish-cleaning") @PreAuthorize(PermissionExpressions.HOUSEKEEPING_OPERATIONS) fun finish(@PathVariable id:UUID)=service.finishCleaning(id,current.current().hotelId)
     @PostMapping("/{id}/inspect") @PreAuthorize(PermissionExpressions.HOUSEKEEPING_INSPECTION)
-    fun inspect(@PathVariable id:UUID,@RequestBody r:InspectHousekeepingRequest)=service.inspect(id,current.current().hotelId,current.current().userId,InspectHousekeepingCommand(r.result,r.rejectionReason,r.qualityScore,r.answers.map { InspectionAnswer(it.checklistItemId,it.passed,it.note) }))
+    fun inspect(@PathVariable id:UUID,@RequestBody r:InspectHousekeepingRequest)=current.current().let { user -> service.inspect(id,user.hotelId,user.userId,InspectHousekeepingCommand(r.result,r.rejectionReason,r.qualityScore,r.answers.map { InspectionAnswer(it.checklistItemId,it.passed,it.note) }),user.employeeId,user.canonicalEmployeeUserId) }
     @GetMapping("/{id}/inspections") @PreAuthorize(PermissionExpressions.HOUSEKEEPING_INSPECTION) fun inspections(@PathVariable id:UUID)=service.inspectionHistory(id,current.current().hotelId)
+    @GetMapping("/{id}/inspection") @PreAuthorize(PermissionExpressions.HOUSEKEEPING_INSPECTION) fun inspection(@PathVariable id:UUID)=service.inspectionDetail(id,current.current().hotelId)
     @PostMapping("/{id}/close") @PreAuthorize(PermissionExpressions.HOUSEKEEPING_OPERATIONS) fun close(@PathVariable id:UUID)=service.close(id,current.current().hotelId)
 }
 
