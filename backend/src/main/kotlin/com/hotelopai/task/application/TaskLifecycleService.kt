@@ -161,8 +161,19 @@ class TaskLifecycleService @Autowired constructor(
             }
         )
 
-    fun startTask(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task =
-        mutate(taskId = taskId, hotelId = hotelId, operation = TaskTransition.START, now = now, mutation = { task, normalizedNow -> task.start(normalizedNow) })
+    fun startTask(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task {
+        val before = taskRepository.findByIdAndHotelId(taskId.toTaskId(), hotelId)
+            ?: throw TaskNotFoundException(taskId.toTaskId())
+        val workflow = before.takeIf { it.intentType == TaskIntentType.HOUSEKEEPING }
+            ?.let { housekeepingRepository?.findByTaskIdAndHotelId(it.id, hotelId) }
+        val started = mutate(taskId = taskId, hotelId = hotelId, operation = TaskTransition.START, now = now, mutation = { task, normalizedNow -> task.start(normalizedNow) })
+        if (workflow != null && workflow.status != HousekeepingStatus.STARTED) {
+            val updatedWorkflow = workflow.start(PersistenceInstant.toPersistencePrecision(now))
+            housekeepingRepository?.save(updatedWorkflow)
+            logger.info("FUNCTION16_HOUSEKEEPING_START_SYNC hotelId={} taskId={} workflowId={} taskStateBefore={} taskStateAfter={} workflowStateBefore={} workflowStateAfter={} outcome=SUCCESS", hotelId, before.id, workflow.id, before.status, started.status, workflow.status, updatedWorkflow.status)
+        }
+        return started
+    }
 
     fun progressTask(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task =
         resumeTask(taskId, hotelId, now)

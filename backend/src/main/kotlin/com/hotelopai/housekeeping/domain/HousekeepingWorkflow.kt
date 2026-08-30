@@ -42,7 +42,7 @@ data class HousekeepingWorkflow(
     }
 
     fun start(now: Instant): HousekeepingWorkflow {
-        require(status in setOf(HousekeepingStatus.ACCEPTED, HousekeepingStatus.ASSIGNED, HousekeepingStatus.REWORK)) { "Housekeeping workflow cannot start from $status" }
+        require(status in setOf(HousekeepingStatus.CREATED, HousekeepingStatus.ACCEPTED, HousekeepingStatus.ASSIGNED, HousekeepingStatus.REWORK)) { "Housekeeping workflow cannot start from $status" }
         return copy(status = HousekeepingStatus.STARTED, startedAt = startedAt ?: now, activeSegmentStartedAt = now, pauseSegmentStartedAt = null, updatedAt = now)
     }
 
