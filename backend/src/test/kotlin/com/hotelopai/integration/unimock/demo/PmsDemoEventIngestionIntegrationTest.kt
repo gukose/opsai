@@ -40,6 +40,7 @@ class PmsDemoEventIngestionIntegrationTest:PostgresIntegrationTestSupport() {
         assertEquals(1,count("select count(*) from housekeeping_workflow where hotel_id=:hotel",fixture.hotel))
         assertEquals(1,count("select count(*) from task where hotel_id=:hotel and intent_type='MINIBAR' and source='PMS'",fixture.hotel))
         assertEquals(1,count("select count(*) from room_minibar_readiness where hotel_id=:hotel and status='PENDING'",fixture.hotel))
+        assertEquals(1,count("select count(*) from housekeeping_workflow where hotel_id=:hotel and task_id=(select id from task where hotel_id=:hotel and intent_type='HOUSEKEEPING' order by created_at desc limit 1) and inspection_required=true",fixture.hotel))
     }
 
     @Test fun `OOO continues to use existing task engine`() {
