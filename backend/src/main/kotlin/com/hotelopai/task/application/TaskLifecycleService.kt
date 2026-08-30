@@ -11,6 +11,8 @@ import com.hotelopai.task.domain.TaskTransition
 import com.hotelopai.observability.OperationalObservability
 import com.hotelopai.shared.kernel.PersistenceInstant
 import com.hotelopai.housekeeping.application.MinibarReadinessService
+import com.hotelopai.housekeeping.application.HousekeepingRepository
+import com.hotelopai.housekeeping.domain.HousekeepingStatus
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -33,7 +35,8 @@ class TaskLifecycleService @Autowired constructor(
     private val completionObservers: List<TaskCompletionObserver> = emptyList(),
     private val taskCreationAssignmentOrchestrator: TaskCreationAssignmentOrchestrator = NoOpTaskCreationAssignmentOrchestrator,
     private val minibarReadinessService: MinibarReadinessService? = null,
-    private val automaticFlashInterruptionHandler: AutomaticFlashInterruptionHandler = NoOpAutomaticFlashInterruptionHandler
+    private val automaticFlashInterruptionHandler: AutomaticFlashInterruptionHandler = NoOpAutomaticFlashInterruptionHandler,
+    private val housekeepingRepository: HousekeepingRepository? = null
 ) : TaskApplicationPort {
     constructor(taskRepository: TaskRepository) : this(
         taskRepository = taskRepository,
@@ -172,6 +175,21 @@ class TaskLifecycleService @Autowired constructor(
 
     fun completeTask(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task =
         run {
+            val currentTask = taskRepository.findByIdAndHotelId(taskId.toTaskId(), hotelId)
+            val housekeeping = currentTask?.let { housekeepingRepository?.findByTaskIdAndHotelId(it.id, hotelId) }
+            if (currentTask != null && housekeeping?.inspectionRequired == true && housekeeping.status in setOf(HousekeepingStatus.STARTED, HousekeepingStatus.REWORK)) {
+                logger.info("HOUSEKEEPING_COMPLETION_EVALUATION taskId={} taskType={} taskState={} workflowId={} workflowState={} inspectionRequired=true", currentTask.id, currentTask.intentType, currentTask.status, housekeeping.id, housekeeping.status)
+                logger.info("HOUSEKEEPING_COMPLETION_DECISION taskId={} decision=SEND_TO_INSPECTION reason=inspection_required", currentTask.id)
+                val persistedNow = PersistenceInstant.toPersistencePrecision(now)
+                val waiting = mutate(taskId, hotelId, TaskTransition.COMPLETE, persistedNow, { task, normalizedNow -> task.wait(normalizedNow) }, successMessage = { _, _ -> "Housekeeping cleaning sent to inspection" })
+                housekeepingRepository?.save(housekeeping.finishCleaning(persistedNow))
+                logger.info("HOUSEKEEPING_INSPECTION_TRANSITION taskId={} workflowId={} previousTaskState={} newTaskState={} previousWorkflowState={} newWorkflowState={}", currentTask.id, housekeeping.id, currentTask.status, waiting.status, housekeeping.status, HousekeepingStatus.INSPECTION)
+                return@run waiting
+            }
+            if (currentTask != null && currentTask.intentType == TaskIntentType.HOUSEKEEPING) {
+                logger.info("HOUSEKEEPING_COMPLETION_EVALUATION taskId={} taskType={} taskState={} workflowId={} workflowState={} inspectionRequired={}", currentTask.id, currentTask.intentType, currentTask.status, housekeeping?.id, housekeeping?.status, housekeeping?.inspectionRequired ?: false)
+                logger.info("HOUSEKEEPING_COMPLETION_DECISION taskId={} decision=NORMAL_COMPLETE reason=no_active_inspection_policy", currentTask.id)
+            }
             taskRepository.findByIdAndHotelId(taskId.toTaskId(), hotelId)
                 ?.takeIf { it.status == TaskStatus.COMPLETED }
                 ?.let { return@run it }

@@ -25,6 +25,10 @@ class HousekeepingJdbcRepository(private val jdbc: NamedParameterJdbcTemplate) :
         "select * from housekeeping_workflow where id=:id and hotel_id=:hotelId", mapOf("id" to id, "hotelId" to hotelId), ::map
     ).firstOrNull()
 
+    override fun findByTaskIdAndHotelId(taskId: UUID, hotelId: UUID): HousekeepingWorkflow? = jdbc.query(
+        "select * from housekeeping_workflow where task_id=:taskId and hotel_id=:hotelId", mapOf("taskId" to taskId, "hotelId" to hotelId), ::map
+    ).firstOrNull()
+
     override fun findForUpdate(id: UUID, hotelId: UUID): HousekeepingWorkflow? = jdbc.query(
         "select * from housekeeping_workflow where id=:id and hotel_id=:hotelId for update", mapOf("id" to id, "hotelId" to hotelId), ::map
     ).firstOrNull()

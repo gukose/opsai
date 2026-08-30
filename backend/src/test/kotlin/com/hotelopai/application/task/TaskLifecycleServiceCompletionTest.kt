@@ -12,8 +12,35 @@ import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import com.hotelopai.housekeeping.application.HousekeepingRepository
+import com.hotelopai.housekeeping.domain.*
 
 class TaskLifecycleServiceCompletionTest {
+    @Test
+    fun `housekeeping completion enters inspection through canonical task endpoint`() {
+        val tasks = InMemoryTaskStore()
+        val hotel = UUID.fromString("018f6b7a-4f22-7caa-8f60-9e4b0f7f4001")
+        val now = Instant.parse("2026-07-08T10:00:00Z")
+        val workflowId = UUID.randomUUID()
+        var workflow = HousekeepingWorkflow(id = workflowId, hotelId = hotel, taskId = UUID.randomUUID(), type = HousekeepingWorkflowType.DEPARTURE_CLEANING, roomNumber = "101", status = HousekeepingStatus.STARTED, inspectionRequired = true, idempotencyKey = "completion-test", createdAt = now, updatedAt = now)
+        val housekeeping = object : HousekeepingRepository {
+            override fun insert(w: HousekeepingWorkflow) = w
+            override fun findByIdAndHotelId(id: UUID, hotelId: UUID) = workflow.takeIf { it.id == id && it.hotelId == hotelId }
+            override fun findByTaskIdAndHotelId(taskId: UUID, hotelId: UUID) = workflow.takeIf { it.taskId == taskId && it.hotelId == hotelId }
+            override fun findByIdempotencyKey(hotelId: UUID, key: String) = workflow
+            override fun save(w: HousekeepingWorkflow): HousekeepingWorkflow { workflow = w; return w }
+            override fun list(hotelId: UUID) = listOf(workflow)
+            override fun appendInspection(hotelId: UUID, inspection: HousekeepingInspection) = Unit
+            override fun inspections(workflowId: UUID, hotelId: UUID) = emptyList<HousekeepingInspection>()
+        }
+        val service = TaskLifecycleService(tasks, completionPolicy = NoOpCompletionPolicy(), housekeepingRepository = housekeeping)
+        val created = service.createTask(newCreateCommand(now).copy(hotelId = hotel), now)
+        workflow = workflow.copy(taskId = created.id)
+        service.startTask(created.id.toString(), hotel, now.plusSeconds(60))
+        val waiting = service.completeTask(created.id.toString(), hotel, now.plusSeconds(120))
+        assertEquals(TaskStatus.WAITING, waiting.status)
+        assertEquals(HousekeepingStatus.INSPECTION, workflow.status)
+    }
     @Test
     fun `complete task succeeds after PMS verification`() {
         val taskRepository = InMemoryTaskStore()
