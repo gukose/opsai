@@ -86,8 +86,7 @@ class HousekeepingService(
         val applicable=template?.items.orEmpty(); val answerById=command.answers.associateBy { it.checklistItemId }
         require(answerById.size==command.answers.size) { "Duplicate checklist answers are not allowed" }
         val passed=applicable.count { answerById[it.id]?.passed == true }; val score=if(applicable.isEmpty()) 100 else (passed*100.0/applicable.size).toInt()
-        if(command.result==InspectionResult.PASS) require(applicable.all { answerById[it.id]?.passed == true }) { "All mandatory checklist items must pass before approval" }
-        if(command.result==InspectionResult.REJECT) require(command.rejectionReason?.isNotBlank()==true || applicable.any { answerById[it.id]?.passed==false }) { "Rejection requires a failed checklist item or reason" }
+        if(command.result==InspectionResult.REJECT) require(command.rejectionReason?.isNotBlank()==true) { "Please enter a reason for rejection." }
         val now=clock.instant(); val updated=current.inspect(command.result,now)
         val history=repository.inspections(id,hotelId)
         repository.appendInspection(hotelId,HousekeepingInspection(UuidV7Generator.generate(now),id,inspectorUserId,history.size+1,command.result,command.rejectionReason,score,command.answers,current.inspectionStartedAt?:now,now))

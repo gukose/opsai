@@ -47,10 +47,11 @@ class Function16InspectionTest {
         verify(repo).appendInspection(eq(hotel) ?: hotel,org.mockito.ArgumentMatchers.any(HousekeepingInspection::class.java) ?: HousekeepingInspection(UUID.randomUUID(),workflowId,supervisor,1,InspectionResult.REJECT,"Bathroom failed",50,emptyList(),now,now))
     }
 
-    @Test fun `approval with failed mandatory item is rejected server side`() {
+    @Test fun `approval does not require checklist answers for MVP`() {
         val workflow=workflow(HousekeepingStatus.INSPECTION).copy(templateId=UUID.randomUUID()); val repo=mock(HousekeepingRepository::class.java); doReturn(workflow).`when`(repo).findForUpdate(workflowId,hotel); doReturn(emptyList<HousekeepingInspection>()).`when`(repo).inspections(workflowId,hotel)
         val service=service(repo,mock(TaskLifecycleService::class.java),templates=templateService(workflow.templateId!!))
-        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException::class.java) { service.inspect(workflowId,hotel,supervisor,InspectHousekeepingCommand(InspectionResult.PASS,null,100,listOf(InspectionAnswer(item1,true),InspectionAnswer(item2,false)))) }
+        service.inspect(workflowId,hotel,supervisor,InspectHousekeepingCommand(InspectionResult.PASS,null,null,emptyList()))
+        verify(repo).appendInspection(eq(hotel) ?: hotel, org.mockito.ArgumentMatchers.any(HousekeepingInspection::class.java) ?: HousekeepingInspection(UUID.randomUUID(),workflowId,supervisor,1,InspectionResult.PASS,null,100,emptyList(),now,now))
     }
 
     @Test fun `assigned housekeeper cannot approve own inspection even with permission`() {
