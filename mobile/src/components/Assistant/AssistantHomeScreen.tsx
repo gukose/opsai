@@ -298,6 +298,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
           </ScrollView>
         ) : activeSection === "tasks" ? (
           <TasksScreen
+            accessToken={accessToken}
             tasks={tasks}
             selectedTask={selectedTask}
             selectedTaskId={selectedTaskId}

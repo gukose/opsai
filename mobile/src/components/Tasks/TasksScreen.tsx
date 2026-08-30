@@ -10,6 +10,7 @@ import { TaskDetailCard } from "./TaskDetailCard";
 import { TaskEmptyState } from "./TaskEmptyState";
 
 type TasksScreenProps = {
+  accessToken?: string | null;
   tasks: TaskSummary[];
   selectedTask: TaskDetail | null;
   selectedTaskId: string | null;
@@ -35,6 +36,7 @@ type TasksScreenProps = {
 };
 
 export function TasksScreen({
+  accessToken,
   tasks,
   selectedTask,
   selectedTaskId,
@@ -153,6 +155,9 @@ export function TasksScreen({
               assignmentCandidates={assignmentCandidates}
               onAssignmentOpen={onAssignmentOpen}
               onAssign={canAssignTasks ? onAssignTask : undefined}
+              accessToken={accessToken}
+              currentUser={currentUser}
+              onInspectionDecision={onRefresh}
             />
           ) : null}
         </ScrollView>
