@@ -95,6 +95,7 @@ data class TaskResponse(
     val overdueAt: Instant?,
     val totalPauseDurationSeconds: Long = 0,
     val actualWorkingDurationSeconds: Long = 0
+    ,val awaitingInspection: Boolean = false
 ) {
     companion object {
         // Timing must be calculated from persisted state history by TaskResponseMapper.
@@ -122,6 +123,7 @@ data class TaskResponse(
                 overdueAt = task.overdueAt,
                 totalPauseDurationSeconds = timing.totalPauseDurationSeconds,
                 actualWorkingDurationSeconds = timing.actualWorkingDurationSeconds
+                ,awaitingInspection = false
             )
 
         private fun safeUnassignedReason(code: String): String = when (code) {

@@ -32,7 +32,7 @@ export function TaskListItem({ task, active, onPress }: TaskListItemProps) {
             {`Problem: ${task.description}`}
           </Text>
           <View style={styles.metaRow}>
-            <TaskStatusChip status={task.status} />
+            <TaskStatusChip status={task.status} awaitingInspection={task.awaitingInspection} />
             <View style={styles.metaPill}>
               <Clock3 color={colors.textMuted} size={11} strokeWidth={2.2} />
               <Text style={styles.metaText}>{formatSlaCountdown(task.slaDeadline)}</Text>

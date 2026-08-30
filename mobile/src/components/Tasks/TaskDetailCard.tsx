@@ -110,7 +110,7 @@ export function TaskDetailCard({
         <InfoChip label="Intent" value={task.intentType} />
         <InfoChip label="Source" value={task.source} />
       </View>
-      <Text style={styles.description}>{task.status === "STARTED" || task.status === "IN_PROGRESS" ? `Working · ${formatDuration(productiveSeconds)}` : task.status === "WAITING" ? `Paused · ${formatDuration(task.totalPauseDurationSeconds ?? 0)}\nWorked · ${formatDuration(task.actualWorkingDurationSeconds ?? 0)}` : task.completedAt ? `Worked · ${formatDuration(task.actualWorkingDurationSeconds ?? 0)}` : ""}</Text>
+      <Text style={styles.description}>{task.status === "STARTED" || task.status === "IN_PROGRESS" ? `Working · ${formatDuration(productiveSeconds)}` : task.status === "WAITING" ? `${task.awaitingInspection ? "Waiting for Inspection" : "Paused"} · ${formatDuration(task.totalPauseDurationSeconds ?? 0)}\nWorked · ${formatDuration(task.actualWorkingDurationSeconds ?? 0)}` : task.completedAt ? `Worked · ${formatDuration(task.actualWorkingDurationSeconds ?? 0)}` : ""}</Text>
       {task.intentType === "MINIBAR" || task.priority === "URGENT" ? <Text style={styles.kicker}>FLASH · Minibar Check</Text> : null}
 
       {onAssign ? (
@@ -179,7 +179,7 @@ export function TaskDetailCard({
             disabled={disabled}
           />
         ) : null}
-        {actions.complete ? (
+        {actions.complete && !task.awaitingInspection ? (
           <ActionButton
             icon={CheckCheck}
             label="Complete"

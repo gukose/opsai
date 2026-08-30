@@ -4,15 +4,16 @@ import { colors, radius, spacing, typography } from "../../theme/tokens";
 
 type TaskStatusChipProps = {
   status: string;
+  awaitingInspection?: boolean;
 };
 
-export function TaskStatusChip({ status }: TaskStatusChipProps) {
+export function TaskStatusChip({ status, awaitingInspection = false }: TaskStatusChipProps) {
   const tone = getTone(status);
 
   return (
     <View style={[styles.chip, tone.container]}>
       <View style={[styles.dot, tone.dot]} />
-      <Text style={[styles.label, tone.label]}>{status.split("_").join(" ")}</Text>
+      <Text style={[styles.label, tone.label]}>{awaitingInspection ? "Waiting for Inspection" : status.split("_").join(" ")}</Text>
     </View>
   );
 }

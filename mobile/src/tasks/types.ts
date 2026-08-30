@@ -27,6 +27,7 @@ export type TaskSummary = {
   source: string;
   unassignedReasonCode: string | null;
   unassignedReason: string | null;
+  awaitingInspection?: boolean;
 };
 
 export type AssignmentCandidate = {
@@ -85,7 +86,8 @@ export function taskSummaryFromResponse(task: TaskResponseDto): TaskSummary {
     intentType: task.intentType,
     source: task.source,
     unassignedReasonCode: task.unassignedReasonCode ?? null,
-    unassignedReason: task.unassignedReason ?? null
+    unassignedReason: task.unassignedReason ?? null,
+    awaitingInspection: Boolean((task as TaskResponseDto & { awaitingInspection?: boolean }).awaitingInspection)
   };
 }
 
