@@ -18,6 +18,7 @@ export type TaskListFilters = {
   assignment?: string | null;
   createdFrom?: string | null;
   createdTo?: string | null;
+  inspectionRequired?: boolean;
   page?: number;
   size?: number;
 };
@@ -82,6 +83,7 @@ export type TaskListQuery = {
   assignment?: string;
   createdFrom?: string;
   createdTo?: string;
+  inspectionRequired?: boolean;
   page?: number;
   size?: number;
 };
@@ -107,6 +109,7 @@ export function buildTaskListQuery(filters?: TaskListFilters): TaskListQuery {
   if (filters?.createdTo) {
     query.createdTo = filters.createdTo;
   }
+  if (filters?.inspectionRequired) query.inspectionRequired = true;
   if (typeof filters?.page === "number") {
     query.page = filters.page;
   }

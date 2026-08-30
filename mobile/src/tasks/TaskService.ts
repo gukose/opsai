@@ -124,5 +124,6 @@ function toApiFilters(filters: TaskFilterState): TaskListFilters {
     assignment: filters.assignment,
     createdFrom: filters.createdFrom,
     createdTo: filters.createdTo
+    ,inspectionRequired: filters.inspectionRequired
   };
 }

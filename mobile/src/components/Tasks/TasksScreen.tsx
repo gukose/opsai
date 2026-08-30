@@ -230,6 +230,11 @@ function TaskFilterRow({
           }
         />
         <FilterChip
+          label="Inspection Required"
+          active={filters.inspectionRequired === true}
+          onPress={() => onChange({ ...filters, inspectionRequired: !filters.inspectionRequired, status: [] })}
+        />
+        <FilterChip
           label="Mine"
           active={filters.assignment === "mine"}
           onPress={() => onChange({ ...filters, assignment: filters.assignment === "mine" ? null : "mine" })}

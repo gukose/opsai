@@ -158,6 +158,7 @@ class TaskPersistenceRepository(
             createdTo?.let {
                 predicates += criteriaBuilder.lessThan(root.get("createdAt"), it)
             }
+            inspectionTaskIds?.let { ids -> predicates += if (ids.isEmpty()) criteriaBuilder.disjunction() else root.get<UUID>("id").`in`(ids) }
 
             criteriaBuilder.and(*predicates.toTypedArray())
         }

@@ -56,6 +56,7 @@ interface TaskRepository {
             }
             .filter { task -> query.createdFrom?.let { !task.createdAt.isBefore(it) } ?: true }
             .filter { task -> query.createdTo?.let { task.createdAt.isBefore(it) } ?: true }
+            .filter { task -> query.inspectionTaskIds?.contains(task.id) ?: true }
 
         val fromIndex = (query.pageRequest.page * query.pageRequest.size).coerceAtMost(filtered.size)
         val toIndex = (fromIndex + query.pageRequest.size).coerceAtMost(filtered.size)
@@ -81,6 +82,7 @@ data class TaskSearchQuery(
     val assignment: TaskAssignmentFilter? = null,
     val createdFrom: Instant? = null,
     val createdTo: Instant? = null,
+    val inspectionTaskIds: Set<UUID>? = null,
     val visibility: TaskVisibilityScope? = null
 )
 

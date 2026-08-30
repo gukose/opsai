@@ -24,6 +24,8 @@ import org.springframework.web.bind.annotation.RestController
 import java.time.Instant
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
+import com.hotelopai.housekeeping.application.HousekeepingRepository
+import com.hotelopai.housekeeping.domain.HousekeepingStatus
 
 @RestController
 @RequestMapping("/api/v1/tasks")
@@ -33,7 +35,8 @@ class TaskController(
     private val currentUserContextResolver: CurrentUserContextResolver,
     private val supervisorTaskAssignmentService: SupervisorTaskAssignmentService,
     private val taskAssignmentCandidateQuery: TaskAssignmentCandidateQuery,
-    private val taskResponseMapper: TaskResponseMapper
+    private val taskResponseMapper: TaskResponseMapper,
+    private val housekeepingRepository: HousekeepingRepository? = null
 ) {
     @PostMapping
     @PreAuthorize(PermissionExpressions.TASK_CREATE)
@@ -74,6 +77,7 @@ class TaskController(
         @RequestParam(required = false) assignment: String?,
         @RequestParam(required = false) createdFrom: String?,
         @RequestParam(required = false) createdTo: String?,
+        @RequestParam(required = false, defaultValue = "false") inspectionRequired: Boolean,
         @RequestParam(required = false) page: Int?,
         @RequestParam(required = false) size: Int?
         ): Any {
@@ -86,7 +90,7 @@ class TaskController(
             priority == null &&
             assignment == null &&
             createdFrom == null &&
-            createdTo == null
+            createdTo == null && !inspectionRequired
         ) {
             return taskResponseMapper.toResponses(taskLifecycleService.listTasksForScope(scope))
         }
@@ -111,7 +115,10 @@ class TaskController(
                     priorities = parseEnumSet<TaskPriority>(priority, "priority"),
                     assignment = parseAssignment(assignment),
                     createdFrom = parseInstant(createdFrom, "createdFrom"),
-                    createdTo = parseInstant(createdTo, "createdTo")
+                    createdTo = parseInstant(createdTo, "createdTo"),
+                    inspectionTaskIds = if (inspectionRequired) housekeepingRepository?.list(currentUser.hotelId).orEmpty()
+                        .filter { it.status == HousekeepingStatus.INSPECTION }
+                        .map { it.taskId }.toSet() else null
                 ).also { validateCreatedRange(it.createdFrom, it.createdTo) }
             )
         )

@@ -8,6 +8,7 @@ export type TaskFilterState = {
   assignment: string | null;
   createdFrom?: string | null;
   createdTo?: string | null;
+  inspectionRequired?: boolean;
   page?: number | null;
   size?: number | null;
 };
@@ -172,6 +173,7 @@ export function hasActiveTaskFilters(filters: TaskFilterState): boolean {
       filters.assignment ||
       filters.createdFrom ||
       filters.createdTo
+      || filters.inspectionRequired
   );
 }
 
