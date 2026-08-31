@@ -96,6 +96,7 @@ data class TaskResponse(
     val totalPauseDurationSeconds: Long = 0,
     val actualWorkingDurationSeconds: Long = 0
     ,val awaitingInspection: Boolean = false
+    ,val latestInspectionRejectionReason: String? = null
 ) {
     companion object {
         // Timing must be calculated from persisted state history by TaskResponseMapper.
@@ -124,6 +125,7 @@ data class TaskResponse(
                 totalPauseDurationSeconds = timing.totalPauseDurationSeconds,
                 actualWorkingDurationSeconds = timing.actualWorkingDurationSeconds
                 ,awaitingInspection = false
+                ,latestInspectionRejectionReason = null
             )
 
         private fun safeUnassignedReason(code: String): String = when (code) {

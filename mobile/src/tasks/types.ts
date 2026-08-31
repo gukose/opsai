@@ -28,6 +28,7 @@ export type TaskSummary = {
   unassignedReasonCode: string | null;
   unassignedReason: string | null;
   awaitingInspection?: boolean;
+  latestInspectionRejectionReason?: string | null;
 };
 
 export type AssignmentCandidate = {
@@ -88,6 +89,7 @@ export function taskSummaryFromResponse(task: TaskResponseDto): TaskSummary {
     unassignedReasonCode: task.unassignedReasonCode ?? null,
     unassignedReason: task.unassignedReason ?? null,
     awaitingInspection: Boolean((task as TaskResponseDto & { awaitingInspection?: boolean }).awaitingInspection)
+    ,latestInspectionRejectionReason: (task as TaskResponseDto & { latestInspectionRejectionReason?: string | null }).latestInspectionRejectionReason ?? null
   };
 }
 

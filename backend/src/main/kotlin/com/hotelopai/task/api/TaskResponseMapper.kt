@@ -11,7 +11,9 @@ import com.hotelopai.housekeeping.domain.HousekeepingStatus
 class TaskResponseMapper(private val history: TaskStateHistoryRepository, private val housekeeping: HousekeepingRepository? = null) {
     fun toResponse(task: Task): TaskResponse {
         val timing = TaskTimingCalculator.calculate(history.findByTaskId(task.id), Instant.now())
-        return TaskResponse.from(task, timing).copy(awaitingInspection = isAwaitingInspection(task))
+        val workflow = housekeeping?.findByTaskIdAndHotelId(task.id, task.hotelId)
+        val latestReason = workflow?.takeIf { it.status.name == "REWORK" }?.let { housekeeping.inspections(it.id, task.hotelId).asReversed().firstOrNull { inspection -> inspection.result.name == "REJECT" }?.rejectionReason }
+        return TaskResponse.from(task, timing).copy(awaitingInspection = workflow?.let { it.inspectionRequired && it.status == HousekeepingStatus.INSPECTION } == true, latestInspectionRejectionReason = latestReason)
     }
 
     fun toResponses(tasks: List<Task>): List<TaskResponse> {
