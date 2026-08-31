@@ -71,7 +71,7 @@ data class HousekeepingWorkflow(
     }
 
     fun finishCleaning(now: Instant): HousekeepingWorkflow {
-        require(status == HousekeepingStatus.STARTED) { "Cleaning can only finish while active" }
+        require(status == HousekeepingStatus.STARTED || status == HousekeepingStatus.REWORK) { "Cleaning can only finish while active or in rework" }
         val next = if (inspectionRequired) HousekeepingStatus.INSPECTION else HousekeepingStatus.COMPLETED
         return copy(
             status = next,

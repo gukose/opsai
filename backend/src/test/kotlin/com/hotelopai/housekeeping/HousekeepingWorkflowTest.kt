@@ -30,4 +30,16 @@ class HousekeepingWorkflowTest {
         assertThatThrownBy { HousekeepingInspection(UUID.randomUUID(),UUID.randomUUID(),UUID.randomUUID(),1,InspectionResult.REJECT,null,null,emptyList(),start,start) }
             .isInstanceOf(IllegalArgumentException::class.java)
     }
+
+    @Test fun `rework completion returns workflow to inspection`() {
+        val rework=workflow().assign(start).accept(start).start(start).finishCleaning(start.plusSeconds(60))
+            .inspect(InspectionResult.REJECT,start.plusSeconds(70))
+        assertThat(rework.finishCleaning(start.plusSeconds(180)).status).isEqualTo(HousekeepingStatus.INSPECTION)
+    }
+
+    @Test fun `completion from inspection remains invalid`() {
+        val inspection=workflow().assign(start).accept(start).start(start).finishCleaning(start.plusSeconds(60))
+        assertThatThrownBy { inspection.inspect(InspectionResult.PASS,start.plusSeconds(70)).finishCleaning(start.plusSeconds(80)) }
+            .isInstanceOf(IllegalArgumentException::class.java)
+    }
 }
