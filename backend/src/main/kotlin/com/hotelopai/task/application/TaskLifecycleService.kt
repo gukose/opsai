@@ -162,16 +162,23 @@ class TaskLifecycleService @Autowired constructor(
         )
 
     fun startTask(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task {
+        val startedAt = System.nanoTime()
         val before = taskRepository.findByIdAndHotelId(taskId.toTaskId(), hotelId)
             ?: throw TaskNotFoundException(taskId.toTaskId())
+        val lookupMs = elapsedMs(startedAt)
         val workflow = before.takeIf { it.intentType == TaskIntentType.HOUSEKEEPING }
             ?.let { housekeepingRepository?.findByTaskIdAndHotelId(it.id, hotelId) }
-        val started = mutate(taskId = taskId, hotelId = hotelId, operation = TaskTransition.START, now = now, mutation = { task, normalizedNow -> task.start(normalizedNow) })
+        val workflowMs = elapsedMs(startedAt) - lookupMs
+        val started = mutateLoaded(before, operation = TaskTransition.START, now = now, mutation = { task, normalizedNow -> task.start(normalizedNow) })
+        var syncMs = 0L
         if (workflow != null && workflow.status != HousekeepingStatus.STARTED) {
+            val syncStarted = System.nanoTime()
             val updatedWorkflow = workflow.start(PersistenceInstant.toPersistencePrecision(now))
             housekeepingRepository?.save(updatedWorkflow)
+            syncMs = elapsedMs(syncStarted)
             logger.info("FUNCTION16_HOUSEKEEPING_START_SYNC hotelId={} taskId={} workflowId={} taskStateBefore={} taskStateAfter={} workflowStateBefore={} workflowStateAfter={} outcome=SUCCESS", hotelId, before.id, workflow.id, before.status, started.status, workflow.status, updatedWorkflow.status)
         }
+        logger.info("TASK_START_TIMING taskLookupMs={} authorizationMs=0 workflowMs={} historyMs=0 saveMs={} responseMs=0 totalMs={}", lookupMs, workflowMs + syncMs, elapsedMs(startedAt), elapsedMs(startedAt))
         return started
     }
 
@@ -189,17 +196,20 @@ class TaskLifecycleService @Autowired constructor(
 
     fun completeTask(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task =
         run {
+            val timingStarted = System.nanoTime()
             val currentTask = taskRepository.findByIdAndHotelId(taskId.toTaskId(), hotelId)
+            val taskLookupMs = elapsedMs(timingStarted)
             val housekeeping = currentTask?.let { housekeepingRepository?.findByTaskIdAndHotelId(it.id, hotelId) }
             if (currentTask != null && TaskCompletionInspectionPolicy.requiresInspection(currentTask, housekeeping != null) && housekeeping?.inspectionRequired == true && housekeeping.status in setOf(HousekeepingStatus.STARTED, HousekeepingStatus.REWORK)) {
                 logger.info("FUNCTION16_COMPLETE_EVALUATION hotelId={} taskId={} taskType={} taskSource={} taskIntentType={} taskState={} assignedEmployeeOrUser={} housekeepingWorkflowFound=true housekeepingWorkflowId={} housekeepingWorkflowTaskId={} housekeepingWorkflowState={} inspectionRequired=true decision=SEND_TO_INSPECTION reason=SEND_TO_INSPECTION", currentTask.hotelId, currentTask.id, currentTask.intentType, currentTask.source, currentTask.intentType, currentTask.status, currentTask.assignment?.assigneeId, housekeeping.id, housekeeping.taskId, housekeeping.status)
                 logger.info("HOUSEKEEPING_COMPLETION_EVALUATION taskId={} taskType={} taskState={} workflowId={} workflowState={} inspectionRequired=true", currentTask.id, currentTask.intentType, currentTask.status, housekeeping.id, housekeeping.status)
                 logger.info("HOUSEKEEPING_COMPLETION_DECISION taskId={} decision=SEND_TO_INSPECTION reason=inspection_required", currentTask.id)
                 val persistedNow = PersistenceInstant.toPersistencePrecision(now)
-                val waiting = mutate(taskId, hotelId, TaskTransition.COMPLETE, persistedNow, { task, normalizedNow -> task.wait(normalizedNow) }, successMessage = { _, _ -> "Housekeeping cleaning sent to inspection" })
+                val waiting = mutateLoaded(currentTask, TaskTransition.COMPLETE, persistedNow, { task, normalizedNow -> task.wait(normalizedNow) }, successMessage = { _, _ -> "Housekeeping cleaning sent to inspection" })
                 housekeepingRepository?.save(housekeeping.finishCleaning(persistedNow))
                 logger.info("HOUSEKEEPING_INSPECTION_TRANSITION taskId={} workflowId={} previousTaskState={} newTaskState={} previousWorkflowState={} newWorkflowState={}", currentTask.id, housekeeping.id, currentTask.status, waiting.status, housekeeping.status, HousekeepingStatus.INSPECTION)
                 logger.info("FUNCTION16_COMPLETE_RESULT taskId={} taskStateBefore={} taskStateAfter={} workflowStateBefore={} workflowStateAfter={}", currentTask.id, currentTask.status, waiting.status, housekeeping.status, HousekeepingStatus.INSPECTION)
+                logger.info("TASK_COMPLETE_TIMING taskLookupMs={} authorizationMs=0 workflowMs={} inspectionMs={} historyMs=0 interruptionMs=0 readinessMs=0 saveMs={} responseMs=0 totalMs={}", taskLookupMs, elapsedMs(timingStarted) - taskLookupMs, 0, elapsedMs(timingStarted), elapsedMs(timingStarted))
                 return@run waiting
             }
             if (currentTask != null) {
@@ -212,14 +222,13 @@ class TaskLifecycleService @Autowired constructor(
                 }
                 logger.info("FUNCTION16_COMPLETE_EVALUATION hotelId={} taskId={} taskType={} taskSource={} taskIntentType={} taskState={} assignedEmployeeOrUser={} housekeepingWorkflowFound={} housekeepingWorkflowId={} housekeepingWorkflowTaskId={} housekeepingWorkflowState={} inspectionRequired={} decision=NORMAL_COMPLETE reason={}", currentTask.hotelId, currentTask.id, currentTask.intentType, currentTask.source, currentTask.intentType, currentTask.status, currentTask.assignment?.assigneeId, housekeeping != null, housekeeping?.id, housekeeping?.taskId, housekeeping?.status, housekeeping?.inspectionRequired ?: false, reason)
             }
-            taskRepository.findByIdAndHotelId(taskId.toTaskId(), hotelId)
+            currentTask
                 ?.takeIf { it.status == TaskStatus.COMPLETED }
                 ?.let { return@run it }
 
             var verificationLogId: UUID? = null
-            mutate(
-                taskId = taskId,
-                hotelId = hotelId,
+            mutateLoaded(
+                task = currentTask ?: throw TaskNotFoundException(taskId.toTaskId()),
                 operation = TaskTransition.COMPLETE,
                 now = now,
                 mutation = { task, normalizedNow ->
@@ -233,6 +242,7 @@ class TaskLifecycleService @Autowired constructor(
             ).also { completed ->
                 if (completed.intentType == TaskIntentType.MINIBAR && completed.roomNumber != null) minibarReadinessService?.markCompleted(completed.hotelId, completed.roomNumber)
                 completionObservers.forEach { observer -> observer.completed(completed) }
+                logger.info("TASK_COMPLETE_TIMING taskLookupMs={} authorizationMs=0 workflowMs={} inspectionMs=0 historyMs=0 interruptionMs=0 readinessMs=0 saveMs={} responseMs=0 totalMs={}", taskLookupMs, elapsedMs(timingStarted) - taskLookupMs, elapsedMs(timingStarted), elapsedMs(timingStarted))
             }
         }
 
@@ -260,6 +270,19 @@ class TaskLifecycleService @Autowired constructor(
                 logger.info("event=task_lifecycle operation=${operation.name.lowercase()} outcome=not_found reasonCode=task_not_found")
                 throw TaskNotFoundException(parsedTaskId)
         }
+        return mutateLoaded(task, operation, now, mutation, successMessage)
+    }
+
+    private fun mutateLoaded(
+        task: Task,
+        operation: TaskTransition,
+        now: Instant,
+        mutation: (Task, Instant) -> Task,
+        successMessage: (Task, Task) -> String = { before, after ->
+            "Task ${operation.name.lowercase()} succeeded from ${before.status} to ${after.status}"
+        }
+    ): Task {
+        val persistedNow = PersistenceInstant.toPersistencePrecision(now)
         return try {
             val updated = mutation(task, persistedNow)
             val saved = taskRepository.save(updated)
@@ -299,6 +322,8 @@ class TaskLifecycleService @Autowired constructor(
             throw exception
         }
     }
+
+    private fun elapsedMs(startedAt: Long): Long = (System.nanoTime() - startedAt) / 1_000_000
 
     private fun recordStateHistory(
         before: Task?,

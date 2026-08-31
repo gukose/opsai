@@ -34,7 +34,7 @@ class TaskLifecycleServiceCompletionTest {
             override fun inspections(workflowId: UUID, hotelId: UUID) = emptyList<HousekeepingInspection>()
         }
         val service = TaskLifecycleService(tasks, completionPolicy = NoOpCompletionPolicy(), housekeepingRepository = housekeeping)
-        val created = service.createTask(newCreateCommand(now).copy(hotelId = hotel), now)
+        val created = service.createTask(newCreateCommand(now).copy(hotelId = hotel, intentType = TaskIntentType.HOUSEKEEPING), now)
         workflow = workflow.copy(taskId = created.id)
         service.startTask(created.id.toString(), hotel, now.plusSeconds(60))
         val waiting = service.completeTask(created.id.toString(), hotel, now.plusSeconds(120))

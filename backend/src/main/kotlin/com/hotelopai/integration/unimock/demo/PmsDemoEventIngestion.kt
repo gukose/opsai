@@ -5,7 +5,6 @@ import com.hotelopai.housekeeping.application.HousekeepingService
 import com.hotelopai.housekeeping.application.RoomOperationalStateService
 import com.hotelopai.housekeeping.application.RoomOperationalStatus
 import com.hotelopai.housekeeping.domain.HousekeepingWorkflowType
-import com.hotelopai.shared.kernel.UuidV7Generator
 import com.hotelopai.task.application.CreateTaskCommand
 import com.hotelopai.task.application.TaskLifecycleService
 import com.hotelopai.task.domain.TaskIntentType
@@ -17,7 +16,6 @@ import org.springframework.http.HttpStatus
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.stereotype.Service
 import org.springframework.stereotype.Component
-import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.core.annotation.Order
@@ -32,7 +30,6 @@ import jakarta.servlet.http.HttpServletResponse
 import java.security.MessageDigest
 import java.time.Clock
 import java.time.Instant
-import java.sql.Timestamp
 import java.util.UUID
 import org.slf4j.LoggerFactory
 
@@ -108,28 +105,37 @@ class PmsDemoEventIngestionService(
     private val roomStates:RoomOperationalStateService,
     private val checkout:PmsCheckoutOrchestrator,
     private val tasks:TaskLifecycleService,
-    private val clock:Clock
+    private val clock:Clock,
+    private val inboxTransactions: PmsDemoInboxTransactionService
 ) {
+    private val logger = LoggerFactory.getLogger(PmsDemoEventIngestionService::class.java)
     fun rooms(hotelCode:String):List<PmsDemoRoomResponse> = jdbc.query("select room_number, case when active then 'ACTIVE' else 'INACTIVE' end from room_master where hotel_id=(select id from hotel where code=:code) order by room_number",mapOf("code" to hotelCode)) { rs,_ -> PmsDemoRoomResponse(rs.getString(1),rs.getString(2)) }
 
-    @Transactional
     fun ingest(request:PmsDemoEventRequest):PmsDemoEventResponse {
+        val startedAt = System.nanoTime()
         require(request.eventId.matches(Regex("[A-Za-z0-9_-]{4,100}"))) { "Invalid event ID" }
         val hotelId=jdbc.query("select id from hotel where code=:code and status='ACTIVE'",mapOf("code" to request.hotelCode)){rs,_->rs.getObject(1,UUID::class.java)}.singleOrNull()
             ?: throw IllegalArgumentException("Hotel does not exist or is inactive")
-        existing(hotelId,request.eventId)?.let { return it.copy(duplicate=true) }
         requireRoom(hotelId,request.roomNumber,"Room does not exist")
         if(request.eventType==PmsDemoEventType.ROOM_MOVE) requireRoom(hotelId,request.toRoomNumber.orEmpty(),"Destination room does not exist")
-        val now=clock.instant()
-        val inboxId=UuidV7Generator.generate(now)
-        val inserted=jdbc.update("""insert into pms_demo_event_inbox(id,hotel_id,provider_event_id,event_type,room_number,destination_room_number,status,occurred_at,created_at)
-            values(:id,:hotel,:event,:type,:room,:destination,'PROCESSING',:occurred,:now) on conflict(hotel_id,provider_event_id) do nothing""",
-            mapOf("id" to inboxId,"hotel" to hotelId,"event" to request.eventId,"type" to request.eventType.name,"room" to request.roomNumber,"destination" to request.toRoomNumber,"occurred" to Timestamp.from(request.occurredAt),"now" to Timestamp.from(now)))
-        if(inserted==0) return existing(hotelId,request.eventId)!!.copy(duplicate=true)
-        val result=applyRule(hotelId,request,now)
-        jdbc.update("update pms_demo_event_inbox set status='PROCESSED',result_type=:resultType,result_id=:resultId,processed_at=:now where id=:id",
-            mapOf("id" to inboxId,"resultType" to result?.first,"resultId" to result?.second,"now" to Timestamp.from(clock.instant())))
-        return PmsDemoEventResponse(request.eventId,request.roomNumber,request.eventType,request.occurredAt,"PROCESSED",false,result?.first,result?.second)
+        val claimStarted = System.nanoTime()
+        val now=clock.instant(); val claim=inboxTransactions.claim(request,hotelId)
+        val claimMs = (System.nanoTime() - claimStarted) / 1_000_000
+        if(claim.duplicate) return existing(hotelId,request.eventId)!!.copy(duplicate=true)
+        val orchestrationStarted = System.nanoTime()
+        val result = try { applyRule(hotelId,request,now) } catch (failure: RuntimeException) {
+            // The business services invoked here each own their short transaction.
+            // Release the claim so a failed provider event can be retried safely.
+            inboxTransactions.release(claim.inboxId)
+            throw failure
+        }
+        val orchestrationMs = (System.nanoTime() - orchestrationStarted) / 1_000_000
+        val finalizeStarted = System.nanoTime()
+        inboxTransactions.finalize(claim.inboxId,result,clock.instant())
+        val finalizeMs = (System.nanoTime() - finalizeStarted) / 1_000_000
+        return PmsDemoEventResponse(request.eventId,request.roomNumber,request.eventType,request.occurredAt,"PROCESSED",false,result?.first,result?.second).also {
+            logger.info("PMS_INGEST_TIMING eventId={} eventType={} claimMs={} orchestrationMs={} finalizeMs={} transactionAms={} transactionBms={} totalMs={}", request.eventId, request.eventType, claimMs, orchestrationMs, finalizeMs, claimMs, finalizeMs, (System.nanoTime()-startedAt)/1_000_000)
+        }
     }
 
     private fun applyRule(hotelId:UUID,request:PmsDemoEventRequest,now:Instant):Pair<String,UUID>? = when(request.eventType) {

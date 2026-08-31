@@ -21,25 +21,10 @@ class TaskCompletionPolicy(
     private val logger = LoggerFactory.getLogger(TaskCompletionPolicy::class.java)
     override fun evaluate(task: Task, now: Instant): CompletionDecision =
         when (task.intentType) {
-            TaskIntentType.HOUSEKEEPING -> {
-                val roomNumber = extractRoomNumber(task)
-                    ?: throw TaskCompletionValidationException(
-                        "Housekeeping task requires a room number before completion"
-                    )
-
-                val result = try {
-                    pmsProviderRegistry.activeProviderRequiring(PmsCapability.ROOM_READY_UPDATE)
-                        .markRoomReady(roomNumber, task.id.toString())
-                } catch (exception: UnsupportedPmsCapabilityException) {
-                    logProviderFailure(task, exception)
-                    null
-                } catch (exception: PmsProviderException) {
-                    logProviderFailure(task, exception)
-                    null
-                }
-
-                result?.let(::validateVerification) ?: CompletionDecision(requiresPmsUpdate = false)
-            }
+            // Room readiness is owned by the centralized readiness coordinator.
+            // Calling the PMS directly here duplicates the RoomReadyService call
+            // performed after housekeeping/inspection state transitions.
+            TaskIntentType.HOUSEKEEPING -> CompletionDecision(requiresPmsUpdate = false)
 
             TaskIntentType.MAINTENANCE -> {
                 val roomNumber = extractRoomNumber(task)

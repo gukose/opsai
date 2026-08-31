@@ -14,6 +14,7 @@ export class SessionService {
   private currentSession: AppSessionSnapshot | null = null;
   private readonly authApi: HttpAuthApi;
   private readonly sessionStore: SessionStore;
+  private refreshInFlight: Promise<AppSessionSnapshot | null> | null = null;
 
   constructor(sessionStore: SessionStore) {
     this.sessionStore = sessionStore;
@@ -91,6 +92,12 @@ export class SessionService {
   }
 
   async refresh(): Promise<AppSessionSnapshot | null> {
+    if (this.refreshInFlight) return this.refreshInFlight;
+    this.refreshInFlight = this.refreshInternal();
+    try { return await this.refreshInFlight; } finally { this.refreshInFlight = null; }
+  }
+
+  private async refreshInternal(): Promise<AppSessionSnapshot | null> {
     const storedSession = this.currentSession ?? (await this.sessionStore.load());
     if (!storedSession?.refreshToken) {
       return null;
