@@ -38,22 +38,30 @@ class HousekeepingService(
 ) {
     private val logger = LoggerFactory.getLogger(HousekeepingService::class.java)
     fun create(command: CreateHousekeepingCommand): HousekeepingWorkflow {
+        val startedAt = System.nanoTime()
         require(command.roomNumber.isNotBlank()) { "roomNumber is required" }
         require(command.idempotencyKey.isNotBlank()) { "idempotencyKey is required" }
-        repository.findByIdempotencyKey(command.hotelId, command.idempotencyKey)?.let { return it }
+        val existing = repository.findByIdempotencyKey(command.hotelId, command.idempotencyKey)
+        existing?.let { return it }
         val now = clock.instant()
+        val taskStarted = System.nanoTime()
         val task = tasks.createTask(CreateTaskCommand(
             hotelId=command.hotelId,intentType=TaskIntentType.HOUSEKEEPING,source=TaskSource.IMPORT,
             title=command.type.name.replace('_',' ').lowercase().replaceFirstChar(Char::uppercase),
             description="Housekeeping workflow for room ${command.roomNumber}",roomNumber=command.roomNumber,
             priority=if(command.type==HousekeepingWorkflowType.VIP_PREPARATION) TaskPriority.HIGH else TaskPriority.MEDIUM,
             slaDeadline=now.plus(Duration.ofHours(4))))
+        val taskCreateMs = (System.nanoTime() - taskStarted) / 1_000_000
+        val templateStarted = System.nanoTime()
         val template=if(command.inspectionRequired) templates?.applicable(command.hotelId,command.type) else null
-        return repository.insert(HousekeepingWorkflow(UuidV7Generator.generate(now),command.hotelId,task.id,command.type,command.roomNumber,
+        val workflowInsertStarted = System.nanoTime()
+        val workflow=repository.insert(HousekeepingWorkflow(UuidV7Generator.generate(now),command.hotelId,task.id,command.type,command.roomNumber,
             HousekeepingStatus.CREATED,command.inspectionRequired,idempotencyKey=command.idempotencyKey,createdAt=now,updatedAt=now,templateId=template?.id,templateVersion=template?.version)).also {
             roomStates?.set(command.hotelId, command.roomNumber, if(command.type==HousekeepingWorkflowType.DEPARTURE_CLEANING) RoomOperationalStatus.DIRTY else RoomOperationalStatus.CLEANING, "housekeeping:${it.id}")
             metric("create","success")
         }
+        logger.info("HOUSEKEEPING_CREATE_TIMING hotelId={} room={} workflowLookupMs={} workflowInsertMs={} taskCreateMs={} assignmentMs={} taskReloadMs={} roomLookupMs={} inspectionSetupMs={} historyMs={} outboxMs={} otherDbMs={} totalMs={} transactionMs={}", command.hotelId, command.roomNumber, 0, (System.nanoTime()-workflowInsertStarted)/1_000_000, taskCreateMs, 0, 0, 0, (System.nanoTime()-templateStarted)/1_000_000, 0, 0, 0, (System.nanoTime()-startedAt)/1_000_000, (System.nanoTime()-startedAt)/1_000_000)
+        return workflow
     }
 
     fun list(hotelId: UUID)=repository.list(hotelId)
