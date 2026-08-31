@@ -138,7 +138,7 @@ class PmsDemoEventIngestionService(
             "HOUSEKEEPING_WORKFLOW" to result.workflow.id
         }
         PmsDemoEventType.DEPARTURE -> housekeeping.create(CreateHousekeepingCommand(hotelId,request.roomNumber,HousekeepingWorkflowType.DEPARTURE_CLEANING,true,"pms:${request.eventId}")).let { "HOUSEKEEPING_WORKFLOW" to it.id }
-        PmsDemoEventType.DIRTY -> housekeeping.create(CreateHousekeepingCommand(hotelId,request.roomNumber,HousekeepingWorkflowType.STAYOVER_CLEANING,false,"pms:${request.eventId}")).let { "HOUSEKEEPING_WORKFLOW" to it.id }
+        PmsDemoEventType.DIRTY -> housekeeping.create(CreateHousekeepingCommand(hotelId,request.roomNumber,HousekeepingWorkflowType.STAYOVER_CLEANING,true,"pms:${request.eventId}")).let { "HOUSEKEEPING_WORKFLOW" to it.id }
         PmsDemoEventType.VIP -> housekeeping.create(CreateHousekeepingCommand(hotelId,request.roomNumber,HousekeepingWorkflowType.VIP_PREPARATION,true,"pms:${request.eventId}")).let { "HOUSEKEEPING_WORKFLOW" to it.id }
         PmsDemoEventType.CLEAN -> { roomStates.set(hotelId,request.roomNumber,RoomOperationalStatus.READY,"pms:${request.eventId}");null }
         PmsDemoEventType.OOO,PmsDemoEventType.OOS -> tasks.createTask(CreateTaskCommand(hotelId,TaskIntentType.MAINTENANCE,TaskSource.IMPORT,

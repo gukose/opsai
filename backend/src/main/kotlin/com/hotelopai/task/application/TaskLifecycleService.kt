@@ -191,7 +191,7 @@ class TaskLifecycleService @Autowired constructor(
         run {
             val currentTask = taskRepository.findByIdAndHotelId(taskId.toTaskId(), hotelId)
             val housekeeping = currentTask?.let { housekeepingRepository?.findByTaskIdAndHotelId(it.id, hotelId) }
-            if (currentTask != null && housekeeping?.inspectionRequired == true && housekeeping.status in setOf(HousekeepingStatus.STARTED, HousekeepingStatus.REWORK)) {
+            if (currentTask != null && TaskCompletionInspectionPolicy.requiresInspection(currentTask, housekeeping != null) && housekeeping?.inspectionRequired == true && housekeeping.status in setOf(HousekeepingStatus.STARTED, HousekeepingStatus.REWORK)) {
                 logger.info("FUNCTION16_COMPLETE_EVALUATION hotelId={} taskId={} taskType={} taskSource={} taskIntentType={} taskState={} assignedEmployeeOrUser={} housekeepingWorkflowFound=true housekeepingWorkflowId={} housekeepingWorkflowTaskId={} housekeepingWorkflowState={} inspectionRequired=true decision=SEND_TO_INSPECTION reason=SEND_TO_INSPECTION", currentTask.hotelId, currentTask.id, currentTask.intentType, currentTask.source, currentTask.intentType, currentTask.status, currentTask.assignment?.assigneeId, housekeeping.id, housekeeping.taskId, housekeeping.status)
                 logger.info("HOUSEKEEPING_COMPLETION_EVALUATION taskId={} taskType={} taskState={} workflowId={} workflowState={} inspectionRequired=true", currentTask.id, currentTask.intentType, currentTask.status, housekeeping.id, housekeeping.status)
                 logger.info("HOUSEKEEPING_COMPLETION_DECISION taskId={} decision=SEND_TO_INSPECTION reason=inspection_required", currentTask.id)
