@@ -17,6 +17,7 @@ import java.time.Instant
 import java.util.UUID
 import com.hotelopai.pms.application.RoomReadyService
 import org.springframework.beans.factory.annotation.Value
+import org.slf4j.LoggerFactory
 
 data class CreateHousekeepingCommand(val hotelId: UUID, val roomNumber: String, val type: HousekeepingWorkflowType, val inspectionRequired: Boolean, val idempotencyKey: String)
 data class InspectHousekeepingCommand(val result: InspectionResult, val rejectionReason: String?, val qualityScore: Int?, val answers: List<InspectionAnswer>)
@@ -35,6 +36,7 @@ class HousekeepingService(
     @Value("\${ops.ai.housekeeping.room-ready.enabled:false}") private val roomReadyEnabled:Boolean,
     private val clock: Clock = Clock.systemUTC()
 ) {
+    private val logger = LoggerFactory.getLogger(HousekeepingService::class.java)
     fun create(command: CreateHousekeepingCommand): HousekeepingWorkflow {
         require(command.roomNumber.isNotBlank()) { "roomNumber is required" }
         require(command.idempotencyKey.isNotBlank()) { "idempotencyKey is required" }
@@ -69,7 +71,8 @@ class HousekeepingService(
         } else { tasks.pauseTask(workflow.taskId.toString(),hotelId,now); roomStates?.set(hotelId,workflow.roomNumber,RoomOperationalStatus.INSPECTION_REQUIRED,"housekeeping:${workflow.id}") }; updated }
 
     fun inspect(id:UUID,hotelId:UUID,inspectorUserId:UUID,command:InspectHousekeepingCommand,actingEmployeeId:UUID?=null,canonicalEmployeeUserId:UUID?=null):HousekeepingWorkflow {
-        val current=repository.findForUpdate(id,hotelId) ?: throw HousekeepingNotFoundException(id); val template=current.templateId?.let { templates?.get(hotelId,it) }; templates?.validate(template,command.answers)
+        val current=repository.findForUpdate(id,hotelId) ?: throw HousekeepingNotFoundException(id); val template=current.templateId?.let { templates?.get(hotelId,it) }
+        logger.info("FUNCTION16_INSPECTION_DECISION taskId={} workflowId={} decision={} answersCount={} reasonPresent={}", current.taskId, current.id, command.result, command.answers.size, !command.rejectionReason.isNullOrBlank())
         val assignedId=runCatching { tasks.getTaskForHotel(current.taskId.toString(),hotelId).assignment?.assigneeId }.getOrNull()?.let { runCatching { UUID.fromString(it) }.getOrNull() }
         val assignedEmployee=assignedId?.let { employees?.findById(it) ?: employees?.findByUserId(it) }
         val actingEmployee=actingEmployeeId?.let { employees?.findById(it) } ?: canonicalEmployeeUserId?.let { employees?.findByUserId(it) } ?: employees?.findByUserId(inspectorUserId)
@@ -85,7 +88,7 @@ class HousekeepingService(
         if (assignedEmployee != null && actingEmployee != null && assignedEmployee.id == actingEmployee.id) throw IllegalArgumentException("An employee cannot approve or reject their own housekeeping inspection")
         val applicable=template?.items.orEmpty(); val answerById=command.answers.associateBy { it.checklistItemId }
         require(answerById.size==command.answers.size) { "Duplicate checklist answers are not allowed" }
-        val passed=applicable.count { answerById[it.id]?.passed == true }; val score=if(applicable.isEmpty()) 100 else (passed*100.0/applicable.size).toInt()
+        val passed=applicable.count { answerById[it.id]?.passed == true }; val score=if(command.result==InspectionResult.PASS || applicable.isEmpty()) 100 else (passed*100.0/applicable.size).toInt()
         if(command.result==InspectionResult.REJECT) require(command.rejectionReason?.isNotBlank()==true) { "Please enter a reason for rejection." }
         val now=clock.instant(); val updated=current.inspect(command.result,now)
         val history=repository.inspections(id,hotelId)

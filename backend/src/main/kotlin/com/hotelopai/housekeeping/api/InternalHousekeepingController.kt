@@ -7,6 +7,9 @@ import com.hotelopai.shared.security.PermissionExpressions
 import org.springframework.security.access.prepost.PreAuthorize
 import org.springframework.web.bind.annotation.*
 import java.util.UUID
+import org.springframework.http.HttpStatus
+import org.springframework.http.ProblemDetail
+import com.hotelopai.shared.error.ProblemDetailFactory
 
 data class CreateHousekeepingRequest(val roomNumber:String,val type:HousekeepingWorkflowType,val inspectionRequired:Boolean=true,val idempotencyKey:String)
 data class InspectionAnswerRequest(val checklistItemId:UUID,val passed:Boolean,val note:String?=null)
@@ -41,4 +44,12 @@ class InternalInspectionTemplateController(private val templates:InspectionTempl
  @GetMapping @PreAuthorize(PermissionExpressions.HOUSEKEEPING_INSPECTION) fun list()=templates.list(current.current().hotelId)
  @PostMapping @PreAuthorize(PermissionExpressions.HOUSEKEEPING_INSPECTION) fun create(@RequestBody request:CreateInspectionTemplate)=templates.createVersion(current.current().hotelId,request)
  @DeleteMapping("/{id}") @PreAuthorize(PermissionExpressions.HOUSEKEEPING_INSPECTION) fun disable(@PathVariable id:UUID)=templates.disable(current.current().hotelId,id)
+}
+
+@RestControllerAdvice(basePackageClasses = [InternalHousekeepingController::class, InternalInspectionTemplateController::class])
+class HousekeepingApiExceptionHandler {
+    @ExceptionHandler(IllegalArgumentException::class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    fun invalid(exception: IllegalArgumentException): ProblemDetail =
+        ProblemDetailFactory.create(HttpStatus.BAD_REQUEST, "Invalid inspection decision", exception.message ?: "Invalid request")
 }
