@@ -176,7 +176,7 @@ class TaskStateHistoryPersistenceRepository(
     private val taskStateHistoryJpaRepository: TaskStateHistoryJpaRepository
 ) : TaskStateHistoryRepository {
     override fun append(entry: TaskStateHistoryEntry) {
-        taskStateHistoryJpaRepository.saveAndFlush(TaskStateHistoryPersistenceMapper.toEntity(entry))
+        taskStateHistoryJpaRepository.save(TaskStateHistoryPersistenceMapper.toEntity(entry))
     }
     override fun findByTaskId(taskId: UUID): List<TaskStateHistoryEntry> =
         taskStateHistoryJpaRepository.findAllByTaskIdOrderByCreatedAtAsc(taskId).map(TaskStateHistoryPersistenceMapper::fromEntity)
@@ -190,6 +190,6 @@ class TaskLogPersistenceRepository(
     private val taskLogJpaRepository: TaskLogJpaRepository
 ) : TaskLogRepository {
     override fun append(entry: TaskLogEntry) {
-        taskLogJpaRepository.saveAndFlush(TaskLogPersistenceMapper.toEntity(entry))
+        taskLogJpaRepository.save(TaskLogPersistenceMapper.toEntity(entry))
     }
 }

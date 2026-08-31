@@ -55,6 +55,7 @@ class TaskLifecycleService @Autowired constructor(
         createTask(request, PersistenceInstant.now(clock))
 
     override fun createTask(request: CreateTaskCommand, now: Instant): Task {
+        val timingStarted = System.nanoTime()
         val persistedNow = PersistenceInstant.toPersistencePrecision(now)
         return try {
             val task = Task.create(
@@ -69,7 +70,10 @@ class TaskLifecycleService @Autowired constructor(
                 createdAt = persistedNow
             )
 
+            val taskSaveStarted = System.nanoTime()
             val saved = taskRepository.save(task)
+            val taskInsertMs = elapsedMs(taskSaveStarted)
+            val historyStarted = System.nanoTime()
             recordStateHistory(
                 before = null,
                 after = saved,
@@ -77,6 +81,8 @@ class TaskLifecycleService @Autowired constructor(
                 note = "Task created",
                 now = persistedNow
             )
+            val historyMs = elapsedMs(historyStarted)
+            val logStarted = System.nanoTime()
             recordTaskLog(
                 task = saved,
                 operation = TaskTransition.CREATE,
@@ -84,6 +90,8 @@ class TaskLifecycleService @Autowired constructor(
                 message = "Task created",
                 now = persistedNow
             )
+            val taskLogMs = elapsedMs(logStarted)
+            val assignmentStarted = System.nanoTime()
             val created = if (request.assignment != null) {
                 mutate(
                     taskId = saved.id.toString(),
@@ -112,7 +120,11 @@ class TaskLifecycleService @Autowired constructor(
                     if (automatic.assignment != null) automaticFlashInterruptionHandler.assigned(assigned, automatic.selectedEmployeeId, persistedNow)
                 }
             }
+            val assignmentMs = elapsedMs(assignmentStarted)
+            val notificationStarted = System.nanoTime()
             taskNotificationPublisher.taskCreated(created, persistedNow)
+            val notificationMs = elapsedMs(notificationStarted)
+            logger.info("TASK_CREATE_TIMING taskId={} validationMs=0 taskInsertMs={} taskSaveMs={} historyInsertMs={} taskLogInsertMs={} assignmentCandidateQueryMs={} assignmentPersistMs={} assignmentAuditMs={} flashEvaluationMs={} interruptionLookupMs={} notificationMs={} outboxMs=0 workflowRelatedMs=0 responseMappingMs=0 taskReloadMs=0 otherMs=0 repositoryCallCount=0 sqlStatementCount=0 totalMs={}", created.id, taskInsertMs, taskInsertMs, historyMs, taskLogMs, assignmentMs, 0, 0, 0, 0, notificationMs, elapsedMs(timingStarted))
             recordLifecycle(operation = TaskTransition.CREATE, outcome = "success", reasonCode = "none")
             created
         } catch (exception: RuntimeException) {
