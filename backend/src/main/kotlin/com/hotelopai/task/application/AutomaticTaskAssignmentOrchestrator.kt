@@ -165,12 +165,15 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
     }
 
     override fun evaluate(task: Task, now: Instant): AutomaticAssignmentResult {
+        val timingStarted = System.nanoTime()
         existing(task.id, task.hotelId)?.let { existing ->
             if (task.assignment != null) return existing.copy(assignment = task.assignment)
         }
 
         val requirement = resolveRequirement(task)
         val loadedEmployees = loadCandidateEmployees(task.hotelId, now, requirement.requiredSkillId)
+        val candidateSqlMs = loadedEmployees.queryMs
+        val candidateMappingMs = loadedEmployees.mappingMs
         val employees = loadedEmployees.employees
         val supervisorEmployeeIds = employees
             .filter { employee -> employee.primaryRoleCode?.let(::isSupervisoryRole) == true }
@@ -260,6 +263,7 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
             candidateCount = decision?.candidates?.size ?: 0
         )
         persist(task, result, selectedEmployee?.userId, now)
+        logger.info("ASSIGNMENT_TIMING taskId={} preconditionMs=0 roomFloorLookupMs=0 candidateSqlMs={} candidateMappingMs={} rankingMs={} assignmentUpdateMs=0 assignmentAuditMs=0 flashEligibilityMs=0 flashActiveTaskLookupMs=0 otherMs={} totalMs={} candidateCount={} sqlStatementCount=1 repositoryCallCount=1", task.id, candidateSqlMs, candidateMappingMs, elapsedMs(timingStarted)-candidateSqlMs-candidateMappingMs, elapsedMs(timingStarted)-candidateSqlMs-candidateMappingMs, elapsedMs(timingStarted), result.candidateCount)
         observability.incrementCounter(
             "hotelopai.task.auto_assignment.total",
             "outcome" to if (assignment == null) "unassigned" else "assigned",
@@ -307,19 +311,24 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
             task.intentType == TaskIntentType.MINIBAR || "minibar" in text -> "MINIBAR"
             else -> null
         }
-        val departments = departmentRepository.findByHotelId(task.hotelId)
-        val skills = skillRepository.findByHotelId(task.hotelId)
-        val skillCodeById = skills.associate { it.id to it.code }
-        val department = departmentCode?.let { code -> departments.firstOrNull { it.code.equals(code, true) } }
-        val skill = skillCode?.let { code ->
-            skills.firstOrNull { it.code.equals(code, true) } ?:
-                if (code == "HVAC_REPAIR") skills.firstOrNull { it.code.equals("HVAC", true) } else null
+        // Resolve only the department/skill actually required for this task.  The
+        // previous full-hotel JPA loads caused a remote round-trip waterfall on
+        // the PMS path; candidate loading already supplies employee skill IDs.
+        val department = departmentCode?.let { code -> departmentRepository.findByHotelIdAndCode(task.hotelId, code) }
+        val skills = jdbc.query(
+            "select id,code from skill where hotel_id=:hotel and is_active=true",
+            mapOf("hotel" to task.hotelId)
+        ) { rs, _ -> rs.getObject("id", UUID::class.java) to rs.getString("code") }
+        val skillCodeById = skills.toMap()
+        val requiredSkillId = skillCode?.let { code ->
+            skills.firstOrNull { it.second.equals(code, true) }?.first
+                ?: if (code == "HVAC_REPAIR") skills.firstOrNull { it.second.equals("HVAC", true) }?.first else null
         }
         return Requirement(
             department?.id,
-            skill?.id,
+            requiredSkillId,
             skillCode,
-            requiredSkillKnown = skillCode == null || skill != null,
+            requiredSkillKnown = skillCode == null || requiredSkillId != null,
             departmentKnown = departmentCode != null && department != null,
             skillResolutionRequired = task.intentType in setOf(TaskIntentType.MAINTENANCE, TaskIntentType.DAMAGE_REPORT),
             skillCodeById = skillCodeById
