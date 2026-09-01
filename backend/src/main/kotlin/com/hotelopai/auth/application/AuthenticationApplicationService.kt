@@ -167,17 +167,17 @@ class AuthenticationApplicationService(
     ): CurrentUserResult {
         val membershipRoleIds=jdbc.query("""select uhr.role_id from user_hotel_membership m join user_hotel_role uhr on uhr.membership_id=m.id and uhr.hotel_id=m.hotel_id where m.user_id=:user and m.hotel_id=:hotel and m.active=true""",mapOf("user" to user.id,"hotel" to hotel.id)){rs,_->rs.getObject(1,UUID::class.java)}.toSet()
         val effectiveRoleIds=(if(membershipRoleIds.isEmpty()&&user.hotelId==hotel.id)user.roleIds else membershipRoleIds)
-        val roles = effectiveRoleIds.map { roleId ->
-            requireNotNull(roleRepository.findById(roleId)) { "Role not found: $roleId" }
-        }.filter { it.hotelId == hotel.id }
-            .sortedBy { it.code }
-        val permissions = roles.asSequence()
-            .flatMap { it.permissionIds.asSequence() }
-            .distinct()
-            .map { permissionId ->
-                requireNotNull(permissionRepository.findById(permissionId)) { "Permission not found: $permissionId" }
-            }
-            .sortedBy { it.code }
+        data class RolePermissionRow(val roleId: UUID, val roleCode: String, val roleName: String, val permissionId: UUID?, val permissionCode: String?, val permissionName: String?)
+        val rows = if (effectiveRoleIds.isEmpty()) emptyList() else jdbc.query(
+            """select r.id,r.code,r.name,p.id,p.code,p.name
+               from role r left join role_permission rp on rp.role_id=r.id
+               left join permission p on p.id=rp.permission_id
+               where r.hotel_id=:hotel and r.id in (:roleIds)
+               order by r.code,p.code""",
+            mapOf("hotel" to hotel.id, "roleIds" to effectiveRoleIds)
+        ) { rs, _ -> RolePermissionRow(rs.getObject(1,UUID::class.java),rs.getString(2),rs.getString(3),rs.getObject(4,UUID::class.java),rs.getString(5),rs.getString(6)) }
+        val roles = rows.distinctBy { it.roleId }.map { RoleSummaryResult(it.roleId,it.roleCode,it.roleName) }
+        val permissions = rows.filter { it.permissionId != null }.distinctBy { it.permissionId }.map { PermissionSummaryResult(it.permissionId!!,it.permissionCode!!,it.permissionName!!) }
 
         val employee = user.employeeId?.let(employeeRepository::findById)
             ?.takeIf { it.hotelId == hotel.id }
@@ -189,20 +189,8 @@ class AuthenticationApplicationService(
             email = user.email.value,
             displayName = user.displayName,
             hotelName = hotel.name,
-            roles = roles.map { role ->
-                RoleSummaryResult(
-                    roleId = role.id,
-                    code = role.code,
-                    name = role.name
-                )
-            },
-            permissions = permissions.map { permission ->
-                PermissionSummaryResult(
-                    permissionId = permission.id,
-                    code = permission.code,
-                    name = permission.name
-                )
-            }.toList()
+            roles = roles,
+            permissions = permissions
         )
     }
 
