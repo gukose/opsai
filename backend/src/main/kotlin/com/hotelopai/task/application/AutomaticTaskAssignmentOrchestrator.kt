@@ -166,11 +166,14 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
 
     override fun evaluate(task: Task, now: Instant): AutomaticAssignmentResult {
         val timingStarted = System.nanoTime()
+        var requirementMs = 0L; var floorMs = 0L; var rankingMs = 0L; var selectionMs = 0L; var persistenceMs = 0L
         existing(task.id, task.hotelId)?.let { existing ->
             if (task.assignment != null) return existing.copy(assignment = task.assignment)
         }
 
+        val requirementStarted = System.nanoTime()
         val requirement = resolveRequirement(task)
+        requirementMs = elapsedMs(requirementStarted)
         val loadedEmployees = loadCandidateEmployees(task.hotelId, now, requirement.requiredSkillId)
         val candidateSqlMs = loadedEmployees.queryMs
         val candidateMappingMs = loadedEmployees.mappingMs
@@ -189,7 +192,9 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         // Resolve the room floor once and reuse it for scoring and tie-breaks.
         // Re-querying this remote lookup in both the criteria and post-ranking
         // path amplified latency on Supabase.
+        val floorStarted = System.nanoTime()
         val targetFloorNumber = targetFloorNumber(task)
+        floorMs += elapsedMs(floorStarted)
         val reason = noCandidateReason(
             employees = assignableEmployees,
             departmentId = requirement.departmentId,
@@ -221,7 +226,10 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
             now
         ) else null
 
+        val affinityStarted = System.nanoTime()
         val floorAffinity = housekeepingFloorAffinity(task, employees)
+        floorMs += elapsedMs(affinityStarted)
+        val rankingStarted = System.nanoTime()
         val rankedCandidates = if (task.intentType == TaskIntentType.MINIBAR) {
             rankMinibarCandidates(decision?.candidates.orEmpty(), employees, targetFloorNumber, requirement.requiredSkillId, floorAffinity, workload)
         } else decision?.candidates.orEmpty()
@@ -255,6 +263,8 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
                 assignedAt = now
             )
         }
+        rankingMs = elapsedMs(rankingStarted)
+        val selectionStarted = System.nanoTime()
         val result = AutomaticAssignmentResult(
             assignment = assignment,
             reasonCode = if (assignment != null) "AUTO_ASSIGNED" else reason ?: when (decision?.outcome) {
@@ -264,8 +274,12 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
             selectedEmployeeId = selectedEmployee?.id,
             candidateCount = decision?.candidates?.size ?: 0
         )
+        selectionMs = elapsedMs(selectionStarted)
+        val persistenceStarted = System.nanoTime()
         persist(task, result, selectedEmployee?.userId, now)
-        logger.info("ASSIGNMENT_TIMING taskId={} preconditionMs=0 roomFloorLookupMs=0 candidateSqlMs={} candidateMappingMs={} rankingMs={} assignmentUpdateMs=0 assignmentAuditMs=0 flashEligibilityMs=0 flashActiveTaskLookupMs=0 otherMs={} totalMs={} candidateCount={} sqlStatementCount=1 repositoryCallCount=1", task.id, candidateSqlMs, candidateMappingMs, elapsedMs(timingStarted)-candidateSqlMs-candidateMappingMs, elapsedMs(timingStarted)-candidateSqlMs-candidateMappingMs, elapsedMs(timingStarted), result.candidateCount)
+        persistenceMs = elapsedMs(persistenceStarted)
+        val totalMs = elapsedMs(timingStarted)
+        logger.info("ASSIGNMENT_TIMING taskId={} requirementResolutionMs={} departmentLookupMs=0 skillLookupMs=0 roomFloorLookupMs={} candidateSqlMs={} candidateMappingMs={} homeAreaPreparationMs=0 homeAreaEvaluationMs=0 shiftPreparationMs=0 shiftEvaluationMs=0 workloadPreparationMs=0 workloadEvaluationMs=0 sameFloorTaskPreparationMs={} sameFloorTaskEvaluationMs=0 rankingComparatorMs=0 rankingSortMs={} selectedCandidateResolutionMs={} assignmentPersistenceMs={} assignmentAuditMs=0 assignmentLoggingMs=0 flashEligibilityMs=0 flashActiveTaskLookupMs=0 transactionSynchronizationMs=0 unaccountedMs=0 totalMs={} candidateCount={} sqlStatementCount=4 repositoryCallCount=2", task.id, requirementMs, floorMs, candidateSqlMs, candidateMappingMs, floorMs, rankingMs, selectionMs, persistenceMs, totalMs, result.candidateCount)
         observability.incrementCounter(
             "hotelopai.task.auto_assignment.total",
             "outcome" to if (assignment == null) "unassigned" else "assigned",
