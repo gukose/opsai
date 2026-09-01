@@ -186,6 +186,10 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         val skillLevels = loadedEmployees.employeeSkillLevels
 
         val rankingSkillId = requirement.requiredSkillId.takeUnless { task.intentType == TaskIntentType.MINIBAR }
+        // Resolve the room floor once and reuse it for scoring and tie-breaks.
+        // Re-querying this remote lookup in both the criteria and post-ranking
+        // path amplified latency on Supabase.
+        val targetFloorNumber = targetFloorNumber(task)
         val reason = noCandidateReason(
             employees = assignableEmployees,
             departmentId = requirement.departmentId,
@@ -211,14 +215,13 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
                 workloadByEmployeeId = workload,
                 maximumWorkload = MAXIMUM_ACTIVE_WORKLOAD,
                 activeTaskEmployeeIds = activeTaskIds,
-                preferredArea = targetFloorNumber(task),
+                preferredArea = targetFloorNumber,
                 unavailableEmployeeIds = supervisorEmployeeIds
             ),
             now
         ) else null
 
         val floorAffinity = housekeepingFloorAffinity(task, employees)
-        val targetFloorNumber = targetFloorNumber(task)
         val rankedCandidates = if (task.intentType == TaskIntentType.MINIBAR) {
             rankMinibarCandidates(decision?.candidates.orEmpty(), employees, targetFloorNumber, requirement.requiredSkillId, floorAffinity, workload)
         } else decision?.candidates.orEmpty()
@@ -226,10 +229,9 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
                 .thenByDescending { floorAffinity[it.employeeId] ?: 0 }
                 .thenBy { workload[it.employeeId] ?: 0 }
                 .thenBy { it.employeeId.toString() })
-        val targetFloorId = targetFloor(task)
         rankedCandidates.forEachIndexed { index, candidate ->
             val employee = employees.firstOrNull { it.id == candidate.employeeId }
-            logger.info("event=housekeeping_auto_assignment_candidate roomNumber={} targetFloorId={} employeeId={} employeeNumber={} sameFloorActiveTaskCount={} activeWorkload={} activeShift={} rank={} selected={}", task.roomNumber, targetFloorId, candidate.employeeId, employee?.employeeNumber, floorAffinity[candidate.employeeId] ?: 0, workload[candidate.employeeId] ?: 0, candidate.employeeId in activeShiftIds, index + 1, index == 0)
+            logger.info("event=housekeeping_auto_assignment_candidate roomNumber={} targetFloorId={} employeeId={} employeeNumber={} sameFloorActiveTaskCount={} activeWorkload={} activeShift={} rank={} selected={}", task.roomNumber, targetFloorNumber, candidate.employeeId, employee?.employeeNumber, floorAffinity[candidate.employeeId] ?: 0, workload[candidate.employeeId] ?: 0, candidate.employeeId in activeShiftIds, index + 1, index == 0)
             if (task.intentType == TaskIntentType.MINIBAR) logger.info(
                 "MINIBAR_ASSIGNMENT_DECISION room={} floor={} candidateEmployeeId={} candidateHomeArea={} candidateRole={} sameFloor={} activeShift={} workload={} selected={}",
                 task.roomNumber, targetFloorNumber, candidate.employeeId, employee?.homeArea, employee?.primaryRoleCode,
