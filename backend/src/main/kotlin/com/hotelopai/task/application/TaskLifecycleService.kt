@@ -258,6 +258,14 @@ class TaskLifecycleService @Autowired constructor(
             }
         }
 
+    /** Finalizes a task after an inspection decision; bypasses employee completion gating. */
+    fun completeInspectedTask(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task {
+        val task = taskRepository.findByIdAndHotelId(taskId.toTaskId(), hotelId)
+            ?: throw TaskNotFoundException(taskId.toTaskId())
+        require(task.status == TaskStatus.WAITING) { "Inspected task must be waiting for approval" }
+        return mutateLoaded(task, TaskTransition.COMPLETE, now, { current, normalizedNow -> current.complete(normalizedNow) }, successMessage = { _, _ -> "Task completed after inspection approval" })
+    }
+
     fun cancelTask(taskId: String, hotelId: UUID, now: Instant = Instant.now()): Task =
         mutate(taskId = taskId, hotelId = hotelId, operation = TaskTransition.CANCEL, now = now, mutation = { task, normalizedNow -> task.cancel(normalizedNow) })
 

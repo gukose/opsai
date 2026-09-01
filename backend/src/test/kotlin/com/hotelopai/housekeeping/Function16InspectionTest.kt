@@ -33,7 +33,7 @@ class Function16InspectionTest {
         val workflow=workflow(HousekeepingStatus.INSPECTION).copy(templateId=UUID.randomUUID()); val repo=mock(HousekeepingRepository::class.java); doReturn(workflow).`when`(repo).findForUpdate(workflowId,hotel); doReturn(emptyList<HousekeepingInspection>()).`when`(repo).inspections(workflowId,hotel)
         val templates=templateService(workflow.templateId!!); val tasks=mock(TaskLifecycleService::class.java); val readiness=mock(MinibarReadinessService::class.java); doReturn(false).`when`(readiness).reevaluateRoomReadiness(hotel,"205"); val service=service(repo,tasks,readiness,templates)
         service.inspect(workflowId,hotel,supervisor,InspectHousekeepingCommand(InspectionResult.PASS,null,0,listOf(InspectionAnswer(item1,true),InspectionAnswer(item2,true))))
-        verify(tasks).completeTask(taskId.toString(),hotel,now)
+        verify(tasks).completeInspectedTask(taskId.toString(),hotel,now)
         verify(repo).appendInspection(eq(hotel) ?: hotel,org.mockito.ArgumentMatchers.any(HousekeepingInspection::class.java) ?: HousekeepingInspection(UUID.randomUUID(),workflowId,supervisor,1,InspectionResult.PASS,null,100,emptyList(),now,now))
         verify(readiness).reevaluateRoomReadiness(hotel,"205")
     }

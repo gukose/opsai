@@ -102,9 +102,12 @@ class HousekeepingService(
         val history=repository.inspections(id,hotelId)
         repository.appendInspection(hotelId,HousekeepingInspection(UuidV7Generator.generate(now),id,inspectorUserId,history.size+1,command.result,command.rejectionReason,score,command.answers,current.inspectionStartedAt?:now,now))
         if(command.result==InspectionResult.PASS) {
-            tasks.completeTask(current.taskId.toString(),hotelId,now)
+            val finalized = repository.save(updated) ?: updated
+            tasks.completeInspectedTask(current.taskId.toString(),hotelId,now)
             val ready=minibarReadiness?.reevaluateRoomReadiness(hotelId,current.roomNumber) ?: run { roomStates?.set(hotelId,current.roomNumber,RoomOperationalStatus.READY,"housekeeping:${current.id}");true }
             if(roomReadyEnabled && ready) roomReadyService.markReady(hotelId,current.roomNumber,"housekeeping-room-ready:${current.id}:${history.size+1}")
+            logger.info("FUNCTION16_INSPECTION_APPROVAL_FINALIZED hotelId={} taskId={} workflowId={} roomNumber={} taskStateBefore=WAITING taskStateAfter=COMPLETED workflowStateBefore=INSPECTION workflowStateAfter={} decision=PASS", hotelId, current.taskId, current.id, current.roomNumber, finalized.status)
+            return finalized
         } else { tasks.resumeTask(current.taskId.toString(),hotelId,now); roomStates?.set(hotelId,current.roomNumber,RoomOperationalStatus.REWORK,"housekeeping:${current.id}") }
         return repository.save(updated).also { metric("inspect",command.result.name.lowercase()) }
     }
