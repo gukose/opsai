@@ -9,6 +9,7 @@ import com.hotelopai.employee.domain.EmployeeOperationalStatus
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.UUID
+import org.slf4j.LoggerFactory
 
 interface DeterministicAssignmentService {
     fun assign(criteria: AssignmentCriteria, now: Instant = Instant.now()): TaskAssignment?
@@ -42,11 +43,14 @@ data class AssignmentDecision(val assignment: TaskAssignment?, val candidates: L
 class DefaultDeterministicAssignmentService(
     private val employeeRepository: EmployeeRepository
 ) : DeterministicAssignmentService {
+    private val logger = LoggerFactory.getLogger(javaClass)
     override fun assign(criteria: AssignmentCriteria, now: Instant): TaskAssignment? {
         return evaluate(criteria, now).assignment
     }
 
     override fun evaluate(criteria: AssignmentCriteria, now: Instant): AssignmentDecision {
+        val startedAt = System.nanoTime()
+        val filteringStarted = System.nanoTime()
         val baseCandidates = (criteria.employees ?: employeeRepository.findByHotelId(criteria.hotelId))
             .asSequence()
             .filter { it.status == EmployeeStatus.ACTIVE }
@@ -58,6 +62,8 @@ class DefaultDeterministicAssignmentService(
             .filter { criteria.requiredRoleId == null || criteria.requiredRoleId in it.roleIds }
             .filter { criteria.requiredLanguage == null || it.languages.any { language -> language.equals(criteria.requiredLanguage, true) } }
             .toList()
+        val filteringMs = elapsedMs(filteringStarted)
+        val skillStarted = System.nanoTime()
         val skillMatchedCandidates = baseCandidates.filter { employee -> skillLevel(employee, criteria) >= criteria.minimumSkillLevel }
         val eligibleCandidates = when {
             criteria.requiredSkillId == null -> baseCandidates
@@ -65,6 +71,8 @@ class DefaultDeterministicAssignmentService(
             criteria.strictRequiredSkill -> emptyList()
             else -> baseCandidates
         }
+        val skillMs = elapsedMs(skillStarted)
+        val scoringStarted = System.nanoTime()
         val ranked = eligibleCandidates
             .asSequence()
             .map { candidate -> candidate to score(candidate, criteria) }
@@ -74,16 +82,19 @@ class DefaultDeterministicAssignmentService(
                     .thenBy { it.first.displayName }
             )
             .toList()
+        val scoringMs = elapsedMs(scoringStarted)
+        val mappingStarted = System.nanoTime()
         val candidates = ranked.map { (employee, scored) -> AssignmentCandidate(employee.id,employee.displayName,scored.first,scored.second) }
+        val mappingMs = elapsedMs(mappingStarted)
         val selected = ranked.firstOrNull()?.first
-        if(selected==null) return AssignmentDecision(null,candidates,"NO_CANDIDATE",if(criteria.emergency) "No eligible candidate; escalate to supervisor" else "No eligible candidate matched availability, shift, role, skill, and language rules")
+        if(selected==null) return AssignmentDecision(null,candidates,"NO_CANDIDATE",if(criteria.emergency) "No eligible candidate; escalate to supervisor" else "No eligible candidate matched availability, shift, role, skill, and language rules").also { logTiming(startedAt, filteringMs, skillMs, scoringMs, mappingMs, candidates.size) }
         if (ranked.size > 1 && ranked[0].second.first == ranked[1].second.first) {
             return AssignmentDecision(
                 assignment = null,
                 candidates = candidates,
                 outcome = "AMBIGUOUS",
                 explanation = "Multiple equally suitable candidates require supervisor assignment"
-            )
+            ).also { logTiming(startedAt, filteringMs, skillMs, scoringMs, mappingMs, candidates.size) }
         }
         val assignment = TaskAssignment(
             assigneeType = TaskAssigneeType.USER,
@@ -91,8 +102,14 @@ class DefaultDeterministicAssignmentService(
             displayName = selected.displayName,
             assignedAt = now
         )
-        return AssignmentDecision(assignment,candidates,"ASSIGNED","Selected ${selected.displayName} by deterministic operational ranking")
+        return AssignmentDecision(assignment,candidates,"ASSIGNED","Selected ${selected.displayName} by deterministic operational ranking").also { logTiming(startedAt, filteringMs, skillMs, scoringMs, mappingMs, candidates.size) }
     }
+
+    private fun logTiming(start: Long, filtering: Long, skill: Long, scoring: Long, mapping: Long, count: Int) {
+        logger.info("DETERMINISTIC_ASSIGNMENT_TIMING filteringMs={} skillEligibilityMs={} scoringSortMs={} candidateMappingMs={} otherMs={} totalMs={} candidateCount={} repositoryCallCount=0 sqlStatementCount=0", filtering, skill, scoring, mapping, (elapsedMs(start)-filtering-skill-scoring-mapping).coerceAtLeast(0), elapsedMs(start), count)
+    }
+
+    private fun elapsedMs(start: Long): Long = (System.nanoTime() - start) / 1_000_000
 
     private fun skillLevel(employee: Employee, criteria: AssignmentCriteria): Int {
         val skillId = criteria.requiredSkillId ?: return criteria.minimumSkillLevel
