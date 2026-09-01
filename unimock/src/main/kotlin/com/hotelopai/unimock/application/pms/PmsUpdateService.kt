@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
 import java.time.Duration
 import java.util.UUID
+import com.hotelopai.unimock.application.demo.HotelOpAiUpdateHistoryRepository
 
 @Service
 @Transactional
@@ -19,6 +20,7 @@ class PmsUpdateService(
     private val objectMapper: ObjectMapper,
     private val clock: Clock,
     private val canonicalRoomState: CanonicalRoomStateStore
+    ,private val hotelOpAiHistory: HotelOpAiUpdateHistoryRepository
 ) {
     fun updateRoomStatus(
         roomNumber: String,
@@ -30,6 +32,7 @@ class PmsUpdateService(
         if (simulation == null) {
             if (!CanonicalDemoRoomCatalog.contains(roomNumber)) throw PmsResourceNotFoundException("Room", roomNumber)
             canonicalRoomState.set(roomNumber, request.status)
+            hotelOpAiHistory.append(roomNumber, request.status)
             return PmsUpdateResponse(UUID.randomUUID(), roomNumber, "ROOM_STATUS_UPDATE", request.status)
         }
         if (simulation.requireDocument("master/rooms.json").rooms().none { it.path("roomNumber").asText() == roomNumber } && !CanonicalDemoRoomCatalog.contains(roomNumber)) {
@@ -39,6 +42,7 @@ class PmsUpdateService(
         val roomStatuses = simulation.requireObjectDocument("operations/room-status.json")
         val status = upsertRoomStatus(roomStatuses, roomNumber, request.status)
         pmsDocumentRepository.replaceDocument(simulation.simulationId, "operations/room-status.json", roomStatuses)
+        hotelOpAiHistory.append(roomNumber, status)
 
         val responsePayload = mapOf("roomNumber" to roomNumber, "status" to status)
         val verificationLogId = recordVerification(
