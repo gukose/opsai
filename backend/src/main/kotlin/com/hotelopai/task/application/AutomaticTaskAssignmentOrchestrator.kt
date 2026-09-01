@@ -166,10 +166,12 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
 
     override fun evaluate(task: Task, now: Instant): AutomaticAssignmentResult {
         val timingStarted = System.nanoTime()
-        var requirementMs = 0L; var floorMs = 0L; var rankingMs = 0L; var selectionMs = 0L; var persistenceMs = 0L
+        var requirementMs = 0L; var floorMs = 0L; var rankingMs = 0L; var selectionMs = 0L; var persistenceMs = 0L; var existingMs = 0L; var decisionMs = 0L; var loggingMs = 0L
+        val existingStarted = System.nanoTime()
         existing(task.id, task.hotelId)?.let { existing ->
             if (task.assignment != null) return existing.copy(assignment = task.assignment)
         }
+        existingMs = elapsedMs(existingStarted)
 
         val requirementStarted = System.nanoTime()
         val requirement = resolveRequirement(task)
@@ -207,6 +209,7 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
             maximumWorkload = MAXIMUM_ACTIVE_WORKLOAD
         )
 
+        val decisionStarted = System.nanoTime()
         val decision = if (reason == null) assignmentService.evaluate(
             AssignmentCriteria(
                 hotelId = task.hotelId,
@@ -225,6 +228,7 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
             ),
             now
         ) else null
+        decisionMs = elapsedMs(decisionStarted)
 
         val affinityStarted = System.nanoTime()
         val floorAffinity = housekeepingFloorAffinity(task, employees)
@@ -237,6 +241,7 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
                 .thenByDescending { floorAffinity[it.employeeId] ?: 0 }
                 .thenBy { workload[it.employeeId] ?: 0 }
                 .thenBy { it.employeeId.toString() })
+        val loggingStarted = System.nanoTime()
         rankedCandidates.forEachIndexed { index, candidate ->
             val employee = employees.firstOrNull { it.id == candidate.employeeId }
             logger.info("event=housekeeping_auto_assignment_candidate roomNumber={} targetFloorId={} employeeId={} employeeNumber={} sameFloorActiveTaskCount={} activeWorkload={} activeShift={} rank={} selected={}", task.roomNumber, targetFloorNumber, candidate.employeeId, employee?.employeeNumber, floorAffinity[candidate.employeeId] ?: 0, workload[candidate.employeeId] ?: 0, candidate.employeeId in activeShiftIds, index + 1, index == 0)
@@ -247,6 +252,7 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
                 workload[candidate.employeeId] ?: 0, index == 0
             )
         }
+        loggingMs = elapsedMs(loggingStarted)
         val selectedEmployee = (rankedCandidates.firstOrNull()?.employeeId
             ?: decision?.assignment?.assigneeId?.let(UUID::fromString))
             ?.let { selectedId -> employees.firstOrNull { it.id == selectedId } }
@@ -279,7 +285,9 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         persist(task, result, selectedEmployee?.userId, now)
         persistenceMs = elapsedMs(persistenceStarted)
         val totalMs = elapsedMs(timingStarted)
-        logger.info("ASSIGNMENT_TIMING taskId={} requirementResolutionMs={} departmentLookupMs=0 skillLookupMs=0 roomFloorLookupMs={} candidateSqlMs={} candidateMappingMs={} homeAreaPreparationMs=0 homeAreaEvaluationMs=0 shiftPreparationMs=0 shiftEvaluationMs=0 workloadPreparationMs=0 workloadEvaluationMs=0 sameFloorTaskPreparationMs={} sameFloorTaskEvaluationMs=0 rankingComparatorMs=0 rankingSortMs={} selectedCandidateResolutionMs={} assignmentPersistenceMs={} assignmentAuditMs=0 assignmentLoggingMs=0 flashEligibilityMs=0 flashActiveTaskLookupMs=0 transactionSynchronizationMs=0 unaccountedMs=0 totalMs={} candidateCount={} sqlStatementCount=4 repositoryCallCount=2", task.id, requirementMs, floorMs, candidateSqlMs, candidateMappingMs, floorMs, rankingMs, selectionMs, persistenceMs, totalMs, result.candidateCount)
+        val measured = existingMs + requirementMs + candidateSqlMs + candidateMappingMs + floorMs + decisionMs + rankingMs + loggingMs + selectionMs + persistenceMs
+        val unaccounted = (totalMs - measured).coerceAtLeast(0)
+        logger.info("ASSIGNMENT_TIMING taskId={} requirementResolutionMs={} departmentLookupMs=0 skillLookupMs=0 roomFloorLookupMs={} candidateSqlMs={} candidateMappingMs={} homeAreaPreparationMs=0 homeAreaEvaluationMs=0 shiftPreparationMs=0 shiftEvaluationMs=0 workloadPreparationMs=0 workloadEvaluationMs=0 sameFloorTaskPreparationMs={} sameFloorTaskEvaluationMs=0 rankingComparatorMs=0 rankingSortMs={} selectedCandidateResolutionMs={} assignmentPersistenceMs={} assignmentAuditMs=0 assignmentLoggingMs={} flashEligibilityMs=0 flashActiveTaskLookupMs=0 transactionSynchronizationMs=0 existingLookupMs={} deterministicDecisionMs={} evaluateEntryToFirstStageMs={} betweenStagesGapMs={} afterLastStageToReturnMs=0 unaccountedMs={} totalMs={} candidateCount={} sqlStatementCount=5 repositoryCallCount=2", task.id, requirementMs, floorMs, candidateSqlMs, candidateMappingMs, floorMs, rankingMs, selectionMs, persistenceMs, loggingMs, existingMs, decisionMs, existingMs, 0, unaccounted, totalMs, result.candidateCount)
         observability.incrementCounter(
             "hotelopai.task.auto_assignment.total",
             "outcome" to if (assignment == null) "unassigned" else "assigned",
