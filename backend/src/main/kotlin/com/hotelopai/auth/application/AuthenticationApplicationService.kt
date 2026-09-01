@@ -109,7 +109,7 @@ class AuthenticationApplicationService(
             createdAt = now,
             expiresAt = PersistenceInstant.toPersistencePrecision(now.plus(authSessionPolicy.refreshTokenTtl()))
         )
-        val savedSession = refreshSessionRepository.save(session)
+        val savedSession = refreshSessionRepository.create(session)
         val currentUser = buildCurrentUser(user, hotel)
         val accessToken = accessTokenService.issueToken(
             context = toAccessTokenContext(savedSession.id, currentUser, user),
@@ -145,7 +145,7 @@ class AuthenticationApplicationService(
             ipAddress = command.ipAddress ?: session.ipAddress,
             userAgent = command.userAgent ?: session.userAgent
         )
-        val savedSession = refreshSessionRepository.save(rotated)
+        val savedSession = refreshSessionRepository.rotate(session, rotated)
         val currentUser = buildCurrentUser(user, hotel)
         val accessToken = accessTokenService.issueToken(
             context = toAccessTokenContext(savedSession.id, currentUser, user),
