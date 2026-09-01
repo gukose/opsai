@@ -8,6 +8,7 @@ import com.hotelopai.auth.domain.UserStatus
 import com.hotelopai.employee.application.EmployeeRepository
 import com.hotelopai.hotel.application.HotelRepository
 import com.hotelopai.shared.kernel.PersistenceInstant
+import com.hotelopai.shared.kernel.UuidV7Generator
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
@@ -140,6 +141,7 @@ class AuthenticationApplicationService(
             nextExpiresAt = PersistenceInstant.toPersistencePrecision(now.plus(authSessionPolicy.refreshTokenTtl())),
             now = now
         ).copy(
+            id = UuidV7Generator.generate(now),
             deviceId = command.deviceId?.takeIf { it.isNotBlank() } ?: session.deviceId,
             deviceName = command.deviceName ?: session.deviceName,
             ipAddress = command.ipAddress ?: session.ipAddress,

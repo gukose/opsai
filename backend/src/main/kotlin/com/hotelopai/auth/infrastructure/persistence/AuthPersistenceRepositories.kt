@@ -106,6 +106,7 @@ class JpaRefreshSessionRepositoryAdapter(
         return refreshSession.copy(version = 0)
     }
     override fun rotate(current: RefreshSession, replacement: RefreshSession): RefreshSession {
+        require(current.id != replacement.id) { "Replacement refresh session must have a fresh id" }
         val updated = jdbc.update(
             "update refresh_session set revoked_at=:now,last_used_at=:now,updated_at=:now,version=version+1 where id=:id and version=:version and revoked_at is null and expires_at>:now",
             mapOf("id" to current.id, "version" to current.version, "now" to Timestamp.from(replacement.lastUsedAt ?: replacement.updatedAt))
