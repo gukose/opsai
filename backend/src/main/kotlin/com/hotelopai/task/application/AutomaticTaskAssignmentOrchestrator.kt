@@ -213,6 +213,7 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         val decision = if (reason == null) assignmentService.evaluate(
             AssignmentCriteria(
                 hotelId = task.hotelId,
+                employees = employees,
                 requiredSkillId = rankingSkillId,
                 departmentId = requirement.departmentId,
                 minimumSkillLevel = 1,
