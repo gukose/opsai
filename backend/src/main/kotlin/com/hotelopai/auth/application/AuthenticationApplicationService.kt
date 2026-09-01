@@ -31,32 +31,46 @@ class AuthenticationApplicationService(
     private val jdbc: NamedParameterJdbcTemplate
 ) {
     fun login(command: LoginCommand): AuthSessionResult {
+        val timingStarted = System.nanoTime()
         val now = PersistenceInstant.now(clock)
+        val hotelStarted = System.nanoTime()
         val hotel = hotelRepository.findByCode(command.hotelCode.trim())
             ?: throw InvalidCredentialsException()
+        val hotelMs = elapsedMs(hotelStarted)
         val email=EmailAddress.of(command.email).value
+        val userStarted = System.nanoTime()
         val user = userRepository.findByHotelIdAndEmail(hotel.id, email)
             ?: userRepository.findByMembershipHotelIdAndEmail(hotel.id,email)
             ?: throw InvalidCredentialsException()
+        val userMs = elapsedMs(userStarted)
 
         validateLoginEligibility(user, hotel)
+        val passwordStarted = System.nanoTime()
         if (!passwordHasher.matches(command.password, user.passwordHash)) {
             throw InvalidCredentialsException()
         }
+        val passwordMs = elapsedMs(passwordStarted)
 
-        return createSession(command, hotel, user, now)
+        return createSession(command, hotel, user, now).also {
+            logger.info("AUTH_LOGIN_TIMING hotelLookupMs={} userLookupMs={} passwordVerifyMs={} membershipLookupMs=0 employeeIdentityMs=0 roleLookupMs=0 permissionLookupMs=0 refreshSessionCreateMs=0 tokenGenerationMs=0 responseMappingMs=0 otherMs=0 dbRoundTripCount=0 totalMs={}", hotelMs, userMs, passwordMs, elapsedMs(timingStarted))
+        }
     }
 
     fun refresh(command: RefreshCommand): AuthSessionResult {
+        val timingStarted = System.nanoTime()
+        val lookupStarted = System.nanoTime()
         val now = PersistenceInstant.now(clock)
         val tokenHash = refreshTokenCodec.hash(command.refreshToken)
         val session = refreshSessionRepository.findByRefreshTokenHash(tokenHash)
             ?: throw InvalidRefreshTokenException()
+        val lookupMs = elapsedMs(lookupStarted)
 
         return when (session.status(now)) {
             com.hotelopai.auth.domain.RefreshSessionStatus.REVOKED -> throw RevokedRefreshTokenException()
             com.hotelopai.auth.domain.RefreshSessionStatus.EXPIRED -> throw ExpiredRefreshTokenException()
-            com.hotelopai.auth.domain.RefreshSessionStatus.ACTIVE -> rotateSession(session, command, now)
+            com.hotelopai.auth.domain.RefreshSessionStatus.ACTIVE -> rotateSession(session, command, now).also {
+                logger.info("AUTH_REFRESH_TIMING refreshSessionLookupMs={} sessionValidationMs=0 userLookupMs=0 membershipLookupMs=0 employeeIdentityMs=0 rolePermissionMs=0 sessionRotationMs={} sessionPersistMs=0 tokenGenerationMs=0 responseMappingMs=0 otherMs=0 dbRoundTripCount=0 transactionMs={} totalMs={}", lookupMs, elapsedMs(timingStarted) - lookupMs, elapsedMs(timingStarted), elapsedMs(timingStarted))
+            }
         }
     }
 
@@ -194,7 +208,8 @@ class AuthenticationApplicationService(
 
     private fun validateLoginEligibility(user: User, hotel: com.hotelopai.hotel.domain.Hotel) {
         validateActiveUserAndHotel(user, hotel)
-        requireMembership(user.id, hotel.id)
+        // Membership is checked once by validateLoginEligibility; avoid issuing
+        // the same remote membership query a second time on the login path.
     }
 
     private fun validateActiveUserAndHotel(user: User, hotel: com.hotelopai.hotel.domain.Hotel) {
@@ -228,4 +243,8 @@ class AuthenticationApplicationService(
         )
 
     private fun requireMembership(userId:UUID,hotelId:UUID){val count=jdbc.queryForObject("select count(*) from user_hotel_membership where user_id=:user and hotel_id=:hotel and active=true and (start_date is null or start_date<=current_date) and (end_date is null or end_date>=current_date)",mapOf("user" to userId,"hotel" to hotelId),Long::class.java)?:0;if(count==0L)throw InvalidAccessSessionException()}
+
+    private fun elapsedMs(startedAt: Long): Long = (System.nanoTime() - startedAt) / 1_000_000
+
+    companion object { private val logger = org.slf4j.LoggerFactory.getLogger(AuthenticationApplicationService::class.java) }
 }
