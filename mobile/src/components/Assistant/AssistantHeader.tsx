@@ -2,8 +2,6 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Bell, LogOut, RotateCcw } from "lucide-react-native";
 import { useMemo, useState } from "react";
 
-import { assistantDataSourceMode } from "../../config/assistantConfig";
-import { isDemoEnvironment } from "../../config/appConfig";
 import {
   getCurrentUserDisplayName,
   getCurrentUserRoleCodes
@@ -25,6 +23,7 @@ type AssistantHeaderProps = {
   notificationsStaleReason?: string | null;
   onReset?: () => void;
   onLogout?: () => void;
+  compact?: boolean;
 };
 
 export function AssistantHeader({
@@ -33,12 +32,13 @@ export function AssistantHeader({
   recentNotifications = [],
   notificationsStaleReason,
   onReset,
-  onLogout
+  onLogout,
+  compact = false
 }: AssistantHeaderProps) {
   const [isNotificationPanelOpen, setNotificationPanelOpen] = useState(false);
   const displayName = getCurrentUserDisplayName(currentUser);
   const roleCodes = getCurrentUserRoleCodes(currentUser);
-  const roleLabel = roleCodes.length > 0 ? roleCodes.join(" · ") : "Session active";
+  const roleLabel = roleCodes.length > 0 ? roleCodes.map(humanizeRole).join(" · ") : "Session active";
   const visibleNotifications = useMemo(
     () => visibleRecentNotifications(recentNotifications),
     [recentNotifications]
@@ -49,19 +49,7 @@ export function AssistantHeader({
     <View style={styles.header}>
       <View style={styles.content}>
         <View style={styles.identity}>
-          <Text style={styles.greeting} numberOfLines={1}>👋 Good Morning{displayName ? `, ${displayName}` : ""}</Text>
-          <Text style={styles.role}>{roleLabel}</Text>
-          {isDemoEnvironment ? (
-            <View style={styles.demoPill} accessibilityLabel="Demo environment">
-              <Text style={styles.demoLabel}>DEMO</Text>
-            </View>
-          ) : null}
-          {__DEV__ ? (
-            <View style={styles.modePill}>
-              <Text style={styles.modeLabel}>assistant mode</Text>
-              <Text style={styles.modeValue}>{assistantDataSourceMode}</Text>
-            </View>
-          ) : null}
+          {!compact ? <><Text style={styles.greeting} numberOfLines={1}>👋 Good Morning{displayName ? `, ${displayName}` : ""}</Text><Text style={styles.role}>{roleLabel}</Text></> : null}
         </View>
         <View style={styles.actions}>
           <Pressable
@@ -128,6 +116,10 @@ export function AssistantHeader({
   );
 }
 
+function humanizeRole(value: string): string {
+  return value.toLowerCase().split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+}
+
 const styles = StyleSheet.create({
   header: {
     minHeight: 64,
@@ -161,6 +153,20 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: typography.subtitle,
     fontWeight: "800"
+  },
+  experiencePill: {
+    marginTop: 5,
+    alignSelf: "flex-start",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    backgroundColor: "#e8f5ed"
+  },
+  experienceLabel: {
+    color: colors.green,
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.5
   },
   modePill: {
     marginTop: 6,

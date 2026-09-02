@@ -1,7 +1,7 @@
 import { ComponentType } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
-import { CalendarDays, Clock3, Flag, MapPin, Play, Pause, RotateCcw, Ban, CheckCheck, Image as ImageIcon, FileText } from "lucide-react-native";
+import { AppState, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { CalendarDays, Clock3, Flag, MapPin, Play, Pause, RotateCcw, Ban, CheckCheck, Image as ImageIcon, FileText, BedDouble, Wrench, ShoppingBasket } from "lucide-react-native";
 import { LucideProps } from "lucide-react-native";
 
 import { colors, radius, shadow, spacing, typography } from "../../theme/tokens";
@@ -13,6 +13,7 @@ import { CurrentUserSnapshot } from "../../session/sessionTypes";
 import { hasPermission } from "../../auth/currentUserHelpers";
 import { InspectionApi, InspectionDetail } from "../../api/housekeeping/InspectionApi";
 import { createMobileHotelOpAiClient } from "../../api/hotelOpAiClient";
+import { calculateSlaRemainingSeconds, formatDurationShort, targetDurationSeconds } from "../../tasks/taskSlaPolicy";
 
 type TaskDetailCardProps = {
   task: TaskDetail;
@@ -28,6 +29,8 @@ type TaskDetailCardProps = {
   accessToken?: string | null;
   currentUser?: CurrentUserSnapshot | null;
   onInspectionDecision?: () => void | Promise<void>;
+  frontlineSimple?: boolean;
+  onReportIssue?: () => void;
 };
 
 export function TaskDetailCard({
@@ -40,7 +43,7 @@ export function TaskDetailCard({
   disabled,
   assignmentCandidates = [],
   onAssignmentOpen,
-  onAssign, accessToken, currentUser, onInspectionDecision
+  onAssign, accessToken, currentUser, onInspectionDecision, frontlineSimple = false, onReportIssue
 }: TaskDetailCardProps) {
   const selfInspection = Boolean(currentUser && task.assigneeId && [currentUser.employeeId, currentUser.userId].filter(Boolean).includes(task.assigneeId));
   const inspectionPending = task.awaitingInspection === true;
@@ -56,12 +59,27 @@ export function TaskDetailCard({
   const [inspectionReason, setInspectionReason] = useState("");
   const [inspectionBusy, setInspectionBusy] = useState(false);
   const [inspectionError, setInspectionError] = useState<string | null>(null);
+  const [timingObservedAt, setTimingObservedAt] = useState(() => Date.now());
+  const running = task.status === "STARTED" || task.status === "IN_PROGRESS" || task.status === "OVERDUE";
   useEffect(() => {
-    if (task.status !== "STARTED" && task.status !== "IN_PROGRESS") return;
+    if (!running) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [task.status]);
-  const productiveSeconds = (task.actualWorkingDurationSeconds ?? 0) + (task.status === "STARTED" || task.status === "IN_PROGRESS" ? Math.max(0, Math.floor((now - new Date(task.startedAt ?? task.updatedAt).getTime()) / 1000)) : 0);
+  }, [running]);
+  useEffect(() => {
+    setTimingObservedAt(Date.now());
+  }, [task.id, task.status, task.actualWorkingDurationSeconds, task.updatedAt]);
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") setNow(Date.now());
+    });
+    return () => subscription.remove();
+  }, []);
+  // The API timing snapshot already includes the active segment through server time.
+  // Only add time since that snapshot was observed; never add elapsed time since startedAt again.
+  const productiveSeconds = Math.max(0, Math.floor(task.actualWorkingDurationSeconds ?? 0)) + (running ? Math.max(0, Math.floor((now - timingObservedAt) / 1000)) : 0);
+  const targetSeconds = task.slaTargetSeconds || targetDurationSeconds(task.intentType, task.title);
+  const slaDelta = calculateSlaRemainingSeconds(targetSeconds, productiveSeconds);
   const formatDuration = (seconds: number) => `${String(Math.floor(seconds / 3600)).padStart(2, "0")}:${String(Math.floor((seconds % 3600) / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
   useEffect(() => { if (!inspectionMode || !accessToken) return; const api = new InspectionApi(createMobileHotelOpAiClient({ accessTokenProvider: () => accessToken })); void api.pending().then(async pending => { const match = pending.find(item => item.taskId === task.id); if (match) setInspection(await api.detail(match.id)); }).catch(() => undefined); }, [inspectionMode, accessToken, task.id]);
   const decideInspection = async (result: "PASS" | "REJECT") => { if (!inspection || inspectionBusy) return; if (result === "REJECT" && !inspectionReason.trim()) { setInspectionError("Please enter a reason for rejection."); return; } setInspectionError(null); setInspectionBusy(true); try { const api = new InspectionApi(createMobileHotelOpAiClient({ accessTokenProvider: () => accessToken })); await api.decide(inspection.workflow.id, result, [], inspectionReason.trim() || undefined); await onInspectionDecision?.(); } catch (error) { setInspectionError(error instanceof Error ? error.message : "Inspection decision failed."); } finally { setInspectionBusy(false); } };
@@ -99,39 +117,54 @@ export function TaskDetailCard({
     }
   };
 
+  if (frontlineSimple) {
+    return <FrontlineTaskExecution
+      task={task}
+      productiveSeconds={productiveSeconds}
+      targetSeconds={targetSeconds}
+      actions={actions}
+      disabled={disabled}
+      onStart={onStart}
+      onPause={onPause}
+      onResume={onResume}
+      onComplete={onComplete}
+      onReportIssue={onReportIssue}
+    />;
+  }
+
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, frontlineSimple && styles.frontlineCard]}>
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Text style={styles.kicker}>TASK DETAIL</Text>
-          <Text style={styles.title} numberOfLines={2}>
-            {task.title}
-          </Text>
+        <View style={[styles.headerLeft, frontlineSimple && styles.frontlineHeaderLeft]}>
+          <Text style={styles.kicker}>{frontlineSimple && task.roomOrLocation ? frontlineRoom(task.roomOrLocation) : "TASK DETAIL"}</Text>
+          <Text style={styles.title} numberOfLines={2}>{frontlineSimple && task.roomOrLocation ? frontlineRoom(task.roomOrLocation) : task.title}</Text>
+          {frontlineSimple ? <Text style={styles.frontlineTaskTitle} numberOfLines={1}>{task.title}</Text> : null}
         </View>
-        <TaskStatusChip status={task.status} />
+        {frontlineSimple ? <Text style={styles.frontlineState}>{frontlineState(task)}</Text> : <TaskStatusChip status={task.status} />}
       </View>
 
-      <Text style={styles.description}>{`Problem: ${task.description}`}</Text>
+      {!frontlineSimple ? <Text style={styles.description}>{`Problem: ${task.description}`}</Text> : null}
 
-      <View style={styles.metaGrid}>
+      {!frontlineSimple ? <View style={styles.metaGrid}>
         <DetailRow icon={Flag} label="Priority" value={task.priority} />
         <DetailRow icon={Clock3} label="SLA" value={formatSlaCountdown(task.slaDeadline)} />
         {task.roomOrLocation ? (
           <DetailRow icon={MapPin} label="Lokasyon" value={formatLocation(task.roomOrLocation)} />
         ) : null}
         <DetailRow icon={CalendarDays} label="Updated" value={formatDateTime(task.updatedAt)} />
-      </View>
+      </View> : null}
 
-      <View style={styles.infoRow}>
+      {!frontlineSimple ? <View style={styles.infoRow}>
         <InfoChip label="Intent" value={task.intentType} />
         <InfoChip label="Source" value={task.source} />
-      </View>
+      </View> : null}
       {task.latestInspectionRejectionReason ? <View style={styles.reworkNote}><Text style={styles.reworkTitle}>Rework Required</Text><Text style={styles.reworkLabel}>Supervisor Note</Text><Text style={styles.reworkReason}>{task.latestInspectionRejectionReason}</Text></View> : null}
       {inspectionMode ? <View style={styles.inspectionPanel}><Text style={styles.inspectionTitle}>Inspection Required</Text><TextInput value={inspectionReason} onChangeText={setInspectionReason} placeholder="Rejection note (required to reject)" style={styles.rejectionInput}/>{inspectionError ? <Text style={styles.modalError}>{inspectionError}</Text> : null}<View style={styles.inspectionChoices}><Pressable disabled={inspectionBusy} onPress={() => void decideInspection("PASS")}><Text style={styles.approveLabel}>Approve</Text></Pressable><Pressable disabled={inspectionBusy} onPress={() => void decideInspection("REJECT")}><Text style={styles.rejectLabel}>Reject</Text></Pressable></View>{inspection?.history.map(h => <Text key={h.id} style={styles.historyText}>Attempt {h.attempt}: {h.result} · {h.qualityScore ?? 0}%{h.rejectionReason ? ` · ${h.rejectionReason}` : ""}</Text>)}</View> : null}
-      <Text style={styles.description}>{task.status === "STARTED" || task.status === "IN_PROGRESS" ? `Working · ${formatDuration(productiveSeconds)}` : task.status === "WAITING" ? `${task.awaitingInspection ? "Waiting for Inspection" : "Paused"} · ${formatDuration(task.totalPauseDurationSeconds ?? 0)}\nWorked · ${formatDuration(task.actualWorkingDurationSeconds ?? 0)}` : task.completedAt ? `Worked · ${formatDuration(task.actualWorkingDurationSeconds ?? 0)}` : ""}</Text>
+      <View style={frontlineSimple ? styles.frontlineTimer : undefined}><Text style={frontlineSimple ? styles.frontlineTimerText : styles.description}>{task.status === "STARTED" || task.status === "IN_PROGRESS" ? (frontlineSimple ? formatDuration(productiveSeconds).slice(3) : `Working · ${formatDuration(productiveSeconds)}`) : task.status === "WAITING" ? `${task.awaitingInspection ? "Waiting for Inspection" : "Paused"} · ${formatDuration(task.totalPauseDurationSeconds ?? 0)}\nWorked · ${formatDuration(task.actualWorkingDurationSeconds ?? 0)}` : task.completedAt ? `Worked · ${formatDuration(task.actualWorkingDurationSeconds ?? 0)}` : ""}</Text>{frontlineSimple && (task.status === "STARTED" || task.status === "IN_PROGRESS") ? <Text style={styles.frontlineTimerCaption}>min working</Text> : null}</View>
+      {frontlineSimple ? <View style={styles.slaPanel}><Text style={styles.slaHeading}>ACTUAL WORKING TIME</Text><Text style={styles.slaValue}>{formatDurationShort(productiveSeconds)}</Text><Text style={styles.slaSubheading}>TARGET · {Math.round(targetSeconds / 60)} MIN</Text><Text style={[styles.slaRemaining, slaDelta < 0 && styles.slaOverdue]}>{slaDelta < 0 ? `${formatDurationShort(-slaDelta)} overdue` : `${formatDurationShort(slaDelta)} remaining`}</Text>{task.startedAt ? <Text style={styles.startedLabel}>Task started: {formatDateTime(task.startedAt)}</Text> : null}</View> : null}
       {task.intentType === "MINIBAR" || task.priority === "URGENT" ? <Text style={styles.kicker}>FLASH · Minibar Check</Text> : null}
 
-      {onAssign ? (
+      {onAssign && !frontlineSimple ? (
         <View style={styles.assignmentPanel}>
           <View style={styles.assignmentHeader}>
             <Text style={styles.attachmentSectionTitle}>{task.assignmentLabel ? "Assigned" : "Needs Assignment"}</Text>
@@ -162,12 +195,12 @@ export function TaskDetailCard({
         onConfirm={() => { void confirmAssignment(); }}
       />
 
-      <View style={styles.infoRow}>
+      {!frontlineSimple ? <View style={styles.infoRow}>
         <InfoChip label="Assignment" value={task.assignmentLabel ?? "Unassigned"} />
         <InfoChip label="Assignee" value={task.assigneeType ?? "N/A"} />
-      </View>
+      </View> : null}
 
-      <TaskAttachmentSection task={task} />
+      {!frontlineSimple ? <TaskAttachmentSection task={task} /> : null}
 
       <View style={styles.actions}>
         {actions.start ? (
@@ -177,6 +210,7 @@ export function TaskDetailCard({
             onPress={onStart}
             tone="primary"
             disabled={disabled}
+            large={frontlineSimple}
           />
         ) : null}
         {actions.pause ? (
@@ -186,8 +220,10 @@ export function TaskDetailCard({
             onPress={onPause}
             tone="secondary"
             disabled={disabled}
+            large={frontlineSimple}
           />
         ) : null}
+        {frontlineSimple && (task.status === "STARTED" || task.status === "IN_PROGRESS" || task.status === "ASSIGNED") ? <ActionButton icon={ImageIcon} label="Report Issue" onPress={onReportIssue} tone="secondary" disabled={disabled} large /> : null}
         {actions.resume ? (
           <ActionButton
             icon={RotateCcw}
@@ -195,6 +231,7 @@ export function TaskDetailCard({
             onPress={onResume}
             tone="secondary"
             disabled={disabled}
+            large={frontlineSimple}
           />
         ) : null}
         {actions.complete && !task.awaitingInspection ? (
@@ -204,9 +241,10 @@ export function TaskDetailCard({
             onPress={onComplete}
             tone="success"
             disabled={disabled}
+            large={frontlineSimple}
           />
         ) : null}
-        {actions.cancel ? (
+        {actions.cancel && !frontlineSimple ? (
           <ActionButton
             icon={Ban}
             label="Cancel"
@@ -218,6 +256,63 @@ export function TaskDetailCard({
       </View>
     </View>
   );
+}
+
+function FrontlineTaskExecution({ task, productiveSeconds, targetSeconds, actions, disabled, onStart, onPause, onResume, onComplete, onReportIssue }: {
+  task: TaskDetail;
+  productiveSeconds: number;
+  targetSeconds: number;
+  actions: ReturnType<typeof getAvailableActions>;
+  disabled?: boolean;
+  onStart?: () => void;
+  onPause?: () => void;
+  onResume?: () => void;
+  onComplete?: () => void;
+  onReportIssue?: () => void;
+}) {
+  const status = frontlineState(task);
+  const remaining = Math.max(0, targetSeconds - productiveSeconds);
+  const overdue = productiveSeconds > targetSeconds;
+  const Icon = frontlineTaskIcon(task);
+  const active = task.status === "STARTED" || task.status === "IN_PROGRESS" || task.status === "OVERDUE";
+  const paused = task.status === "WAITING" && !task.awaitingInspection;
+  const waiting = task.awaitingInspection === true;
+  const rework = Boolean(task.latestInspectionRejectionReason) && !waiting && task.status !== "COMPLETED";
+  return <View style={[styles.card, styles.frontlineExecutionCard]}>
+    <View style={styles.frontlineExecutionHeader}>
+      <View style={styles.frontlineIconCircle}><Icon size={30} color={colors.green} /></View>
+      <View style={styles.frontlineExecutionHeading}>
+        <Text style={styles.frontlineHeroRoom}>{frontlineRoom(task.roomOrLocation ?? "Location")}</Text>
+        <Text style={styles.frontlineHeroTitle} numberOfLines={2}>{task.title}</Text>
+        <Text style={styles.frontlineState}>{rework ? "REWORK REQUIRED" : status}</Text>
+      </View>
+    </View>
+    {task.priority === "URGENT" || task.priority === "HIGH" ? <Text style={styles.frontlineWarning}>{task.priority}</Text> : null}
+    {overdue && active ? <Text style={styles.frontlineWarning}>OVERDUE</Text> : null}
+    {rework ? <View style={styles.reworkNote}><Text style={styles.reworkTitle}>Rework Required</Text><Text style={styles.reworkLabel}>Supervisor Note</Text><Text style={styles.reworkReason}>{task.latestInspectionRejectionReason}</Text></View> : null}
+    {waiting ? <View style={styles.frontlineWaiting}><Text style={styles.frontlineWaitingTitle}>WAITING FOR INSPECTION</Text><Text style={styles.frontlineWaitingBody}>Work completed. Waiting for supervisor approval.</Text></View> : null}
+    {!waiting ? <View style={styles.frontlineTimingBlock}>
+      <Text style={styles.slaHeading}>SLA COUNTDOWN</Text>
+      <View style={[styles.frontlineTimer, { borderColor: remaining === 0 ? colors.textSubtle : colors.green }]}><Text style={styles.frontlineTimerText}>{formatDurationShort(remaining)}</Text><Text style={styles.frontlineTimerCaption}>min</Text></View>
+      <Text style={styles.frontlineTargetText}>Target · <Text style={styles.frontlineTargetValue}>{Math.round(targetSeconds / 60)} min</Text></Text>
+      {task.startedAt ? <Text style={styles.startedLabel}>Task started: {formatDateTime(task.startedAt)}</Text> : null}
+    </View> : null}
+    <View style={styles.actions}>
+      {actions.start ? <ActionButton icon={Play} label="Start" onPress={onStart} tone="primary" disabled={disabled} large frontline /> : null}
+      {rework ? <ActionButton icon={RotateCcw} label="Continue Work" onPress={onResume} tone="primary" disabled={disabled} large frontline /> : null}
+      {active && actions.complete ? <ActionButton icon={CheckCheck} label="Complete" onPress={onComplete} tone="primary" disabled={disabled} large frontline /> : null}
+      {active && (actions.pause || task.status === "OVERDUE") ? <ActionButton icon={Pause} label="Pause" onPress={onPause} tone="secondary" disabled={disabled} large frontline vertical /> : null}
+      {paused && actions.resume ? <ActionButton icon={RotateCcw} label="Resume" onPress={onResume} tone="primary" disabled={disabled} large frontline /> : null}
+      {(active || actions.start || paused || rework) ? <ActionButton icon={ImageIcon} label="Report Issue" onPress={onReportIssue} tone="secondary" disabled={disabled} large frontline vertical /> : null}
+    </View>
+  </View>;
+}
+
+function frontlineTaskIcon(task: TaskDetail): ComponentType<LucideProps> {
+  const value = `${task.intentType} ${task.title}`.toUpperCase();
+  if (value.includes("MINIBAR")) return ShoppingBasket;
+  if (value.includes("TECHNICAL") || value.includes("MAINTENANCE") || value.includes("REPAIR")) return Wrench;
+  return BedDouble;
 }
 
 function AssignmentModal({
@@ -357,6 +452,9 @@ function formatLocation(value: string): string {
   return room ? `${room[1]} numaralı oda` : value;
 }
 
+function frontlineRoom(value: string): string { const match = value.match(/room\s+(.+)/i); if (match) return `ROOM ${match[1]}`.toUpperCase(); return /^\d+$/.test(value.trim()) ? `ROOM ${value.trim()}` : value.toUpperCase(); }
+function frontlineState(task: TaskDetail): string { const status = task.status.toUpperCase(); if (task.awaitingInspection) return "WAITING FOR INSPECTION"; if (task.latestInspectionRejectionReason && (status === "IN_PROGRESS" || status === "STARTED" || status === "OVERDUE")) return "REWORK REQUIRED"; return status === "STARTED" || status === "IN_PROGRESS" || status === "OVERDUE" ? "IN PROGRESS" : status; }
+
 type InfoChipProps = {
   label: string;
   value: string;
@@ -379,9 +477,12 @@ type ActionButtonProps = {
   onPress?: () => void;
   tone: "primary" | "secondary" | "success" | "danger";
   disabled?: boolean;
+  large?: boolean;
+  frontline?: boolean;
+  vertical?: boolean;
 };
 
-function ActionButton({ icon: Icon, label, onPress, tone, disabled }: ActionButtonProps) {
+function ActionButton({ icon: Icon, label, onPress, tone, disabled, large = false, frontline = false, vertical = false }: ActionButtonProps) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -389,13 +490,17 @@ function ActionButton({ icon: Icon, label, onPress, tone, disabled }: ActionButt
       disabled={disabled}
       style={({ pressed }) => [
         styles.actionButton,
+        large && styles.frontlineActionButton,
         getActionToneStyle(tone),
+        frontline && tone === "primary" ? styles.frontlinePrimaryButton : null,
+        frontline && tone === "secondary" ? styles.frontlineSecondaryButton : null,
+        vertical ? styles.frontlineVerticalAction : null,
         pressed && !disabled ? styles.actionPressed : null,
         disabled ? styles.actionDisabled : null
       ]}
     >
-      <Icon color="#ffffff" size={12} strokeWidth={2.4} />
-      <Text style={styles.actionLabel}>{label}</Text>
+      <Icon color={frontline && tone === "secondary" ? colors.text : "#ffffff"} size={frontline ? 18 : 12} strokeWidth={2.4} />
+      <Text style={[styles.actionLabel, frontline && tone === "secondary" ? styles.frontlineSecondaryLabel : null]}>{label}</Text>
     </Pressable>
   );
 }
@@ -439,6 +544,59 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     ...shadow.card
   },
+  frontlineCard: {
+    padding: 18,
+    borderColor: "#cfe8d8"
+  },
+  frontlineExecutionCard: {
+    padding: 20,
+    borderColor: "#cfe8d8",
+    backgroundColor: "#f2faf4"
+  },
+  frontlineExecutionHeader: {
+    alignItems: "center",
+    marginBottom: 10
+  },
+  frontlineIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#e8f5ed",
+    marginBottom: 10
+  },
+  frontlineExecutionHeading: { alignItems: "center" },
+  frontlineHeroRoom: { color: colors.text, fontSize: 25, fontWeight: "900", letterSpacing: 0.4 },
+  frontlineHeroTitle: { color: colors.textMuted, fontSize: 16, fontWeight: "700", marginTop: 3, textAlign: "center" },
+  frontlineWarning: { alignSelf: "center", color: colors.red, fontSize: 11, fontWeight: "900", marginBottom: 4 },
+  frontlineTimingBlock: { alignItems: "center", marginTop: 8 },
+  frontlineTargetText: { color: colors.textMuted, fontSize: 13, fontWeight: "700", marginTop: 6 },
+  frontlineTargetValue: { color: colors.green, fontWeight: "900" },
+  frontlineWaiting: { alignItems: "center", paddingVertical: 24 },
+  frontlineWaitingTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
+  frontlineWaitingBody: { color: colors.textMuted, fontSize: 12, marginTop: 6, textAlign: "center" },
+  frontlineTimer: {
+    minHeight: 150,
+    marginVertical: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 8,
+    borderColor: colors.green,
+    borderRadius: 90,
+    alignSelf: "center",
+    width: 170,
+    height: 170
+  },
+  frontlineTimerText: { color: colors.text, fontSize: 28, fontWeight: "900" },
+  frontlineTimerCaption: { marginTop: 2, color: colors.textMuted, fontSize: 11, fontWeight: "800" },
+  slaPanel: { alignItems: "center", marginBottom: 16 },
+  slaHeading: { color: colors.textMuted, fontSize: 10, fontWeight: "900", letterSpacing: 0.7 },
+  slaValue: { color: colors.text, fontSize: 24, fontWeight: "900", marginTop: 3 },
+  slaSubheading: { color: colors.textMuted, fontSize: 10, fontWeight: "900", marginTop: 8 },
+  slaRemaining: { color: colors.green, fontSize: 15, fontWeight: "900", marginTop: 2 },
+  slaOverdue: { color: colors.red },
+  startedLabel: { color: colors.textMuted, fontSize: 11, marginTop: 8 },
   header: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -449,6 +607,8 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0
   },
+  frontlineHeaderLeft: { alignItems: "center" },
+  frontlineState: { paddingHorizontal: 9, paddingVertical: 5, borderRadius: radius.pill, color: colors.green, backgroundColor: "#e1f5e8", fontSize: 11, fontWeight: "900" },
   kicker: {
     color: colors.textMuted,
     fontSize: typography.tiny,
@@ -459,6 +619,12 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 14,
     fontWeight: "800"
+  },
+  frontlineTaskTitle: {
+    marginTop: 3,
+    color: colors.textMuted,
+    fontSize: 15,
+    fontWeight: "700"
   },
   description: {
     marginTop: 6,
@@ -779,6 +945,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 6
   },
+  frontlineActionButton: { minHeight: 52, paddingVertical: 12, borderRadius: 15 },
+  frontlinePrimaryButton: { flexBasis: "100%", minHeight: 56, backgroundColor: colors.green },
+  frontlineSecondaryButton: { flex: 1, minWidth: 130, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.cardBorder },
+  frontlineVerticalAction: { minHeight: 76, flexDirection: "column", gap: 6 },
+  frontlineSecondaryLabel: { color: colors.text },
   action_primary: {
     backgroundColor: colors.green
   },

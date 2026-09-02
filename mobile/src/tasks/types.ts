@@ -1,5 +1,6 @@
 import type { TaskListResponseDto } from "../api/task/TaskApi";
 import type { TaskAttachmentResponseDto, TaskResponseDto } from "../api/task/TaskDtos";
+import { targetDurationSeconds } from "./taskSlaPolicy";
 
 export type TaskFilterState = {
   q: string;
@@ -29,6 +30,7 @@ export type TaskSummary = {
   unassignedReason: string | null;
   awaitingInspection?: boolean;
   latestInspectionRejectionReason?: string | null;
+  slaTargetSeconds: number;
 };
 
 export type AssignmentCandidate = {
@@ -90,6 +92,7 @@ export function taskSummaryFromResponse(task: TaskResponseDto): TaskSummary {
     unassignedReason: task.unassignedReason ?? null,
     awaitingInspection: Boolean((task as TaskResponseDto & { awaitingInspection?: boolean }).awaitingInspection)
     ,latestInspectionRejectionReason: (task as TaskResponseDto & { latestInspectionRejectionReason?: string | null }).latestInspectionRejectionReason ?? null
+    ,slaTargetSeconds: Number((task as TaskResponseDto & { slaTargetSeconds?: number }).slaTargetSeconds ?? targetDurationSeconds(task.intentType, task.title))
   };
 }
 

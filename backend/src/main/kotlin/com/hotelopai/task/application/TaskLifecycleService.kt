@@ -103,7 +103,9 @@ class TaskLifecycleService @Autowired constructor(
                     }
                 )
             } else {
+                logger.info("AUTO_ASSIGN_BEGIN taskId={} hotelId={} room={} intent={} state={}", saved.id, saved.hotelId, saved.roomNumber, saved.intentType, saved.status)
                 val automatic = taskCreationAssignmentOrchestrator.evaluate(saved, persistedNow)
+                logger.info("AUTO_ASSIGN_CANDIDATES taskId={} candidateCount={} reason={}", saved.id, automatic.candidateCount, automatic.reasonCode)
                 when {
                     automatic.assignment != null -> mutate(
                         taskId = saved.id.toString(),
@@ -117,6 +119,7 @@ class TaskLifecycleService @Autowired constructor(
                         taskRepository.save(saved.remainUnassigned(automatic.reasonCode, persistedNow))
                     else -> saved
                 }.also { assigned ->
+                    logger.info("AUTO_ASSIGN_PERSISTED taskId={} employeeId={} assigned={}", assigned.id, assigned.assignment?.assigneeId, assigned.assignment != null)
                     if (automatic.assignment != null) automaticFlashInterruptionHandler.assigned(assigned, automatic.selectedEmployeeId, persistedNow)
                 }
             }

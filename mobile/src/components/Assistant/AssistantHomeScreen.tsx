@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Bell, Menu, ArrowLeft } from "lucide-react-native";
 
 import { colors } from "../../theme/tokens";
 import { assistantBackendEnabled } from "../../config/assistantConfig";
@@ -23,7 +24,6 @@ import { CurrentUserSnapshot } from "../../session/sessionTypes";
 import { hasPermission } from "../../auth/currentUserHelpers";
 import { Composer } from "../Composer/Composer";
 import { BottomNavigation } from "../Navigation/BottomNavigation";
-import { AssistantCard } from "./AssistantCard";
 import { AssistantHeader } from "./AssistantHeader";
 import { NextTaskCard } from "./NextTaskCard";
 import { OverviewStrip } from "./OverviewStrip";
@@ -38,6 +38,10 @@ import { KnowledgeAssistantScreen } from "../Knowledge/KnowledgeAssistantScreen"
 import { VoiceRecorderPanel } from "../Voice/VoiceRecorderPanel";
 import { resolveResponsiveLayout } from "../../layout/responsiveLayout";
 import { AdministrationScreen } from "../Admin/AdministrationScreen";
+import { TaskDetailCard } from "../Tasks/TaskDetailCard";
+import { resolveExperienceMode, UserExperienceMode } from "../../auth/experienceMode";
+import { FrontlineCompletionScreen, RoleAdaptiveHome } from "./RoleAdaptiveHome";
+import { TaskDetail } from "../../tasks/types";
 
 type AssistantHomeScreenProps = {
   accessToken: string | null;
@@ -51,7 +55,11 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
   const responsiveLayout = resolveResponsiveLayout(width);
   const isDesktop = responsiveLayout.mode === "desktop";
   const isTablet = responsiveLayout.mode === "tablet";
+  const experienceMode: UserExperienceMode = resolveExperienceMode(currentUser);
+  const frontlineSimple = experienceMode === "FRONTLINE_SIMPLE";
   const [activeSection, setActiveSection] = useState<BottomNavigationKey>("home");
+  const [frontlineDetailOrigin, setFrontlineDetailOrigin] = useState<"home" | "list">("home");
+  const [frontlineCompletionTask, setFrontlineCompletionTask] = useState<TaskDetail | null>(null);
   const [composerText, setComposerText] = useState("");
   const [selectedAttachments, setSelectedAttachments] = useState<LocalAttachmentMetadata[]>([]);
   const [voiceTranscript, setVoiceTranscript] = useState<LocalVoiceTranscriptMetadata | null>(null);
@@ -85,6 +93,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
     updateFilters,
     clearFilters,
     selectTask,
+    clearSelectedTask,
     refreshTasks,
     startSelectedTask,
     pauseSelectedTask,
@@ -106,6 +115,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
   const overviewForDisplay = dashboardSummary?.overview ?? overview;
   const assistantActionDisabled = isSending || isConfirming;
   const isHomeSurface = activeSection === "home" || activeSection === "assistant";
+  const showAssistantComposer = false;
   const canUseKnowledgeAssistant = hasPermission(currentUser, "KNOWLEDGE_OPERATIONS");
   const offlineScope = useMemo(
     () =>
@@ -226,16 +236,26 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.screen}>
-        <AssistantHeader
-          currentUser={currentUser}
-          unreadNotificationCount={dashboardSummary?.overview.unreadNotificationCount ?? 0}
-          recentNotifications={dashboardSummary?.recentNotifications ?? []}
-          notificationsStaleReason={dashboardStaleReason}
-          onReset={() => {
-            void resetConversation();
-          }}
-          onLogout={onLogout}
-        />
+        {frontlineSimple ? (
+          <FrontlineHeader
+            title={frontlineCompletionTask ? "Completed" : activeSection === "profile" ? "Profile" : activeSection === "tasks" && selectedTask ? frontlineRoomLabel(selectedTask.roomOrLocation) : activeSection === "tasks" ? "My Tasks" : "Home"}
+            nested={activeSection === "tasks" && Boolean(selectedTask)}
+            onBack={() => { clearSelectedTask(); setActiveSection(frontlineDetailOrigin === "list" ? "tasks" : "home"); }}
+            onMenu={() => { clearSelectedTask(); setActiveSection("home"); }}
+          />
+        ) : (
+          <AssistantHeader
+            currentUser={currentUser}
+            compact={frontlineSimple}
+            unreadNotificationCount={dashboardSummary?.overview.unreadNotificationCount ?? 0}
+            recentNotifications={dashboardSummary?.recentNotifications ?? []}
+            notificationsStaleReason={dashboardStaleReason}
+            onReset={() => {
+              void resetConversation();
+            }}
+            onLogout={onLogout}
+          />
+        )}
         {isHomeSurface ? (
           <ScrollView
             style={styles.homeScroll}
@@ -246,7 +266,18 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
             ]}
             showsVerticalScrollIndicator={false}
           >
-            <OverviewStrip {...overviewForDisplay} />
+            <RoleAdaptiveHome
+              mode={experienceMode}
+              currentUser={currentUser}
+              tasks={tasks}
+              homeTask={homeTask}
+              overview={overviewForDisplay}
+              actionInProgress={isRefreshing}
+              onStartTask={() => void startHomeTask()}
+              onResumeTask={() => void resumeHomeTask()}
+              onOpenTask={(taskId) => { setFrontlineDetailOrigin("home"); void selectTask(taskId); setActiveSection("tasks"); }}
+              onAssignTask={(taskId) => { void selectTask(taskId); setActiveSection("tasks"); }}
+            />
             {dashboardStaleReason ? (
               <TaskErrorBanner
                 title="Offline data"
@@ -255,45 +286,26 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
             ) : null}
             {assistantErrorMessage ? <TaskErrorBanner title="Assistant sync issue" message={assistantErrorMessage} /> : null}
             {errorMessage ? <TaskErrorBanner title="Task sync issue" message={errorMessage} /> : null}
-            {homeTask ? (
-              <NextTaskCard
-                task={homeTask}
-                isActionInProgress={isRefreshing}
-                onStartTask={() => {
-                  void startHomeTask();
-                }}
-                onResumeTask={() => {
-                  void resumeHomeTask();
-                }}
-                onContinueTask={async () => {
-                  setActiveSection("tasks");
-                  await selectTask(homeTask.id);
-                }}
-              />
-            ) : (
-              <TaskEmptyState
-                title="No next task"
-                message="When the backend returns work, the next assigned task will appear here."
-              />
-            )}
-            <AssistantCard
-              items={conversationItems}
-              onQuestionActionPress={(action) => {
-                void sendTextMessage(action.value ?? action.label);
-              }}
-              onTaskPreviewCancel={() => {
-                void resetConversation();
-              }}
-              onTaskPreviewCreate={async () => {
-                const createdTaskId = await confirmTask();
-                if (createdTaskId) {
-                  await refreshTasks();
-                  await refreshDashboard();
-                  setActiveSection("tasks");
-                  await selectTask(createdTaskId);
-                }
-              }}
-              isActionDisabled={assistantActionDisabled}
+          </ScrollView>
+        ) : frontlineSimple && frontlineCompletionTask ? (
+          <ScrollView style={styles.homeScroll} contentContainerStyle={styles.homeContent}>
+            <FrontlineCompletionScreen task={frontlineCompletionTask} tasks={tasks} onOpenTask={(taskId) => { setFrontlineCompletionTask(null); setFrontlineDetailOrigin("home"); void selectTask(taskId); setActiveSection("tasks"); }} onViewTasks={() => { setFrontlineCompletionTask(null); clearSelectedTask(); setActiveSection("tasks"); }} />
+          </ScrollView>
+        ) : activeSection === "tasks" && experienceMode === "FRONTLINE_SIMPLE" && selectedTask ? (
+          <ScrollView style={styles.homeScroll} contentContainerStyle={styles.taskDetailContent}>
+            <TaskDetailCard
+              task={selectedTask}
+              currentUser={currentUser}
+              accessToken={accessToken}
+              disabled={isRefreshing}
+              onStart={() => void startSelectedTask()}
+              onPause={() => void pauseSelectedTask()}
+              onResume={() => void resumeSelectedTask()}
+              onComplete={async () => { const completedTask = await completeSelectedTask(); if (completedTask) { await refreshTasks(); setFrontlineCompletionTask(completedTask); clearSelectedTask(); } }}
+              onCancel={() => void cancelSelectedTask()}
+              onInspectionDecision={refreshTasks}
+              frontlineSimple
+              onReportIssue={() => { void addImageAttachment("camera"); }}
             />
           </ScrollView>
         ) : activeSection === "tasks" ? (
@@ -312,11 +324,11 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
             onRefresh={refreshTasks}
             onFiltersChange={updateFilters}
             onClearFilters={clearFilters}
-            onSelectTask={selectTask}
+            onSelectTask={async (taskId) => { setFrontlineDetailOrigin("list"); await selectTask(taskId); }}
             onStartTask={startSelectedTask}
             onPauseTask={pauseSelectedTask}
             onResumeTask={resumeSelectedTask}
-            onCompleteTask={completeSelectedTask}
+            onCompleteTask={async () => { await completeSelectedTask(); }}
             onCancelTask={cancelSelectedTask}
             assignmentCandidates={assignmentCandidates}
             onAssignmentOpen={refreshAssignmentCandidates}
@@ -340,7 +352,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
           />
         )}
         <View style={[styles.footer, isDesktop ? styles.footerDesktop : null]}>
-          {isHomeSurface ? (
+          {isHomeSurface && showAssistantComposer ? (
             <View style={isTablet && !isDesktop ? styles.composerTablet : null}>
               <View
                 accessibilityElementsHidden
@@ -458,11 +470,34 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
               />
             </View>
           ) : null}
+          {voiceRecorderVisible && accessToken ? (
+            <View style={styles.voiceSurface}>
+              <VoiceRecorderPanel
+                accessToken={accessToken}
+                onClose={() => setVoiceRecorderVisible(false)}
+                onUseTranscript={(proposal) => {
+                  setVoiceTranscript(createLocalVoiceTranscriptMetadata({ transcript: proposal.transcript, languageCode: proposal.languageCode, durationMs: proposal.durationMs, source: "SERVER_STT" }));
+                  setComposerText(proposal.transcript);
+                }}
+              />
+            </View>
+          ) : null}
           <BottomNavigation
             activeKey={activeSection}
             currentUser={currentUser}
+            onAssistantPress={() => setVoiceRecorderVisible(true)}
             onSelect={(key) => {
-              if (key === "home" || key === "tasks" || key === "assistant" || key === "knowledge" || key === "operations" || key === "profile") {
+              if (key === "home") {
+                setFrontlineCompletionTask(null);
+                clearSelectedTask();
+                setFrontlineDetailOrigin("home");
+                setActiveSection("home");
+              } else if (key === "tasks") {
+                setFrontlineCompletionTask(null);
+                clearSelectedTask();
+                setActiveSection("tasks");
+              } else if (key === "assistant" || key === "knowledge" || key === "operations" || key === "profile") {
+                if (key === "profile") setFrontlineCompletionTask(null);
                 setActiveSection(key);
               }
             }}
@@ -471,6 +506,25 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
       </View>
     </SafeAreaView>
   );
+}
+
+function FrontlineHeader({ title, nested, onBack, onMenu }: { title: string; nested: boolean; onBack: () => void; onMenu: () => void }) {
+  return <View style={styles.frontlineTaskHeader}>
+    <Pressable accessibilityRole="button" accessibilityLabel={nested ? "Back" : "Open menu"} onPress={nested ? onBack : onMenu} style={styles.frontlineBackButton}>
+      {nested ? <ArrowLeft color={colors.text} size={21} strokeWidth={2.4} /> : <Menu color={colors.text} size={21} strokeWidth={2.4} />}
+    </Pressable>
+    <Text style={styles.frontlineTaskHeaderTitle} numberOfLines={1}>{title}</Text>
+    <Pressable accessibilityRole="button" accessibilityLabel="Notifications" style={styles.frontlineNotificationButton}>
+      <Bell color={colors.text} size={18} strokeWidth={2.2} />
+    </Pressable>
+  </View>;
+}
+
+function frontlineRoomLabel(value: string | null): string {
+  if (!value) return "Task";
+  const match = value.match(/room\s+(.+)/i);
+  if (match) return `ROOM ${match[1]}`.toUpperCase();
+  return /^\d+$/.test(value.trim()) ? `ROOM ${value.trim()}` : value.toUpperCase();
 }
 
 function TaskErrorBanner({ title, message }: { title: string; message: string }) {
@@ -495,6 +549,18 @@ function formatCacheTime(value: string): string {
 }
 
 const styles = StyleSheet.create({
+  frontlineTaskHeader: {
+    height: 56,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.background
+  },
+  frontlineBackButton: { width: 40, height: 40, alignItems: "flex-start", justifyContent: "center" },
+  frontlineBackIcon: { color: colors.text, fontSize: 34, lineHeight: 36, fontWeight: "400" },
+  frontlineTaskHeaderTitle: { position: "absolute", left: 58, right: 58, textAlign: "center", color: colors.text, fontSize: 15, fontWeight: "900" },
+  frontlineNotificationButton: { width: 40, height: 40, alignItems: "flex-end", justifyContent: "center" },
   safeArea: {
     flex: 1,
     backgroundColor: colors.background
@@ -521,6 +587,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingBottom: 18
   },
+  taskDetailContent: {
+    padding: 12,
+    paddingBottom: 24,
+    flexGrow: 1
+  },
+  backToTasks: {
+    alignSelf: "flex-start",
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 6
+  },
+  backToTasksLabel: {
+    color: colors.green,
+    fontSize: 15,
+    fontWeight: "900"
+  },
+  frontlineIntro: {
+    marginHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 6
+  },
+  frontlineKicker: {
+    color: colors.green,
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.8
+  },
+  frontlineTitle: {
+    marginTop: 2,
+    color: colors.text,
+    fontSize: 22,
+    fontWeight: "900"
+  },
   footer: {
     paddingTop: 0,
     backgroundColor: colors.background
@@ -528,6 +627,13 @@ const styles = StyleSheet.create({
   footerDesktop: {
     paddingHorizontal: 24,
     paddingBottom: 8
+  },
+  voiceSurface: {
+    marginHorizontal: 12,
+    marginBottom: 8,
+    borderRadius: 18,
+    overflow: "hidden",
+    backgroundColor: colors.surface
   },
   composerTablet: {
     paddingHorizontal: 12

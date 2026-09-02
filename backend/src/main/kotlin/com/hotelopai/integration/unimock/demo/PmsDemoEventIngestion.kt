@@ -120,6 +120,7 @@ class PmsDemoEventIngestionService(
         if(request.eventType==PmsDemoEventType.ROOM_MOVE) requireRoom(hotelId,request.toRoomNumber.orEmpty(),"Destination room does not exist")
         val claimStarted = System.nanoTime()
         val now=clock.instant(); val claim=inboxTransactions.claim(request,hotelId)
+        logger.info("PMS_EVENT_RECEIVED eventId={} hotelId={} room={} eventType={}", request.eventId, hotelId, request.roomNumber, request.eventType)
         val claimMs = (System.nanoTime() - claimStarted) / 1_000_000
         if(claim.duplicate) return existing(hotelId,request.eventId)!!.copy(duplicate=true)
         val orchestrationStarted = System.nanoTime()
@@ -129,6 +130,7 @@ class PmsDemoEventIngestionService(
             inboxTransactions.release(claim.inboxId)
             throw failure
         }
+        if (result != null) logger.info("PMS_TASK_CREATED eventId={} resultType={} resultId={}", request.eventId, result.first, result.second)
         val orchestrationMs = (System.nanoTime() - orchestrationStarted) / 1_000_000
         val finalizeStarted = System.nanoTime()
         inboxTransactions.finalize(claim.inboxId,result,clock.instant())

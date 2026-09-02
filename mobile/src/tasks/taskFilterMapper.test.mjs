@@ -69,6 +69,24 @@ test("existing unfiltered array response still maps into task summaries", () => 
   assert.equal(summaries[0]?.priority, "HIGH");
 });
 
+test("assigned PMS task keeps its assignee when mapped for frontline lists", () => {
+  const summaries = taskSummariesFromListResponse([{
+    ...baseTask,
+    intentType: "HOUSEKEEPING",
+    source: "IMPORT",
+    roomNumber: "113",
+    assignment: {
+      assigneeType: "USER",
+      assigneeId: "employee-1",
+      displayName: "EMP0014",
+      assignedAt: "2026-07-14T09:01:00Z"
+    }
+  }]);
+
+  assert.equal(summaries[0]?.assignmentLabel, "EMP0014");
+  assert.equal(summaries[0]?.roomOrLocation, "113");
+});
+
 test("empty filtered result is handled", () => {
   const summaries = taskSummariesFromListResponse({
     items: [],

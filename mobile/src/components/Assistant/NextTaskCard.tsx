@@ -1,10 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { ArrowRight, Clock3, Play, RotateCcw, ShoppingBasket } from "lucide-react-native";
+import { BedDouble, ChevronRight } from "lucide-react-native";
 
 import { colors, radius, shadow, typography } from "../../theme/tokens";
-import { formatSlaCountdown } from "../../tasks/formatters";
 import { TaskSummary } from "../../tasks/types";
-import { getHomeTaskPresentation } from "../../tasks/taskBoardSelectors";
 
 type NextTaskCardProps = {
   task: TaskSummary;
@@ -21,68 +19,32 @@ export function NextTaskCard({
   onResumeTask,
   onContinueTask
 }: NextTaskCardProps) {
-  const presentation = getHomeTaskPresentation(task);
-  const action = getActionForTask(task.status);
-  const actionHandler =
-    action === "start" ? onStartTask : action === "resume" ? onResumeTask : onContinueTask;
-  const actionLabel = presentation?.actionLabel ?? "Open Task";
-
   return (
-    <View style={styles.card}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`Open ${task.roomOrLocation ?? task.title}`} onPress={onContinueTask} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
       <View style={styles.iconWell}>
-        <ShoppingBasket color={colors.green} size={21} strokeWidth={2.25} />
+        <BedDouble color={colors.green} size={22} strokeWidth={2.25} />
       </View>
 
       <View style={styles.details}>
-        <Text style={styles.kicker}>{presentation?.bannerLabel ?? "NEXT TASK"}</Text>
+        <Text style={styles.kicker}>{formatLocation(task.roomOrLocation) ?? "NEXT TASK"}</Text>
         <Text style={styles.title} numberOfLines={1}>
           {task.title}
         </Text>
 
-        <View style={styles.statusRow}>
-          <Text style={styles.statusLabel}>Status</Text>
-          <Text style={styles.statusValue}>{presentation?.statusLabel ?? task.status}</Text>
-        </View>
-
-        <Text style={styles.room}>{task.roomOrLocation ?? "No room assigned"}</Text>
         <View style={styles.priorityRow}>
           <View style={styles.priorityDot} />
-          <Text style={styles.priority}>{task.priority}</Text>
+          <Text style={styles.priorityBadge}>{task.priority}</Text>
+          {task.status.toUpperCase() === "OVERDUE" ? <Text style={styles.overdue}>Overdue</Text> : null}
         </View>
       </View>
-
-      <View style={styles.sla}>
-        <Text style={styles.slaLabel}>SLA REMAINING</Text>
-        <View style={styles.slaTimeRow}>
-          <Clock3 color={colors.green} size={13} strokeWidth={2.35} />
-          <Text style={styles.slaTime}>{formatSlaCountdown(task.slaDeadline)}</Text>
-        </View>
-        <Text style={styles.remaining}>remaining</Text>
-      </View>
-
-      {actionHandler ? (
-        <Pressable
-          accessibilityRole="button"
-          disabled={isActionInProgress}
-          onPress={actionHandler}
-          style={({ pressed }) => [
-            styles.startButton,
-            pressed && !isActionInProgress ? styles.startButtonPressed : null,
-            isActionInProgress ? styles.startButtonDisabled : null
-          ]}
-        >
-          {action === "resume" ? (
-            <RotateCcw color="#ffffff" size={10} strokeWidth={2.4} />
-          ) : action === "continue" ? (
-            <ArrowRight color="#ffffff" size={10} strokeWidth={2.4} />
-          ) : (
-            <Play color="#ffffff" size={9} strokeWidth={2.4} fill="#ffffff" />
-          )}
-          <Text style={styles.startLabel}>{actionLabel}</Text>
-        </Pressable>
-      ) : null}
-    </View>
+      <ChevronRight color={colors.green} size={24} strokeWidth={2.4} />
+    </Pressable>
   );
+}
+
+function formatLocation(value: string | null): string | null {
+  if (!value) return null;
+  return /^room\s/i.test(value) ? value.toUpperCase() : value;
 }
 
 function getActionForTask(status: string): "start" | "resume" | "continue" | "none" {
@@ -103,9 +65,9 @@ function getActionForTask(status: string): "start" | "resume" | "continue" | "no
 
 const styles = StyleSheet.create({
   card: {
-    minHeight: 58,
-    marginHorizontal: 13,
-    marginTop: 7,
+    minHeight: 104,
+    marginHorizontal: 14,
+    marginTop: 10,
     marginBottom: 2,
     flexDirection: "row",
     alignItems: "center",
@@ -113,8 +75,8 @@ const styles = StyleSheet.create({
     borderColor: colors.cardBorder,
     borderRadius: radius.lg,
     backgroundColor: "#fbfffc",
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     ...shadow.card
   },
   iconWell: {
@@ -139,7 +101,7 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 2,
     color: colors.text,
-    fontSize: 11,
+    fontSize: 15,
     fontWeight: "800"
   },
   statusRow: {
@@ -150,18 +112,18 @@ const styles = StyleSheet.create({
   },
   statusLabel: {
     color: colors.textMuted,
-    fontSize: 8,
+    fontSize: 12,
     fontWeight: "800"
   },
   statusValue: {
     color: colors.text,
-    fontSize: 9,
+    fontSize: 13,
     fontWeight: "900"
   },
   room: {
     marginTop: 1,
     color: "#64748b",
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: "700"
   },
   priorityRow: {
@@ -169,6 +131,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6
+  },
+  overdue: {
+    marginLeft: 8,
+    color: colors.red,
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  pressed: {
+    opacity: 0.82
   },
   priorityDot: {
     width: 5,
@@ -178,8 +149,17 @@ const styles = StyleSheet.create({
   },
   priority: {
     color: colors.textMuted,
-    fontSize: typography.caption,
+    fontSize: 12,
     fontWeight: "800"
+  },
+  priorityBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: "#fff2dc",
+    color: "#b96b00",
+    fontSize: 11,
+    fontWeight: "900"
   },
   sla: {
     width: 58,
@@ -210,13 +190,13 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   },
   startButton: {
-    width: 88,
-    height: 34,
+    width: "100%",
+    height: 48,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 5,
-    borderRadius: 13,
+    borderRadius: 16,
     backgroundColor: "#071432"
   },
   startButtonPressed: {
@@ -227,7 +207,7 @@ const styles = StyleSheet.create({
   },
   startLabel: {
     color: "#ffffff",
-    fontSize: 9,
+    fontSize: 14,
     fontWeight: "800"
   }
 });

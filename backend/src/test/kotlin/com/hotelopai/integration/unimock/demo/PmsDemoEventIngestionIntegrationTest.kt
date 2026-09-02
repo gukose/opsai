@@ -1,6 +1,13 @@
 package com.hotelopai.integration.unimock.demo
 
 import com.hotelopai.support.PostgresIntegrationTestSupport
+import com.hotelopai.employee.application.DepartmentRepository
+import com.hotelopai.employee.application.EmployeeRepository
+import com.hotelopai.employee.application.SkillRepository
+import com.hotelopai.employee.domain.Department
+import com.hotelopai.employee.domain.Employee
+import com.hotelopai.employee.domain.EmployeeOperationalStatus
+import com.hotelopai.employee.domain.Skill
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -9,6 +16,8 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 import java.time.Instant
+import java.time.temporal.ChronoUnit
+import java.sql.Timestamp
 import java.util.UUID
 
 @SpringBootTest
@@ -16,6 +25,9 @@ import java.util.UUID
 class PmsDemoEventIngestionIntegrationTest:PostgresIntegrationTestSupport() {
     @Autowired lateinit var service:PmsDemoEventIngestionService
     @Autowired lateinit var jdbc:NamedParameterJdbcTemplate
+    @Autowired lateinit var departments: DepartmentRepository
+    @Autowired lateinit var skills: SkillRepository
+    @Autowired lateinit var employees: EmployeeRepository
 
     @Test fun `DIRTY traverses ingestion into one idempotent housekeeping workflow`() {
         val fixture=fixture("PMS_DIRTY")
@@ -27,6 +39,32 @@ class PmsDemoEventIngestionIntegrationTest:PostgresIntegrationTestSupport() {
         assertEquals(first.resultId,duplicate.resultId)
         assertEquals(1,count("select count(*) from housekeeping_workflow where hotel_id=:hotel",fixture.hotel))
         assertEquals(1,count("select count(*) from task where hotel_id=:hotel",fixture.hotel))
+    }
+
+    @Test fun `DIRTY creates a task and preserves automatic assignment`() {
+        val fixture = fixture("PMS_ASSIGN")
+        val department = departments.save(Department(hotelId = fixture.hotel, code = "HOUSEKEEPING", name = "Housekeeping"))
+        val skill = skills.save(Skill(hotelId = fixture.hotel, code = "ROOM_CLEANING", name = "Room cleaning"))
+        val employee = employees.save(Employee(
+            hotelId = fixture.hotel,
+            employeeNumber = "EMP-DIRTY",
+            displayName = "Demo Housekeeper",
+            departmentId = department.id,
+            skillIds = setOf(skill.id),
+            operationalStatus = EmployeeOperationalStatus.AVAILABLE,
+            homeArea = "1",
+            primaryRoleCode = "HOUSEKEEPER"
+        ))
+        val now = Instant.now()
+        jdbc.update("""insert into workforce_shift(id,hotel_id,employee_id,planned_start,planned_end,actual_start,status,created_at,updated_at)
+            values(:id,:hotel,:employee,:start,:end,:start,'WORKING',:start,:start)""", mapOf(
+            "id" to UUID.randomUUID(), "hotel" to fixture.hotel, "employee" to employee.id,
+            "start" to Timestamp.from(now.minus(1, ChronoUnit.HOURS)), "end" to Timestamp.from(now.plus(8, ChronoUnit.HOURS))
+        ))
+        val result = service.ingest(request(fixture.code, "113", PmsDemoEventType.DIRTY, "DIRTY-${UUID.randomUUID()}"))
+        val taskId = jdbc.queryForObject("select task_id from housekeeping_workflow where id=:id", mapOf("id" to result.resultId), UUID::class.java)
+        val assigned = jdbc.queryForObject("select assignee_id from task where id=:id", mapOf("id" to taskId), String::class.java)
+        assertEquals(employee.id.toString(), assigned)
     }
 
     @Test fun `CHECK_OUT creates one departure workflow one minibar task and pending readiness idempotently`() {
@@ -70,7 +108,7 @@ class PmsDemoEventIngestionIntegrationTest:PostgresIntegrationTestSupport() {
         jdbc.update("insert into hotel(id,version,created_at,updated_at,code,name,status,timezone) values(:id,0,:now,:now,:code,'PMS Test','ACTIVE','UTC')",mapOf("id" to hotel,"now" to now,"code" to code))
         jdbc.update("insert into building(id,hotel_id,code,name,active,created_at,updated_at) values(:id,:hotel,'MAIN','Main',true,:now,:now)",mapOf("id" to building,"hotel" to hotel,"now" to now))
         jdbc.update("insert into hotel_floor(id,hotel_id,building_id,floor_number,active,created_at,updated_at) values(:id,:hotel,:building,2,true,:now,:now),(:id2,:hotel,:building,3,true,:now,:now)",mapOf("id" to floor205,"id2" to floor310,"hotel" to hotel,"building" to building,"now" to now))
-        listOf("205" to floor205,"207" to floor205,"310" to floor310).forEach{(room,floor)->jdbc.update("insert into room_master(id,hotel_id,building_id,floor_id,room_number,active,created_at,updated_at) values(:id,:hotel,:building,:floor,:room,true,:now,:now)",mapOf("id" to UUID.randomUUID(),"hotel" to hotel,"building" to building,"floor" to floor,"room" to room,"now" to now))}
+        listOf("113" to floor205,"205" to floor205,"207" to floor205,"310" to floor310).forEach{(room,floor)->jdbc.update("insert into room_master(id,hotel_id,building_id,floor_id,room_number,active,created_at,updated_at) values(:id,:hotel,:building,:floor,:room,true,:now,:now)",mapOf("id" to UUID.randomUUID(),"hotel" to hotel,"building" to building,"floor" to floor,"room" to room,"now" to now))}
         return Fixture(hotel,code)
     }
     private fun count(sql:String,hotel:UUID)=jdbc.queryForObject(sql,mapOf("hotel" to hotel),Long::class.java)!!

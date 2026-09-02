@@ -34,11 +34,12 @@ type TaskBoardState = {
   updateFilters: (nextFilters: TaskFilterState) => void;
   clearFilters: () => void;
   selectTask: (taskId: string) => Promise<void>;
+  clearSelectedTask: () => void;
   refreshTasks: () => Promise<void>;
   startSelectedTask: () => Promise<void>;
   pauseSelectedTask: () => Promise<void>;
   resumeSelectedTask: () => Promise<void>;
-  completeSelectedTask: () => Promise<void>;
+  completeSelectedTask: () => Promise<TaskDetail | null>;
   cancelSelectedTask: () => Promise<void>;
   startHomeTask: () => Promise<void>;
   resumeHomeTask: () => Promise<void>;
@@ -257,14 +258,14 @@ export function useTaskBoardState(
   );
 
   const runCommand = useCallback(
-    async (operation:OfflineMutationType|null,command: TaskCommand): Promise<boolean> => {
+    async (operation:OfflineMutationType|null,command: TaskCommand): Promise<TaskDetail | null> => {
       if (inFlightRef.current) {
-        return false;
+        return null;
       }
 
       const taskId = selectedTaskIdRef.current;
       if (!taskId) {
-        return false;
+        return null;
       }
 
       try {
@@ -275,14 +276,14 @@ export function useTaskBoardState(
         setTasks((current) =>
           current.map((task) => (task.id === updatedTask.id ? taskSummaryFromDetail(updatedTask) : task))
         );
-        return true;
+        return updatedTask;
       } catch (error) {
         const scope=currentUser?.hotelId&&currentUser.userId?{hotelId:currentUser.hotelId,userId:currentUser.userId}:null;
         if(operation && scope && (error instanceof AppApiError ? error.kind==="network"||error.kind==="timeout" : !globalThis.navigator?.onLine)){
           await defaultOfflineMutationQueue.enqueue(scope,operation,taskId);
           setErrorMessage("Saved offline. This operation will sync when connectivity returns.");
         } else setErrorMessage(getAppApiErrorMessage(error));
-        return false;
+        return null;
       } finally {
         inFlightRef.current = false;
         setIsRefreshing(false);
@@ -333,6 +334,11 @@ export function useTaskBoardState(
   const clearFilters = useCallback(() => {
     setFilters(emptyTaskFilters());
   }, []);
+  const clearSelectedTask = useCallback(() => {
+    setSelectedTaskId(null);
+    setSelectedTask(null);
+    setAssignmentCandidates([]);
+  }, []);
 
   return {
     tasks,
@@ -349,11 +355,12 @@ export function useTaskBoardState(
     updateFilters,
     clearFilters,
     selectTask,
+    clearSelectedTask,
     refreshTasks,
     startSelectedTask: async () => { await runCommand("TASK_START",(taskId) => service.startTask(taskId)); },
     pauseSelectedTask: async () => { await runCommand("TASK_PAUSE",(taskId) => service.pauseTask(taskId)); },
     resumeSelectedTask: async () => { await runCommand("TASK_RESUME",(taskId) => service.resumeTask(taskId)); },
-    completeSelectedTask: async () => { await runCommand("TASK_COMPLETE",(taskId) => service.completeTask(taskId)); },
+    completeSelectedTask: async () => runCommand("TASK_COMPLETE",(taskId) => service.completeTask(taskId)),
     cancelSelectedTask: async () => { await runCommand(null,(taskId) => service.cancelTask(taskId)); },
     startHomeTask: async () => runHomeCommand((taskId) => service.startTask(taskId)),
     resumeHomeTask: async () => runHomeCommand((taskId) => service.resumeTask(taskId)),
@@ -398,6 +405,7 @@ function taskSummaryFromDetail(task: TaskDetail): TaskSummary {
     source: task.source,
     unassignedReasonCode: task.unassignedReasonCode,
     unassignedReason: task.unassignedReason
+    ,slaTargetSeconds: task.slaTargetSeconds
   };
 }
 
@@ -416,6 +424,7 @@ function mockTaskFromSample(): TaskSummary {
     source: "STATIC_MOCK",
     unassignedReasonCode: null,
     unassignedReason: null
+    ,slaTargetSeconds: 30 * 60
   };
 }
 
