@@ -24,7 +24,7 @@ type NavigationItem = {
 };
 
 const baseItems: NavigationItem[] = [
-  { key: "home", icon: Home, label: "Overview" },
+  { key: "home", icon: Home, label: "Tasks" },
   { key: "tasks", icon: CheckSquare, label: "My Tasks" },
   { key: "operations", icon: Settings, label: "Operations" },
   { key: "profile", icon: User, label: "Profile" }
@@ -46,10 +46,12 @@ export function BottomNavigation({ activeKey, currentUser, onSelect, onAssistant
   const mode = resolveExperienceMode(currentUser ?? null);
   const items = mode === "FRONTLINE_SIMPLE"
     ? baseItems.filter((item) => item.key === "tasks" || item.key === "profile")
-    : baseItems.filter((item) => item.key !== "operations" || canOpenAdministration(getCurrentUserPermissionCodes(currentUser ?? null)));
+    : mode === "SUPERVISOR"
+      ? baseItems.filter((item) => item.key === "home" || item.key === "profile")
+      : baseItems.filter((item) => item.key === "operations" || item.key === "profile");
   const visibleItems = items.map((item) => item.key === "home"
-    ? { ...item, label: mode === "FRONTLINE_SIMPLE" ? "Home" : "Overview" }
-    : item);
+    ? { ...item, label: mode === "SUPERVISOR" ? "Tasks" : "Home" }
+    : item.key === "tasks" && mode === "FRONTLINE_SIMPLE" ? { ...item, label: "My Tasks" } : item);
   const centerSplitIndex = visibleItems.length <= 2 ? 1 : 2;
 
   return (

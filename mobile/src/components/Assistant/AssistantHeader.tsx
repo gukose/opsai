@@ -1,15 +1,10 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Bell, LogOut, RotateCcw } from "lucide-react-native";
+import { Bell, Menu, ArrowLeft } from "lucide-react-native";
 import { useMemo, useState } from "react";
 
-import {
-  getCurrentUserDisplayName,
-  getCurrentUserRoleCodes
-} from "../../auth/currentUserHelpers";
 import { CurrentUserSnapshot } from "../../session/sessionTypes";
 import { DashboardRecentNotification } from "../../dashboard/types";
 import { colors, radius, spacing, typography } from "../../theme/tokens";
-import { IconButton } from "../ui/IconButton";
 import {
   formatUnreadBadge,
   shouldShowUnreadBadge,
@@ -24,6 +19,10 @@ type AssistantHeaderProps = {
   onReset?: () => void;
   onLogout?: () => void;
   compact?: boolean;
+  title?: string;
+  nested?: boolean;
+  onBack?: () => void;
+  onMenu?: () => void;
 };
 
 export function AssistantHeader({
@@ -33,12 +32,13 @@ export function AssistantHeader({
   notificationsStaleReason,
   onReset,
   onLogout,
-  compact = false
+  compact = false,
+  title = "Home",
+  nested = false,
+  onBack,
+  onMenu
 }: AssistantHeaderProps) {
   const [isNotificationPanelOpen, setNotificationPanelOpen] = useState(false);
-  const displayName = getCurrentUserDisplayName(currentUser);
-  const roleCodes = getCurrentUserRoleCodes(currentUser);
-  const roleLabel = roleCodes.length > 0 ? roleCodes.map(humanizeRole).join(" · ") : "Session active";
   const visibleNotifications = useMemo(
     () => visibleRecentNotifications(recentNotifications),
     [recentNotifications]
@@ -48,9 +48,10 @@ export function AssistantHeader({
   return (
     <View style={styles.header}>
       <View style={styles.content}>
-        <View style={styles.identity}>
-          {!compact ? <><Text style={styles.greeting} numberOfLines={1}>👋 Good Morning{displayName ? `, ${displayName}` : ""}</Text><Text style={styles.role}>{roleLabel}</Text></> : null}
-        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel={nested ? "Back" : "Open menu"} onPress={nested ? onBack : onMenu} style={styles.headerControl}>
+          {nested ? <ArrowLeft color={colors.text} size={20} /> : <Menu color={colors.text} size={20} />}
+        </Pressable>
+        <Text style={styles.pageTitle} numberOfLines={1}>{title}</Text>
         <View style={styles.actions}>
           <Pressable
             accessibilityRole="button"
@@ -68,26 +69,6 @@ export function AssistantHeader({
               </View>
             ) : null}
           </Pressable>
-          {onReset ? (
-            <IconButton
-              icon={RotateCcw}
-              label="Reset assistant"
-              onPress={onReset}
-              color={colors.text}
-              size={16}
-              style={styles.notification}
-            />
-          ) : null}
-          {onLogout ? (
-            <IconButton
-              icon={LogOut}
-              label="Sign out"
-              onPress={onLogout}
-              color={colors.textMuted}
-              size={15}
-              style={styles.logout}
-            />
-          ) : null}
         </View>
       </View>
       {isNotificationPanelOpen ? (
@@ -116,10 +97,6 @@ export function AssistantHeader({
   );
 }
 
-function humanizeRole(value: string): string {
-  return value.toLowerCase().split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
-}
-
 const styles = StyleSheet.create({
   header: {
     minHeight: 64,
@@ -132,6 +109,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between"
   },
+  headerControl: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
+  pageTitle: { position: "absolute", left: 44, right: 44, textAlign: "center", color: colors.text, fontSize: typography.subtitle, fontWeight: "900" },
   actions: {
     flexShrink: 0,
     flexDirection: "row",

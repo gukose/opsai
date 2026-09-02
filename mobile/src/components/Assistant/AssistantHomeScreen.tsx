@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, useWindowDimensions, View } from "react-native";
-import { Bell, Menu, ArrowLeft } from "lucide-react-native";
 
 import { colors } from "../../theme/tokens";
 import { assistantBackendEnabled } from "../../config/assistantConfig";
@@ -236,26 +235,18 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.screen}>
-        {frontlineSimple ? (
-          <FrontlineHeader
-            title={frontlineCompletionTask ? "Completed" : activeSection === "profile" ? "Profile" : activeSection === "tasks" && selectedTask ? frontlineRoomLabel(selectedTask.roomOrLocation) : activeSection === "tasks" ? "My Tasks" : "Home"}
-            nested={activeSection === "tasks" && Boolean(selectedTask)}
-            onBack={() => { clearSelectedTask(); setActiveSection(frontlineDetailOrigin === "list" ? "tasks" : "home"); }}
-            onMenu={() => { clearSelectedTask(); setActiveSection("home"); }}
-          />
-        ) : (
-          <AssistantHeader
-            currentUser={currentUser}
-            compact={frontlineSimple}
-            unreadNotificationCount={dashboardSummary?.overview.unreadNotificationCount ?? 0}
-            recentNotifications={dashboardSummary?.recentNotifications ?? []}
-            notificationsStaleReason={dashboardStaleReason}
-            onReset={() => {
-              void resetConversation();
-            }}
-            onLogout={onLogout}
-          />
-        )}
+        <AssistantHeader
+          currentUser={currentUser}
+          title={frontlineCompletionTask ? "Completed" : activeSection === "profile" ? "Profile" : activeSection === "tasks" && selectedTask ? frontlineRoomLabel(selectedTask.roomOrLocation) : activeSection === "tasks" ? "My Tasks" : experienceMode === "SUPERVISOR" ? "Supervisor" : experienceMode === "MANAGER" ? "Dashboard" : "Home"}
+          nested={Boolean(selectedTask) || Boolean(frontlineCompletionTask)}
+          onBack={() => { clearSelectedTask(); setFrontlineCompletionTask(null); setActiveSection(frontlineDetailOrigin === "list" ? "tasks" : "home"); }}
+          onMenu={() => { clearSelectedTask(); setFrontlineCompletionTask(null); setActiveSection("home"); }}
+          unreadNotificationCount={dashboardSummary?.overview.unreadNotificationCount ?? 0}
+          recentNotifications={dashboardSummary?.recentNotifications ?? []}
+          notificationsStaleReason={dashboardStaleReason}
+          onReset={() => { void resetConversation(); }}
+          onLogout={onLogout}
+        />
         {isHomeSurface ? (
           <ScrollView
             style={styles.homeScroll}
@@ -510,18 +501,6 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
   );
 }
 
-function FrontlineHeader({ title, nested, onBack, onMenu }: { title: string; nested: boolean; onBack: () => void; onMenu: () => void }) {
-  return <View style={styles.frontlineTaskHeader}>
-    <Pressable accessibilityRole="button" accessibilityLabel={nested ? "Back" : "Open menu"} onPress={nested ? onBack : onMenu} style={styles.frontlineBackButton}>
-      {nested ? <ArrowLeft color={colors.text} size={21} strokeWidth={2.4} /> : <Menu color={colors.text} size={21} strokeWidth={2.4} />}
-    </Pressable>
-    <Text style={styles.frontlineTaskHeaderTitle} numberOfLines={1}>{title}</Text>
-    <Pressable accessibilityRole="button" accessibilityLabel="Notifications" style={styles.frontlineNotificationButton}>
-      <Bell color={colors.text} size={18} strokeWidth={2.2} />
-    </Pressable>
-  </View>;
-}
-
 function frontlineRoomLabel(value: string | null): string {
   if (!value) return "Task";
   const match = value.match(/room\s+(.+)/i);
@@ -551,18 +530,6 @@ function formatCacheTime(value: string): string {
 }
 
 const styles = StyleSheet.create({
-  frontlineTaskHeader: {
-    height: 56,
-    paddingHorizontal: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: colors.background
-  },
-  frontlineBackButton: { width: 40, height: 40, alignItems: "flex-start", justifyContent: "center" },
-  frontlineBackIcon: { color: colors.text, fontSize: 34, lineHeight: 36, fontWeight: "400" },
-  frontlineTaskHeaderTitle: { position: "absolute", left: 58, right: 58, textAlign: "center", color: colors.text, fontSize: 15, fontWeight: "900" },
-  frontlineNotificationButton: { width: 40, height: 40, alignItems: "flex-end", justifyContent: "center" },
   safeArea: {
     flex: 1,
     backgroundColor: colors.background

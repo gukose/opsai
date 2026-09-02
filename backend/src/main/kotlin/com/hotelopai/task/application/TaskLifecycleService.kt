@@ -215,12 +215,21 @@ class TaskLifecycleService @Autowired constructor(
             val currentTask = taskRepository.findByIdAndHotelId(taskId.toTaskId(), hotelId)
             val taskLookupMs = elapsedMs(timingStarted)
             val housekeeping = currentTask?.let { housekeepingRepository?.findByTaskIdAndHotelId(it.id, hotelId) }
-            if (currentTask != null && TaskCompletionInspectionPolicy.requiresInspection(currentTask, housekeeping != null) && housekeeping?.inspectionRequired == true && housekeeping.status in setOf(HousekeepingStatus.STARTED, HousekeepingStatus.REWORK)) {
+            logger.info("TASK_COMPLETE_BEGIN taskId={} hotelId={} state={} source={} intent={}", taskId, hotelId, currentTask?.status, currentTask?.source, currentTask?.intentType)
+            val inspectionRequired = currentTask != null && TaskCompletionInspectionPolicy.requiresInspection(currentTask, housekeeping != null) && housekeeping?.inspectionRequired == true
+            val inspectionEligibleState = housekeeping?.status in setOf(HousekeepingStatus.STARTED, HousekeepingStatus.REWORK)
+            logger.info("INSPECTION_GATE_DECISION taskId={} required={} eligibleWorkflowState={} workflowState={} reason={}", taskId, inspectionRequired, inspectionEligibleState, housekeeping?.status, when {
+                !inspectionRequired -> "NOT_REQUIRED"
+                !inspectionEligibleState -> "INVALID_WORKFLOW_STATE"
+                else -> "INSPECTION_GATE"
+            })
+            if (inspectionRequired && inspectionEligibleState) {
                 logger.info("FUNCTION16_COMPLETE_EVALUATION hotelId={} taskId={} taskType={} taskSource={} taskIntentType={} taskState={} assignedEmployeeOrUser={} housekeepingWorkflowFound=true housekeepingWorkflowId={} housekeepingWorkflowTaskId={} housekeepingWorkflowState={} inspectionRequired=true decision=SEND_TO_INSPECTION reason=SEND_TO_INSPECTION", currentTask.hotelId, currentTask.id, currentTask.intentType, currentTask.source, currentTask.intentType, currentTask.status, currentTask.assignment?.assigneeId, housekeeping.id, housekeeping.taskId, housekeeping.status)
                 logger.info("HOUSEKEEPING_COMPLETION_EVALUATION taskId={} taskType={} taskState={} workflowId={} workflowState={} inspectionRequired=true", currentTask.id, currentTask.intentType, currentTask.status, housekeeping.id, housekeeping.status)
                 logger.info("HOUSEKEEPING_COMPLETION_DECISION taskId={} decision=SEND_TO_INSPECTION reason=inspection_required", currentTask.id)
                 val persistedNow = PersistenceInstant.toPersistencePrecision(now)
                 val waiting = mutateLoaded(currentTask, TaskTransition.COMPLETE, persistedNow, { task, normalizedNow -> task.wait(normalizedNow) }, successMessage = { _, _ -> "Housekeeping cleaning sent to inspection" })
+                logger.info("TASK_COMPLETE_TRANSITION taskId={} from={} to={}", currentTask.id, currentTask.status, waiting.status)
                 housekeepingRepository?.save(housekeeping.finishCleaning(persistedNow))
                 logger.info("HOUSEKEEPING_INSPECTION_TRANSITION taskId={} workflowId={} previousTaskState={} newTaskState={} previousWorkflowState={} newWorkflowState={}", currentTask.id, housekeeping.id, currentTask.status, waiting.status, housekeeping.status, HousekeepingStatus.INSPECTION)
                 logger.info("FUNCTION16_COMPLETE_RESULT taskId={} taskStateBefore={} taskStateAfter={} workflowStateBefore={} workflowStateAfter={}", currentTask.id, currentTask.status, waiting.status, housekeeping.status, HousekeepingStatus.INSPECTION)
@@ -255,6 +264,7 @@ class TaskLifecycleService @Autowired constructor(
                     verificationLogId?.let { "Task completed after PMS verification $it" } ?: "Task completed"
                 }
             ).also { completed ->
+                logger.info("TASK_COMPLETE_TRANSITION taskId={} from={} to={}", currentTask.id, currentTask.status, completed.status)
                 if (completed.intentType == TaskIntentType.MINIBAR && completed.roomNumber != null) minibarReadinessService?.markCompleted(completed.hotelId, completed.roomNumber)
                 completionObservers.forEach { observer -> observer.completed(completed) }
                 logger.info("TASK_COMPLETE_TIMING taskLookupMs={} authorizationMs=0 workflowMs={} inspectionMs=0 historyMs=0 interruptionMs=0 readinessMs=0 saveMs={} responseMs=0 totalMs={}", taskLookupMs, elapsedMs(timingStarted) - taskLookupMs, elapsedMs(timingStarted), elapsedMs(timingStarted))
