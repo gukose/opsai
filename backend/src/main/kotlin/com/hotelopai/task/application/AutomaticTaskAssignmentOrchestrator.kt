@@ -197,6 +197,7 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         val floorStarted = System.nanoTime()
         val targetFloorNumber = targetFloorNumber(task)
         floorMs += elapsedMs(floorStarted)
+        logger.info("AUTO_ASSIGN_BEGIN taskId={} hotelId={} room={} resolvedFloor={}", task.id, task.hotelId, task.roomNumber, targetFloorNumber)
         val reason = noCandidateReason(
             employees = assignableEmployees,
             departmentId = requirement.departmentId,
@@ -270,6 +271,13 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
                 assignedAt = now
             )
         }
+        if (rankedCandidates.isEmpty()) {
+            logger.info("AUTO_ASSIGN_NO_CANDIDATES taskId={} room={} floor={} reason={}", task.id, task.roomNumber, targetFloorNumber, reason ?: "NO_RANKED_CANDIDATES")
+        } else {
+            logger.info("AUTO_ASSIGN_CANDIDATES taskId={} candidateCount={} candidateEmployeeIds={}", task.id, rankedCandidates.size, rankedCandidates.map { it.employeeId })
+        }
+        if (selectedEmployee != null) logger.info("AUTO_ASSIGN_SELECTED taskId={} employeeId={}", task.id, selectedEmployee.id)
+        else logger.info("AUTO_ASSIGN_SKIPPED taskId={} reason={}", task.id, resultReason(reason, decision?.outcome))
         rankingMs = elapsedMs(rankingStarted)
         val selectionStarted = System.nanoTime()
         val result = AutomaticAssignmentResult(
@@ -284,6 +292,7 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         selectionMs = elapsedMs(selectionStarted)
         val persistenceStarted = System.nanoTime()
         persist(task, result, selectedEmployee?.userId, now)
+        if (assignment != null) logger.info("AUTO_ASSIGN_PERSISTED taskId={} employeeId={}", task.id, assignment.assigneeId)
         persistenceMs = elapsedMs(persistenceStarted)
         val totalMs = elapsedMs(timingStarted)
         val measured = existingMs + requirementMs + candidateSqlMs + candidateMappingMs + floorMs + decisionMs + rankingMs + loggingMs + selectionMs + persistenceMs
@@ -295,6 +304,11 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
             "reason_code" to result.reasonCode.lowercase()
         )
         return result
+    }
+
+    private fun resultReason(reason: String?, outcome: String?): String = reason ?: when (outcome) {
+        "AMBIGUOUS" -> "AMBIGUOUS_CANDIDATES"
+        else -> "MANUAL_ASSIGNMENT_REQUIRED"
     }
 
     private fun housekeepingFloorAffinity(task: Task, employees: List<Employee>): Map<UUID, Int> {

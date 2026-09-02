@@ -18,15 +18,17 @@ type Props = {
   homeTask: TaskSummary | null;
   overview: TaskBoardOverview;
   actionInProgress?: boolean;
+  taskError?: string | null;
+  taskLoading?: boolean;
   onStartTask?: () => void;
   onResumeTask?: () => void;
   onOpenTask?: (taskId: string) => void;
   onAssignTask?: (taskId: string) => void;
 };
 
-export function RoleAdaptiveHome({ mode, currentUser, tasks, homeTask, overview, actionInProgress, onStartTask, onResumeTask, onOpenTask, onAssignTask }: Props) {
+export function RoleAdaptiveHome({ mode, currentUser, tasks, homeTask, overview, actionInProgress, taskError, taskLoading, onStartTask, onResumeTask, onOpenTask, onAssignTask }: Props) {
   if (mode === "FRONTLINE_SIMPLE") {
-    return <FrontlineHome currentUser={currentUser} task={homeTask} tasks={tasks} overview={overview} actionInProgress={actionInProgress} onStartTask={onStartTask} onResumeTask={onResumeTask} onOpenTask={onOpenTask} />;
+    return <FrontlineHome currentUser={currentUser} task={homeTask} tasks={tasks} overview={overview} actionInProgress={actionInProgress} taskError={taskError} taskLoading={taskLoading} onStartTask={onStartTask} onResumeTask={onResumeTask} onOpenTask={onOpenTask} />;
   }
   if (mode === "SUPERVISOR") {
     return <SupervisorHome currentUser={currentUser} tasks={tasks} overview={overview} onOpenTask={onOpenTask} onAssignTask={onAssignTask} />;
@@ -59,12 +61,12 @@ function Confetti() {
   return <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>{pieces.map((piece, index) => <View key={index} style={{ position: "absolute", left: piece.left as any, top: piece.top, width: 7, height: 12, borderRadius: 2, backgroundColor: piece.color, transform: [{ rotate: piece.rotate }] }} />)}</View>;
 }
 
-function FrontlineHome({ currentUser, task, tasks, overview, actionInProgress, onStartTask, onResumeTask, onOpenTask }: { currentUser: CurrentUserSnapshot | null; task: TaskSummary | null; tasks: TaskSummary[]; overview: TaskBoardOverview; actionInProgress?: boolean; onStartTask?: () => void; onResumeTask?: () => void; onOpenTask?: (id: string) => void }) {
+function FrontlineHome({ currentUser, task, tasks, overview, actionInProgress, taskError, taskLoading, onStartTask, onResumeTask, onOpenTask }: { currentUser: CurrentUserSnapshot | null; task: TaskSummary | null; tasks: TaskSummary[]; overview: TaskBoardOverview; actionInProgress?: boolean; taskError?: string | null; taskLoading?: boolean; onStartTask?: () => void; onResumeTask?: () => void; onOpenTask?: (id: string) => void }) {
   const otherTasks = tasks.filter((item) => item.id !== task?.id && !["COMPLETED", "CANCELLED"].includes(item.status.toUpperCase()));
   const completed = tasks.filter((item) => item.status.toUpperCase() === "COMPLETED").length;
   const total = tasks.length;
   const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-  return <View>{<View style={styles.greetingCard}><Text style={styles.greetingEmoji}>👋</Text><View><Text style={styles.greetingTitle}>Hello {getCurrentUserDisplayName(currentUser).replace("Signed-in user", "there")}</Text><Text style={styles.greetingBody}>Have a great shift.</Text></View></View>}{total > 0 ? <View style={styles.progressCard}><View style={styles.progressHeader}><View><Text style={styles.progressTitle}>Daily Progress</Text><Text style={styles.progressValue}>{completed} / {total}</Text></View><Star size={20} color="#d99a23" fill="#f7c948" /></View><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${percent}%` }]} /></View><Text style={styles.progressCaption}>{percent}% completed</Text></View> : null}{task ? <NextTaskCard task={task} isActionInProgress={actionInProgress} onContinueTask={() => onOpenTask?.(task.id)} /> : <View style={styles.empty}><Text style={styles.emptyTitle}>No next task</Text><Text style={styles.emptyBody}>Your assigned work will appear here.</Text></View>}{otherTasks.length > 0 ? <View style={styles.other}><View style={styles.otherHeader}><Text style={styles.otherTitle}>Other Tasks</Text><Text style={styles.otherCount}>{otherTasks.length}</Text></View><ScrollView nestedScrollEnabled showsVerticalScrollIndicator={otherTasks.length > 3} style={styles.otherScroll}>{otherTasks.map((item) => <Pressable key={item.id} style={styles.otherRow} onPress={() => onOpenTask?.(item.id)}><TaskTypeIcon task={item} /><View style={styles.otherMain}><Text style={styles.room}>{formatLocation(item.roomOrLocation) ?? "Location unavailable"}</Text><Text style={styles.task}>{item.title}</Text><PriorityBadge value={item.priority} /></View><ChevronRight color={colors.textMuted} size={20} /></Pressable>)}</ScrollView></View> : null}</View>;
+  return <View>{<View style={styles.greetingCard}><Text style={styles.greetingEmoji}>👋</Text><View><Text style={styles.greetingTitle}>Hello {getCurrentUserDisplayName(currentUser).replace("Signed-in user", "there")}</Text><Text style={styles.greetingBody}>Have a great shift.</Text></View></View>}{total > 0 ? <View style={styles.progressCard}><View style={styles.progressHeader}><View><Text style={styles.progressTitle}>Daily Progress</Text><Text style={styles.progressValue}>{completed} / {total}</Text></View><Star size={20} color="#d99a23" fill="#f7c948" /></View><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${percent}%` }]} /></View><Text style={styles.progressCaption}>{percent}% completed</Text></View> : null}{task ? <NextTaskCard task={task} isActionInProgress={actionInProgress} onContinueTask={() => onOpenTask?.(task.id)} /> : taskError ? <View style={styles.empty}><Text style={styles.emptyTitle}>Unable to load tasks</Text><Text style={styles.emptyBody}>{taskError}</Text></View> : taskLoading ? null : <View style={styles.empty}><Text style={styles.emptyTitle}>No next task</Text><Text style={styles.emptyBody}>Your assigned work will appear here.</Text></View>}{otherTasks.length > 0 ? <View style={styles.other}><View style={styles.otherHeader}><Text style={styles.otherTitle}>Other Tasks</Text><Text style={styles.otherCount}>{otherTasks.length}</Text></View><ScrollView nestedScrollEnabled showsVerticalScrollIndicator={otherTasks.length > 3} style={styles.otherScroll}>{otherTasks.map((item) => <Pressable key={item.id} style={styles.otherRow} onPress={() => onOpenTask?.(item.id)}><TaskTypeIcon task={item} /><View style={styles.otherMain}><Text style={styles.room}>{formatLocation(item.roomOrLocation) ?? "Location unavailable"}</Text><Text style={styles.task}>{item.title}</Text><PriorityBadge value={item.priority} /></View><ChevronRight color={colors.textMuted} size={20} /></Pressable>)}</ScrollView></View> : null}</View>;
 }
 
 function formatLocation(value: string | null): string | null { if (!value) return null; if (/^room\s/i.test(value)) return value.toUpperCase(); return /^\d+$/.test(value.trim()) ? `ROOM ${value.trim()}` : value; }

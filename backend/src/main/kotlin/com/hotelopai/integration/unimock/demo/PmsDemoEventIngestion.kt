@@ -121,16 +121,27 @@ class PmsDemoEventIngestionService(
         val claimStarted = System.nanoTime()
         val now=clock.instant(); val claim=inboxTransactions.claim(request,hotelId)
         logger.info("PMS_EVENT_RECEIVED eventId={} hotelId={} room={} eventType={}", request.eventId, hotelId, request.roomNumber, request.eventType)
+        logger.info("PMS_EVENT_NORMALIZED providerEventId={} normalizedType={} room={}", request.eventId, request.eventType, request.roomNumber)
         val claimMs = (System.nanoTime() - claimStarted) / 1_000_000
-        if(claim.duplicate) return existing(hotelId,request.eventId)!!.copy(duplicate=true)
+        if(claim.duplicate) {
+            logger.info("PMS_EVENT_SKIPPED providerEventId={} reason=IDEMPOTENT_DUPLICATE", request.eventId)
+            return existing(hotelId,request.eventId)!!.copy(duplicate=true)
+        }
         val orchestrationStarted = System.nanoTime()
         val result = try { applyRule(hotelId,request,now) } catch (failure: RuntimeException) {
+            logger.warn("PMS_EVENT_FAILED providerEventId={} stage=rule_application exceptionClass={} message={}", request.eventId, failure::class.simpleName, failure.message)
             // The business services invoked here each own their short transaction.
             // Release the claim so a failed provider event can be retried safely.
             inboxTransactions.release(claim.inboxId)
             throw failure
         }
-        if (result != null) logger.info("PMS_TASK_CREATED eventId={} resultType={} resultId={}", request.eventId, result.first, result.second)
+        if (result != null) {
+            val taskId = if (result.first == "HOUSEKEEPING_WORKFLOW") {
+                jdbc.query("select task_id from housekeeping_workflow where id=:workflow and hotel_id=:hotel", mapOf("workflow" to result.second, "hotel" to hotelId)) { rs, _ -> rs.getObject(1, UUID::class.java) }.firstOrNull()
+            } else result.second
+            val taskState = taskId?.let { id -> jdbc.query("select status from task where id=:task and hotel_id=:hotel", mapOf("task" to id, "hotel" to hotelId)) { rs, _ -> rs.getString(1) }.firstOrNull() }
+            logger.info("PMS_TASK_CREATED providerEventId={} taskId={} taskType={} state={} room={}", request.eventId, taskId, request.eventType, taskState, request.roomNumber)
+        }
         val orchestrationMs = (System.nanoTime() - orchestrationStarted) / 1_000_000
         val finalizeStarted = System.nanoTime()
         inboxTransactions.finalize(claim.inboxId,result,clock.instant())

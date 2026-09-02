@@ -272,6 +272,8 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
               tasks={tasks}
               homeTask={homeTask}
               overview={overviewForDisplay}
+              taskError={errorMessage}
+              taskLoading={isLoading}
               actionInProgress={isRefreshing}
               onStartTask={() => void startHomeTask()}
               onResumeTask={() => void resumeHomeTask()}

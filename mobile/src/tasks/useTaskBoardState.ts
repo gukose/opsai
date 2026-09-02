@@ -18,6 +18,7 @@ import {
   taskDetailFromResponse
 } from "./types";
 import { buildTaskBoardOverview, selectHomeTask } from "./taskBoardSelectors";
+import { appApiBaseUrl } from "../config/appConfig";
 
 type TaskBoardState = {
   tasks: TaskSummary[];
@@ -151,6 +152,7 @@ export function useTaskBoardState(
         }
 
         const nextTasks = await service.listTasks(filtersRef.current);
+        if (typeof __DEV__ !== "undefined" && __DEV__) console.debug("FRONTLINE_TASK_LOAD", { baseUrl: appApiBaseUrl, count: nextTasks.length, hotelId: currentUser?.hotelId, userId: currentUser?.userId });
         setTasks(nextTasks);
         const cacheKey = scopedTaskCacheKey(currentUser, filtersRef.current);
         if (cacheKey) {
@@ -182,6 +184,7 @@ export function useTaskBoardState(
         void loadAttachments(resolvedId);
       } catch (error) {
         const message = getAppApiErrorMessage(error);
+        if (typeof __DEV__ !== "undefined" && __DEV__) console.warn("FRONTLINE_TASK_LOAD_FAILED", { baseUrl: appApiBaseUrl, kind: error instanceof AppApiError ? error.kind : "unknown", status: error instanceof AppApiError ? error.status : undefined, hotelId: currentUser?.hotelId, userId: currentUser?.userId });
         setErrorMessage(message);
         if (!isConnectivityFailure(error)) {
           setStaleReason(null);
