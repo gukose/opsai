@@ -42,6 +42,11 @@ data class AssignmentCandidateView(
     val score: Int
 )
 
+private fun sameFloor(homeArea: String?, floorNumber: String?): Boolean {
+    if (homeArea.isNullOrBlank() || floorNumber.isNullOrBlank()) return false
+    return Regex("\\d+").find(homeArea)?.value == floorNumber
+}
+
 internal fun rankMinibarCandidates(
     candidates: List<AssignmentCandidate>,
     employees: List<Employee>,
@@ -53,7 +58,7 @@ internal fun rankMinibarCandidates(
     val employeesById = employees.associateBy(Employee::id)
     fun tier(candidate: AssignmentCandidate): Int {
         val employee = employeesById[candidate.employeeId] ?: return 0
-        val sameHomeFloor = targetFloor != null && employee.homeArea?.equals(targetFloor, true) == true
+        val sameHomeFloor = sameFloor(employee.homeArea, targetFloor)
         return when {
             sameHomeFloor && employee.primaryRoleCode.equals("HOUSEKEEPER", true) && minibarSkillId != null && minibarSkillId in employee.skillIds -> 4
             sameHomeFloor && employee.primaryRoleCode.equals("HOUSEKEEPER", true) -> 3
@@ -239,7 +244,7 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
         val rankedCandidates = if (task.intentType == TaskIntentType.MINIBAR) {
             rankMinibarCandidates(decision?.candidates.orEmpty(), employees, targetFloorNumber, requirement.requiredSkillId, floorAffinity, workload)
         } else decision?.candidates.orEmpty()
-            .sortedWith(compareByDescending<AssignmentCandidate> { employees.firstOrNull { e -> e.id == it.employeeId }?.homeArea?.equals(targetFloorNumber, true) == true }
+            .sortedWith(compareByDescending<AssignmentCandidate> { sameFloor(employees.firstOrNull { e -> e.id == it.employeeId }?.homeArea, targetFloorNumber) }
                 .thenByDescending { floorAffinity[it.employeeId] ?: 0 }
                 .thenBy { workload[it.employeeId] ?: 0 }
                 .thenBy { it.employeeId.toString() })
@@ -250,7 +255,7 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
             if (task.intentType == TaskIntentType.MINIBAR) logger.info(
                 "MINIBAR_ASSIGNMENT_DECISION room={} floor={} candidateEmployeeId={} candidateHomeArea={} candidateRole={} sameFloor={} activeShift={} workload={} selected={}",
                 task.roomNumber, targetFloorNumber, candidate.employeeId, employee?.homeArea, employee?.primaryRoleCode,
-                employee?.homeArea?.equals(targetFloorNumber, true) == true, candidate.employeeId in activeShiftIds,
+                sameFloor(employee?.homeArea, targetFloorNumber), candidate.employeeId in activeShiftIds,
                 workload[candidate.employeeId] ?: 0, index == 0
             )
         }
@@ -319,19 +324,25 @@ class PersistedWorkforceTaskAssignmentOrchestrator(
                where t.hotel_id=:hotel and r.floor_id=(select floor_id from room_master where hotel_id=:hotel and room_number=:room)
                  and t.status in ('ASSIGNED','STARTED','IN_PROGRESS','WAITING','OVERDUE')
                group by t.assignee_id""",
-            mapOf("hotel" to task.hotelId, "room" to task.roomNumber)
+            mapOf("hotel" to task.hotelId, "room" to canonicalRoomNumber(task.roomNumber))
         ) { rs, _ -> rs.getString(1) to rs.getInt(2) }
             .flatMap { (id, count) -> employees.filter { it.id.toString() == id || it.userId?.toString() == id }.map { it.id to count } }
             .toMap()
     }
 
-    private fun targetFloor(task: Task): UUID? = task.roomNumber?.let {
+    private fun targetFloor(task: Task): UUID? = canonicalRoomNumber(task.roomNumber)?.let {
         jdbc.query("select floor_id from room_master where hotel_id=:hotel and room_number=:room", mapOf("hotel" to task.hotelId, "room" to it)) { rs, _ -> rs.getObject(1, UUID::class.java) }.firstOrNull()
     }
 
-    private fun targetFloorNumber(task: Task): String? = task.roomNumber?.let {
+    private fun targetFloorNumber(task: Task): String? = canonicalRoomNumber(task.roomNumber)?.let {
         jdbc.query("select floor_number from room_master r join hotel_floor f on f.id=r.floor_id where r.hotel_id=:hotel and r.room_number=:room", mapOf("hotel" to task.hotelId, "room" to it)) { rs, _ -> rs.getInt(1).toString() }.firstOrNull()
     }
+
+    private fun canonicalRoomNumber(value: String?): String? = value?.trim()?.let { raw ->
+        Regex("(?:room\\s*)?(\\d+)", RegexOption.IGNORE_CASE).find(raw)?.groupValues?.get(1)
+            ?: raw.takeIf { it.isNotBlank() }
+    }
+
 
     private fun resolveRequirement(task: Task): Requirement {
         val text = "${task.title} ${task.description}".lowercase()
