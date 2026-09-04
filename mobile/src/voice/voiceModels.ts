@@ -44,6 +44,7 @@ export function voiceErrorMessage(error: unknown): string {
   if (/not authorized.*sign in again/i.test(message)) return "Your voice session expired. Sign in again and retry.";
   if (/network|fetch|upload/i.test(message)) return "Audio upload failed. Check your connection and retry.";
   if (/empty transcript|empty audio/i.test(message)) return "No speech was detected. Please record again.";
+  if (/FormDataPart|multipart|unsupported/i.test(message)) return "Audio upload failed. Please retry the recording.";
   if (/provider|transcription|speech/i.test(message)) return "Speech transcription is unavailable. Please retry or type the request.";
   return message;
 }

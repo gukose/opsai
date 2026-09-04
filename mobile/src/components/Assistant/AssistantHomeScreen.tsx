@@ -38,6 +38,7 @@ import { VoiceRecorderPanel } from "../Voice/VoiceRecorderPanel";
 import { resolveResponsiveLayout } from "../../layout/responsiveLayout";
 import { AdministrationScreen } from "../Admin/AdministrationScreen";
 import { TaskDetailCard } from "../Tasks/TaskDetailCard";
+import { ConversationList } from "../Conversation/ConversationList";
 import { resolveExperienceMode, UserExperienceMode } from "../../auth/experienceMode";
 import { FrontlineCompletionScreen, RoleAdaptiveHome } from "./RoleAdaptiveHome";
 import { TaskDetail } from "../../tasks/types";
@@ -215,6 +216,21 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
     }
   };
 
+  const acceptVoiceProposal = async (proposal: import("../../voice/voiceModels").VoiceTaskProposal) => {
+    const transcript = createLocalVoiceTranscriptMetadata({
+      transcript: proposal.transcript,
+      languageCode: proposal.languageCode,
+      durationMs: proposal.durationMs,
+      source: "SERVER_STT"
+    });
+    setVoiceTranscript(transcript);
+    setComposerText(proposal.transcript);
+    setAttachmentError(proposal.confirmationRequired ? "Low-confidence voice intent: review the transcript before creating the task." : null);
+    // The assistant response creates the shared preview only; task creation
+    // remains behind the preview's explicit Create Task action.
+    await sendTextMessage(proposal.transcript, selectedAttachments, transcript, imageObservations);
+  };
+
   const addImageAttachment = async (source: "camera" | "gallery") => {
     try {
       const selected = source === "camera"
@@ -268,9 +284,20 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
               actionInProgress={isRefreshing}
               onStartTask={() => void startHomeTask()}
               onResumeTask={() => void resumeHomeTask()}
-              onOpenTask={(taskId) => { setFrontlineDetailOrigin("home"); void selectTask(taskId); setActiveSection("tasks"); }}
+              onOpenTask={async (taskId) => { setFrontlineDetailOrigin("home"); await selectTask(taskId); setActiveSection("tasks"); }}
+              onOpenTasks={() => { setFrontlineCompletionTask(null); clearSelectedTask(); setActiveSection("tasks"); }}
               onAssignTask={(taskId) => { void selectTask(taskId); setActiveSection("tasks"); }}
             />
+            {frontlineSimple && conversationItems.some((item) => item.type === "taskPreview") ? (
+              <View style={styles.taskPreviewSurface}>
+                <ConversationList
+                  items={conversationItems.filter((item) => item.type === "taskPreview")}
+                  onTaskPreviewCancel={() => { void resetConversation(); setComposerText(""); setVoiceTranscript(null); }}
+                  onTaskPreviewCreate={async () => { await confirmTask(); await refreshTasks(); }}
+                  isActionDisabled={assistantActionDisabled}
+                />
+              </View>
+            ) : null}
             {dashboardStaleReason ? (
               <TaskErrorBanner
                 title="Offline data"
@@ -304,6 +331,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
         ) : activeSection === "tasks" ? (
           <TasksScreen
             accessToken={accessToken}
+            frontlineSimple={frontlineSimple}
             tasks={tasks}
             selectedTask={selectedTask}
             selectedTaskId={selectedTaskId}
@@ -453,9 +481,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
                   accessToken={accessToken}
                   onClose={() => setVoiceRecorderVisible(false)}
                   onUseTranscript={(proposal) => {
-                    setVoiceTranscript(createLocalVoiceTranscriptMetadata({ transcript: proposal.transcript, languageCode: proposal.languageCode, durationMs: proposal.durationMs, source: "SERVER_STT" }));
-                    setComposerText(proposal.transcript);
-                    setAttachmentError(proposal.confirmationRequired ? "Low-confidence voice intent: review the transcript before sending." : null);
+                    void acceptVoiceProposal(proposal);
                   }}
                 />
               ) : null}
@@ -469,8 +495,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
                 accessToken={accessToken}
                 onClose={() => setVoiceRecorderVisible(false)}
                 onUseTranscript={(proposal) => {
-                  setVoiceTranscript(createLocalVoiceTranscriptMetadata({ transcript: proposal.transcript, languageCode: proposal.languageCode, durationMs: proposal.durationMs, source: "SERVER_STT" }));
-                  setComposerText(proposal.transcript);
+                  void acceptVoiceProposal(proposal);
                 }}
               />
             </View>
@@ -548,6 +573,13 @@ const styles = StyleSheet.create({
   homeContent: {
     width: "100%",
     paddingBottom: 8
+  },
+  taskPreviewSurface: {
+    marginHorizontal: 12,
+    marginTop: 12,
+    minHeight: 120,
+    borderRadius: 16,
+    overflow: "hidden"
   },
   homeContentTablet: {
     paddingHorizontal: 12

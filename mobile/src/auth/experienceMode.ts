@@ -21,8 +21,15 @@ function hasAny(codes: Set<string>, capabilities: Set<string>): boolean {
 
 export function resolveExperienceMode(currentUser: CurrentUserSnapshot | null): UserExperienceMode {
   const codes = new Set(getCurrentUserPermissionCodes(currentUser).map((code) => code.trim().toUpperCase()));
-  if (hasAny(codes, MANAGER_CAPABILITIES)) return "MANAGER";
-  if (hasAny(codes, SUPERVISOR_CAPABILITIES)) return "SUPERVISOR";
+  const supervisor = hasAny(codes, SUPERVISOR_CAPABILITIES);
+  // Housekeeping supervisors receive DASHBOARD_READ for operational summaries,
+  // but that capability alone must not route them into the manager landing UI.
+  // Explicit hotel-wide/reporting capabilities still take precedence when roles overlap.
+  const manager = hasAny(codes, MANAGER_CAPABILITIES);
+  const hotelWideManager = codes.has("PLATFORM_HOTEL_MANAGE") || codes.has("MANAGER_REPORTING") || codes.has("REPORT_READ");
+  if (supervisor && !hotelWideManager) return "SUPERVISOR";
+  if (manager) return "MANAGER";
+  if (supervisor) return "SUPERVISOR";
   return "FRONTLINE_SIMPLE";
 }
 

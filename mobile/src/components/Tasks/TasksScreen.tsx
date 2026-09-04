@@ -1,5 +1,5 @@
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { CircleCheckBig, ClipboardList } from "lucide-react-native";
+import { CalendarDays, ChevronRight, CircleCheckBig, ClipboardList, Clock3, MapPin, BedDouble, ShoppingBasket, Wrench, UserRound } from "lucide-react-native";
 
 import { getCurrentUserDisplayName, getCurrentUserHotelLabel, getCurrentUserRoleCodes } from "../../auth/currentUserHelpers";
 import { colors, radius, shadow, spacing, typography } from "../../theme/tokens";
@@ -33,6 +33,7 @@ type TasksScreenProps = {
   assignmentCandidates: AssignmentCandidate[];
   onAssignmentOpen: () => Promise<void>;
   onAssignTask: (candidate: AssignmentCandidate) => Promise<void>;
+  frontlineSimple?: boolean;
 };
 
 export function TasksScreen({
@@ -58,7 +59,8 @@ export function TasksScreen({
   onCancelTask,
   assignmentCandidates,
   onAssignmentOpen,
-  onAssignTask
+  onAssignTask,
+  frontlineSimple = false
 }: TasksScreenProps) {
   const taskCount = tasks.length;
   const canAssignTasks = currentUser?.permissions?.some((permission) => permission.code === "TASK_ASSIGN") ?? false;
@@ -71,11 +73,9 @@ export function TasksScreen({
     <View style={styles.container}>
       <View style={styles.titleRow}>
         <View>
-          <Text style={styles.kicker}>MY TASKS</Text>
+          <Text style={styles.kicker}>{frontlineSimple ? `${hotelLabel} · ${displayName}` : "MY TASKS"}</Text>
           <Text style={styles.subtitle} numberOfLines={1}>
-            {hotelLabel}
-            {displayName ? ` · ${displayName}` : ""}
-            {roleCodes.length > 0 ? ` · ${roleCodes.join(", ")}` : ""}
+            {frontlineSimple ? "Housekeeper" : `${hotelLabel}${displayName ? ` · ${displayName}` : ""}${roleCodes.length > 0 ? ` · ${roleCodes.join(", ")}` : ""}`}
           </Text>
         </View>
         <View style={styles.countPill}>
@@ -97,6 +97,7 @@ export function TasksScreen({
         onChange={onFiltersChange}
         onClear={onClearFilters}
         canViewAssignmentQueue={canAssignTasks}
+        frontlineSimple={frontlineSimple}
       />
 
       {!isLoading && tasks.length === 0 ? (
@@ -109,8 +110,8 @@ export function TasksScreen({
       {tasks.length > 0 ? (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.list}>
           <View style={styles.summaryRow}>
-            <SummaryCard label="Open" value={String(openTasks.length)} />
-            <SummaryCard label="Selected" value={selectedTask?.status ?? "None"} />
+            <SummaryCard icon={frontlineSimple ? ClipboardList : undefined} label={frontlineSimple ? "Open Tasks" : "Open"} value={String(openTasks.length)} />
+            <SummaryCard icon={frontlineSimple ? UserRound : undefined} label="Selected" value={frontlineSimple ? (selectedTask?.roomOrLocation ? formatRoom(selectedTask.roomOrLocation) : "None") : (selectedTask?.status ?? "None")} />
           </View>
 
           {isRefreshing ? (
@@ -122,7 +123,12 @@ export function TasksScreen({
 
           <View style={styles.cards}>
             {tasks.map((task) => (
-              <TaskListItem
+              frontlineSimple ? <FrontlineTaskListItem
+                key={task.id}
+                task={task}
+                active={task.id === selectedTaskId}
+                onPress={() => { void onSelectTask(task.id); }}
+              /> : <TaskListItem
                 key={task.id}
                 task={task}
                 active={task.id === selectedTaskId}
@@ -163,7 +169,7 @@ export function TasksScreen({
         </ScrollView>
       ) : null}
 
-      <View style={styles.refreshFooter}>
+      {!frontlineSimple ? <View style={styles.refreshFooter}>
         <Text style={styles.refreshFooterText}>Pull style refresh is not wired yet.</Text>
         <Text
           accessibilityRole="button"
@@ -174,7 +180,7 @@ export function TasksScreen({
         >
           Refresh
         </Text>
-      </View>
+      </View> : null}
     </View>
   );
 }
@@ -183,12 +189,14 @@ function TaskFilterRow({
   filters,
   onChange,
   onClear,
-  canViewAssignmentQueue
+  canViewAssignmentQueue,
+  frontlineSimple = false
 }: {
   filters: TaskFilterState;
   onChange: (filters: TaskFilterState) => void;
   onClear: () => void;
   canViewAssignmentQueue: boolean;
+  frontlineSimple?: boolean;
 }) {
   const active = hasActiveTaskFilters(filters);
 
@@ -202,6 +210,7 @@ function TaskFilterRow({
         style={styles.searchInput}
       />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChips}>
+        {frontlineSimple ? <FilterChip label="All" active={!active} onPress={onClear} /> : null}
         <FilterChip
           label="Open"
           active={filters.status.includes("CREATED")}
@@ -224,8 +233,9 @@ function TaskFilterRow({
             })
           }
         />
+        {frontlineSimple ? <FilterChip label="In Progress" active={filters.status.includes("IN_PROGRESS") || filters.status.includes("STARTED")} onPress={() => onChange({ ...filters, status: ["STARTED", "IN_PROGRESS"] })} /> : null}
         <FilterChip
-          label="High"
+          label={frontlineSimple ? "High Priority" : "High"}
           active={filters.priority.includes("HIGH")}
           onPress={() =>
             onChange({
@@ -235,7 +245,7 @@ function TaskFilterRow({
           }
         />
         <FilterChip
-          label="Inspection Required"
+          label={frontlineSimple ? "Inspection" : "Inspection Required"}
           active={filters.inspectionRequired === true}
           onPress={() => onChange({ ...filters, inspectionRequired: !filters.inspectionRequired, status: [] })}
         />
@@ -271,9 +281,20 @@ function FilterChip({ label, active, onPress }: { label: string; active: boolean
   );
 }
 
-function SummaryCard({ label, value }: { label: string; value: string }) {
+function FrontlineTaskListItem({ task, active, onPress }: { task: TaskSummary; active?: boolean; onPress?: () => void }) {
+  const normalized = `${task.intentType} ${task.title}`.toUpperCase();
+  const Icon = normalized.includes("MINIBAR") ? ShoppingBasket : normalized.includes("TECHNICAL") || normalized.includes("REPAIR") ? Wrench : BedDouble;
+  const status = task.awaitingInspection ? "WAITING FOR INSPECTION" : task.status.replaceAll("_", " ");
+  const tone = status.includes("COMPLETED") ? colors.green : status.includes("OVERDUE") ? colors.red : status.includes("IN PROGRESS") || status.includes("STARTED") ? "#3267a8" : colors.textMuted;
+  return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.frontlineCard, active && styles.frontlineCardActive, pressed && styles.pressed]}>
+    <View style={styles.frontlineIcon}><Icon size={22} color={colors.green} /></View><View style={styles.frontlineMain}><View style={styles.frontlineTitleRow}><Text style={styles.frontlineRoom}>{formatRoom(task.roomOrLocation)}</Text><ChevronRight size={18} color={colors.textSubtle} /></View><Text style={styles.frontlineTaskTitle} numberOfLines={1}>{task.title}</Text>{task.description ? <Text style={styles.frontlineDescription} numberOfLines={1}>{task.description}</Text> : null}<View style={styles.frontlineMeta}><Text style={[styles.frontlineBadge, { color: tone, backgroundColor: `${tone}18` }]}>{status}</Text><Text style={styles.frontlineBadge}>{task.priority}</Text>{task.roomOrLocation ? <Text style={styles.frontlineDetail}><MapPin size={11} color={colors.textMuted} /> {floorLabel(task.roomOrLocation)}</Text> : null}<Text style={styles.frontlineDetail}><Clock3 size={11} color={colors.textMuted} /> {formatWorkingDuration(task)}</Text><Text style={styles.frontlineDetail}><CalendarDays size={11} color={colors.textMuted} /> {formatDateTime(task.updatedAt)}</Text></View></View>
+  </Pressable>;
+}
+
+function SummaryCard({ icon: Icon, label, value }: { icon?: typeof ClipboardList; label: string; value: string }) {
   return (
     <View style={styles.summaryCard}>
+      {Icon ? <Icon color={colors.green} size={17} /> : null}
       <Text style={styles.summaryLabel}>{label}</Text>
       <Text style={styles.summaryValue} numberOfLines={1}>
         {value}
@@ -281,6 +302,11 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
     </View>
   );
 }
+
+function formatRoom(value: string | null): string { if (!value) return "Location unavailable"; const match = value.match(/(\d{3,4}[A-Za-z]?)/); return match ? `ROOM ${match[1]}` : value; }
+function floorLabel(value: string): string { const match = value.match(/(\d{3,4})/); return match ? `Floor ${Math.floor(Number(match[1]) / 100)}` : value; }
+function formatDateTime(value: string): string { const date = new Date(value); return Number.isNaN(date.getTime()) ? "Updated recently" : `Updated ${date.toLocaleDateString([], { day: "numeric", month: "short" })} ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`; }
+function formatWorkingDuration(task: TaskSummary): string { const seconds = Math.max(0, Math.floor(task.actualWorkingDurationSeconds ?? 0)); if (seconds < 60) return `${seconds}s`; return `${Math.floor(seconds / 60)} min`; }
 
 function formatCacheTime(value: string): string {
   const date = new Date(value);
@@ -459,5 +485,76 @@ const styles = StyleSheet.create({
     color: colors.blue,
     fontSize: typography.tiny,
     fontWeight: "800"
+  },
+  pressed: {
+    opacity: 0.82
+  },
+  frontlineCard: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    ...shadow.card
+  },
+  frontlineCardActive: {
+    borderColor: colors.green
+  },
+  frontlineIcon: {
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: radius.pill,
+    backgroundColor: "#e8f5ed"
+  },
+  frontlineMain: {
+    flex: 1,
+    minWidth: 0
+  },
+  frontlineTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between"
+  },
+  frontlineRoom: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: "900"
+  },
+  frontlineTaskTitle: {
+    marginTop: 2,
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: "700"
+  },
+  frontlineDescription: {
+    marginTop: 2,
+    color: colors.textMuted,
+    fontSize: 11
+  },
+  frontlineMeta: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 7
+  },
+  frontlineBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    backgroundColor: "#f5f7fa",
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: "800"
+  },
+  frontlineDetail: {
+    flexDirection: "row",
+    alignItems: "center",
+    color: colors.textMuted,
+    fontSize: 10
   }
 });

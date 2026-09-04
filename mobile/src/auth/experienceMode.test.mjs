@@ -16,6 +16,7 @@ test("team assignment or inspection capabilities resolve to supervisor mode", ()
 
 test("operational supervisor is not promoted to manager", () => {
   assert.equal(resolveExperienceMode(user(["TASK_ASSIGN", "HOUSEKEEPING_INSPECTION", "HOUSEKEEPING_OPERATIONS"])), "SUPERVISOR");
+  assert.equal(resolveExperienceMode(user(["TASK_ASSIGN", "HOUSEKEEPING_INSPECTION", "DASHBOARD_READ"])), "SUPERVISOR");
 });
 
 test("hotel-wide capability wins when capabilities overlap", () => {

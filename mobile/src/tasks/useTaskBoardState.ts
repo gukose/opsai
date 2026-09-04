@@ -409,6 +409,9 @@ function taskSummaryFromDetail(task: TaskDetail): TaskSummary {
     unassignedReasonCode: task.unassignedReasonCode,
     unassignedReason: task.unassignedReason
     ,slaTargetSeconds: task.slaTargetSeconds
+    ,startedAt: task.startedAt
+    ,actualWorkingDurationSeconds: task.actualWorkingDurationSeconds
+    ,totalPauseDurationSeconds: task.totalPauseDurationSeconds
   };
 }
 

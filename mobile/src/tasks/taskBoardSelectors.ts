@@ -17,24 +17,36 @@ export type TaskBoardOverview = {
   dueSoonCount?: number;
 };
 
-const ACTIVE_STATUS_RANK: Record<string, number> = {
+const HOME_STATUS_RANK: Record<string, number> = {
   STARTED: 0,
   IN_PROGRESS: 0,
+  PAUSED: 1,
   WAITING: 1,
-  OVERDUE: 2,
+  REWORK_REQUIRED: 2,
   ASSIGNED: 3,
-  CREATED: 3
+  CREATED: 3,
+  OPEN: 3,
+  OVERDUE: 3
 };
 
 const TERMINAL_STATUSES = new Set(["COMPLETED", "CANCELLED"]);
 
 export function selectHomeTask(tasks: TaskSummary[]): TaskSummary | null {
-  const candidates = tasks.filter((task) => !TERMINAL_STATUSES.has(normalizeStatus(task.status)));
+  const candidates = tasks.filter(isHomeActionable);
   if (candidates.length === 0) {
     return null;
   }
 
   return [...candidates].sort(compareHomeTasks)[0] ?? null;
+}
+
+/** Tasks eligible for the employee's Home primary/secondary work queue. */
+export function isHomeActionable(task: TaskSummary): boolean {
+  const status = normalizeStatus(task.status);
+  if (TERMINAL_STATUSES.has(status) || task.awaitingInspection || status === "WAITING_FOR_INSPECTION" || status === "INSPECTION_REQUIRED") {
+    return false;
+  }
+  return Object.prototype.hasOwnProperty.call(HOME_STATUS_RANK, status);
 }
 
 export function getHomeTaskPresentation(task: TaskSummary | null): HomeTaskPresentation | null {
@@ -52,12 +64,21 @@ export function getHomeTaskPresentation(task: TaskSummary | null): HomeTaskPrese
     };
   }
 
-  if (status === "WAITING") {
+  if (status === "WAITING" || status === "PAUSED") {
     return {
       bannerLabel: "WAITING TASK",
       statusLabel: status,
       actionLabel: "Resume Task",
       actionKind: "resume"
+    };
+  }
+
+  if (status === "REWORK_REQUIRED") {
+    return {
+      bannerLabel: "REWORK REQUIRED",
+      statusLabel: status,
+      actionLabel: "Continue Work",
+      actionKind: "continue"
     };
   }
 
@@ -120,7 +141,7 @@ function compareHomeTasks(left: TaskSummary, right: TaskSummary): number {
 
 function getStatusRank(status: string): number {
   const normalized = normalizeStatus(status);
-  return ACTIVE_STATUS_RANK[normalized] ?? 4;
+  return HOME_STATUS_RANK[normalized] ?? 4;
 }
 
 function getPriorityRank(priority: string): number {

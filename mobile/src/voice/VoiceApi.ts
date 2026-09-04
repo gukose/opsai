@@ -1,5 +1,6 @@
 import { appApiBaseUrl } from "../config/appConfig";
 import type { VoiceTaskProposal } from "./voiceModels";
+import { File } from "expo-file-system";
 
 type VoiceApiResponse = {
   transcript: { transcript: string; languageCode: string; confidence: number; provider: string; simulated: boolean };
@@ -23,18 +24,26 @@ export async function transcribeRecording(input: {
   if (!input.accessToken) throw new Error("Authentication is required for transcription.");
   if (!input.uri) throw new Error("Audio recording is empty.");
   const form = new FormData();
-  const extension = input.mimeType === "audio/webm" ? "webm" : "m4a";
+  const extension = extensionForAudio(input.uri, input.mimeType);
   const fileName = `voice-${Date.now()}.${extension}`;
   if (input.uri.startsWith("blob:") || input.uri.startsWith("data:")) {
     const recordingResponse = await fetch(input.uri);
     if (!recordingResponse.ok) throw new Error("Audio recording could not be read for upload.");
     const recordingBlob = await recordingResponse.blob();
+    if (recordingBlob.size <= 0) throw new Error("Audio recording is empty.");
     const typedBlob = recordingBlob.type === input.mimeType
       ? recordingBlob
       : recordingBlob.slice(0, recordingBlob.size, input.mimeType);
     form.append("audio", typedBlob, fileName);
   } else {
-    form.append("audio", { uri: input.uri, name: fileName, type: input.mimeType } as unknown as Blob);
+    // React Native's legacy `{ uri, name, type }` FormData parts are rejected
+    // by the SDK 57 fetch implementation. Expo's File is a real Blob-backed
+    // multipart part and keeps the upload streaming from the local URI.
+    const recordingFile = new File(input.uri);
+    if (recordingFile.exists !== true || (recordingFile.size ?? 0) <= 0) {
+      throw new Error("Audio recording is empty.");
+    }
+    form.append("audio", recordingFile, fileName);
   }
   if (input.languageHint) form.append("languageHint", input.languageHint);
   const controller = new AbortController();
@@ -76,4 +85,13 @@ export async function transcribeRecording(input: {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function extensionForAudio(uri: string, mimeType: string): string {
+  const uriExtension = (uri.split(/[?#]/, 1)[0] ?? "").match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
+  if (uriExtension && ["m4a", "mp4", "wav", "webm", "caf", "3gp"].includes(uriExtension)) return uriExtension;
+  if (mimeType === "audio/webm") return "webm";
+  if (mimeType === "audio/wav" || mimeType === "audio/x-wav") return "wav";
+  if (mimeType === "audio/3gpp") return "3gp";
+  return "m4a";
 }

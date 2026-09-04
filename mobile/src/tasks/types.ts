@@ -31,6 +31,10 @@ export type TaskSummary = {
   awaitingInspection?: boolean;
   latestInspectionRejectionReason?: string | null;
   slaTargetSeconds: number;
+  /** Optional timing fields when the task-list response exposes Function 1.5 data. */
+  startedAt?: string | null;
+  actualWorkingDurationSeconds?: number;
+  totalPauseDurationSeconds?: number;
 };
 
 export type AssignmentCandidate = {
@@ -93,6 +97,9 @@ export function taskSummaryFromResponse(task: TaskResponseDto): TaskSummary {
     awaitingInspection: Boolean((task as TaskResponseDto & { awaitingInspection?: boolean }).awaitingInspection)
     ,latestInspectionRejectionReason: (task as TaskResponseDto & { latestInspectionRejectionReason?: string | null }).latestInspectionRejectionReason ?? null
     ,slaTargetSeconds: Number((task as TaskResponseDto & { slaTargetSeconds?: number }).slaTargetSeconds ?? targetDurationSeconds(task.intentType, task.title))
+    ,startedAt: task.startedAt ?? null
+    ,actualWorkingDurationSeconds: Number((task as TaskResponseDto & { actualWorkingDurationSeconds?: number }).actualWorkingDurationSeconds ?? 0)
+    ,totalPauseDurationSeconds: Number((task as TaskResponseDto & { totalPauseDurationSeconds?: number }).totalPauseDurationSeconds ?? 0)
   };
 }
 
