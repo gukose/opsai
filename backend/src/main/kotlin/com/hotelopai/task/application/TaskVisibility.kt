@@ -50,6 +50,10 @@ object TaskVisibilityRules {
     private val technicalIntents = setOf(TaskIntentType.MAINTENANCE, TaskIntentType.DAMAGE_REPORT)
     private val frontOfficeIntents = setOf(TaskIntentType.GUEST_REQUEST, TaskIntentType.LOST_AND_FOUND)
     private val securityIntents = emptySet<TaskIntentType>()
+    // Generic operational notes are intentionally supervisor-visible so the
+    // fallback assistant flow can be routed for assignment instead of becoming
+    // invisible when no specialised intent was recognised.
+    private val supervisorFallbackIntents = setOf(TaskIntentType.GENERAL_OPERATIONAL_NOTE)
 
     fun canView(task: Task, scope: TaskVisibilityScope): Boolean {
         if (task.hotelId != scope.hotelId) return false
@@ -68,10 +72,10 @@ object TaskVisibilityRules {
     }
 
     fun allowedIntents(roleCodes: Set<String>): Set<TaskIntentType> = when {
-        roleCodes.any { it.contains("HOUSEKEEPING") } -> housekeepingIntents
-        roleCodes.any { it.contains("TECHNICAL") || it.contains("ENGINEER") || it.contains("MAINTENANCE") } -> technicalIntents
-        roleCodes.any { it.contains("FRONT_OFFICE") || it == "RECEPTION_SUPERVISOR" || it == "RECEPTION_MANAGER" } -> frontOfficeIntents
-        roleCodes.any { it.contains("SECURITY") } -> securityIntents
+        roleCodes.any { it.contains("HOUSEKEEPING") } -> housekeepingIntents + supervisorFallbackIntents
+        roleCodes.any { it.contains("TECHNICAL") || it.contains("ENGINEER") || it.contains("MAINTENANCE") } -> technicalIntents + supervisorFallbackIntents
+        roleCodes.any { it.contains("FRONT_OFFICE") || it == "RECEPTION_SUPERVISOR" || it == "RECEPTION_MANAGER" } -> frontOfficeIntents + supervisorFallbackIntents
+        roleCodes.any { it.contains("SECURITY") } -> securityIntents + supervisorFallbackIntents
         else -> emptySet()
     }
 

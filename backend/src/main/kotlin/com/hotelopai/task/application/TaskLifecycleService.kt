@@ -72,6 +72,7 @@ class TaskLifecycleService @Autowired constructor(
 
             val taskSaveStarted = System.nanoTime()
             val saved = taskRepository.save(task)
+            logger.info("TASK_CREATED_CANONICAL taskId={} hotelId={} state={} intent={} type={} source={} assigneeEmployeeId={} assignable={}", saved.id, saved.hotelId, saved.status, saved.intentType, saved.intentType, saved.source, saved.assignment?.assigneeId, true)
             val taskInsertMs = elapsedMs(taskSaveStarted)
             val historyStarted = System.nanoTime()
             recordStateHistory(
@@ -155,7 +156,12 @@ class TaskLifecycleService @Autowired constructor(
         taskRepository.findAllByHotelId(hotelId)
 
     fun listTasksForScope(scope: TaskVisibilityScope, now: Instant = Instant.now()): List<Task> =
-        taskRepository.findAllByHotelId(scope.hotelId).filter { TaskVisibilityRules.canView(it, scope) }
+        taskRepository.findAllByHotelId(scope.hotelId).also { tasks ->
+            tasks.filter { it.assignment == null }.forEach { task ->
+                val included = TaskVisibilityRules.canView(task, scope)
+                logger.info("NEEDS_ASSIGNMENT_VISIBILITY taskId={} included={} firstExclusionReason={}", task.id, included, if (included) "none" else visibilityExclusionReason(task, scope))
+            }
+        }.filter { TaskVisibilityRules.canView(it, scope) }
 
     fun listTasksPage(request: TaskPageRequest, now: Instant = Instant.now()): TaskPage<Task> =
         taskRepository.findPage(request)
@@ -430,6 +436,13 @@ class TaskLifecycleService @Autowired constructor(
 
     companion object {
         private val logger = LoggerFactory.getLogger(TaskLifecycleService::class.java)
+    }
+
+    private fun visibilityExclusionReason(task: Task, scope: TaskVisibilityScope): String = when {
+        task.hotelId != scope.hotelId -> "hotel"
+        scope.level == TaskVisibilityLevel.SELF -> "self_scope_unassigned"
+        task.intentType !in TaskVisibilityRules.allowedIntents(scope.roleCodes) -> "intent_or_department"
+        else -> "scope"
     }
 
 }

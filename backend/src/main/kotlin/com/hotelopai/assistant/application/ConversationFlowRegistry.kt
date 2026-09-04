@@ -8,6 +8,7 @@ class ConversationFlowRegistry(
     definitions: List<ConversationFlowDefinition> = listOf(
         GuestRequestIntentDefinition(),
         MaintenanceIntentDefinition(),
+        HousekeepingIntentDefinition(),
         GeneralOperationalIntentDefinition()
     )
 ) {

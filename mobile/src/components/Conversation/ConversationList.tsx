@@ -15,6 +15,9 @@ type ConversationListProps = {
   onTaskPreviewCreate?: () => void;
   roomOptions?: string[];
   onTaskPreviewRoomChange?: (room: string) => void;
+  roomMasterLoading?: boolean;
+  roomMasterError?: string | null;
+  onRetryRooms?: () => void;
   isActionDisabled?: boolean;
 };
 
@@ -25,6 +28,9 @@ export function ConversationList({
   onTaskPreviewCreate,
   roomOptions,
   onTaskPreviewRoomChange,
+  roomMasterLoading,
+  roomMasterError,
+  onRetryRooms,
   isActionDisabled
 }: ConversationListProps) {
   return (
@@ -76,6 +82,9 @@ export function ConversationList({
               onCreateTask={onTaskPreviewCreate}
               roomOptions={roomOptions}
               onRoomChange={onTaskPreviewRoomChange}
+              roomMasterLoading={roomMasterLoading}
+              roomMasterError={roomMasterError}
+              onRetryRooms={onRetryRooms}
               disabled={isActionDisabled}
             />
           ) : null}

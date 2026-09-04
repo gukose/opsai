@@ -35,6 +35,7 @@ class TaskVisibilityTest {
         )
         assertThat(TaskVisibilityRules.canView(task(TaskIntentType.HOUSEKEEPING, null), scope)).isTrue()
         assertThat(TaskVisibilityRules.canView(task(TaskIntentType.MAINTENANCE, null), scope)).isFalse()
+        assertThat(TaskVisibilityRules.canView(task(TaskIntentType.GENERAL_OPERATIONAL_NOTE, null), scope)).isTrue()
     }
 
     @Test

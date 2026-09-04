@@ -42,6 +42,7 @@ import { ConversationList } from "../Conversation/ConversationList";
 import { resolveExperienceMode, UserExperienceMode } from "../../auth/experienceMode";
 import { FrontlineCompletionScreen, RoleAdaptiveHome } from "./RoleAdaptiveHome";
 import { TaskDetail } from "../../tasks/types";
+import { MobileHotelOpAiClient } from "../../api/hotelOpAiClient";
 
 type AssistantHomeScreenProps = {
   accessToken: string | null;
@@ -68,6 +69,23 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
   const [voiceRecorderVisible, setVoiceRecorderVisible] = useState(false);
   const [visionAnalyzing, setVisionAnalyzing] = useState(false);
   const [taskCreateFeedback, setTaskCreateFeedback] = useState<string | null>(null);
+  const [roomMaster, setRoomMaster] = useState<string[]>([]);
+  const [roomMasterLoading, setRoomMasterLoading] = useState(false);
+  const [roomMasterError, setRoomMasterError] = useState<string | null>(null);
+  const [roomMasterRetry, setRoomMasterRetry] = useState(0);
+  const [voiceAnalyzing, setVoiceAnalyzing] = useState(false);
+  const roomClient = useMemo(() => new MobileHotelOpAiClient({ accessTokenProvider: () => accessToken, refreshAccessToken }), [accessToken, refreshAccessToken]);
+
+  useEffect(() => {
+    if (!frontlineSimple || !currentUser?.hotelId) return;
+    let active = true;
+    setRoomMasterLoading(true); setRoomMasterError(null);
+    void roomClient.call<{ items?: Array<{ roomNumber: string; active?: boolean }> }>("GET", (sdk, signal) => sdk.request({ method: "GET", path: `/api/v1/internal/admin/hotels/${currentUser.hotelId}/rooms`, auth: true, query: { page: 0, size: 200, active: true }, signal }))
+      .then((response) => { if (active) setRoomMaster((response.items ?? []).filter((room) => room.active !== false).map((room) => room.roomNumber)); })
+      .catch(() => { if (active) setRoomMasterError("Couldn’t load rooms."); })
+      .finally(() => { if (active) setRoomMasterLoading(false); });
+    return () => { active = false; };
+  }, [currentUser?.hotelId, frontlineSimple, roomClient, roomMasterRetry]);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const {
     conversationId,
@@ -221,6 +239,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
   };
 
   const acceptVoiceProposal = async (proposal: import("../../voice/voiceModels").VoiceTaskProposal) => {
+    setVoiceAnalyzing(true);
     const transcript = createLocalVoiceTranscriptMetadata({
       transcript: proposal.transcript,
       languageCode: proposal.languageCode,
@@ -232,7 +251,8 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
     setAttachmentError(proposal.confirmationRequired ? "Low-confidence voice intent: review the transcript before creating the task." : null);
     // The assistant response creates the shared preview only; task creation
     // remains behind the preview's explicit Create Task action.
-    await sendTextMessage(proposal.transcript, selectedAttachments, transcript, imageObservations);
+    try { await sendTextMessage(proposal.transcript, selectedAttachments, transcript, imageObservations); }
+    finally { setVoiceAnalyzing(false); }
   };
 
   const handlePreviewCreate = async () => {
@@ -390,7 +410,10 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
           <View style={styles.taskPreviewSurface}>
             <ConversationList
               items={conversationItems.filter((item) => item.type === "taskPreview")}
-              roomOptions={Array.from(new Set(tasks.map((item) => item.roomOrLocation).filter((value): value is string => Boolean(value))))}
+              roomOptions={roomMaster}
+              roomMasterLoading={roomMasterLoading}
+              roomMasterError={roomMasterError}
+              onRetryRooms={() => setRoomMasterRetry((value) => value + 1)}
               onTaskPreviewRoomChange={(room) => { void sendTextMessage(`Use room ${room}`, [], null, []); }}
               onTaskPreviewCancel={() => { void resetConversation(); setComposerText(""); setVoiceTranscript(null); }}
               onTaskPreviewCreate={() => { void handlePreviewCreate(); }}
@@ -399,7 +422,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
           </View>
         ) : null}
         {frontlineSimple && taskCreateFeedback ? <View style={styles.taskCreateFeedback}><Text style={styles.taskCreateFeedbackText}>{taskCreateFeedback}</Text></View> : null}
-        {frontlineSimple && visionAnalyzing ? <View style={styles.visionStatus}><ActivityIndicator color={colors.green} size="small" /><Text style={styles.visionStatusText}>Analyzing issue…</Text></View> : null}
+        {frontlineSimple && (visionAnalyzing || voiceAnalyzing) ? <View style={styles.visionStatus}><ActivityIndicator color={colors.green} size="small" /><Text style={styles.visionStatusText}>{voiceAnalyzing ? "Understanding request…" : "Analyzing issue…"}</Text></View> : null}
         <View style={[styles.footer, isDesktop ? styles.footerDesktop : null]}>
           {isHomeSurface && showAssistantComposer ? (
             <View style={isTablet && !isDesktop ? styles.composerTablet : null}>

@@ -1,4 +1,4 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useMemo, useState } from "react";
 import { X } from "lucide-react-native";
 
@@ -12,9 +12,12 @@ type TaskPreviewProps = {
   disabled?: boolean;
   roomOptions?: string[];
   onRoomChange?: (room: string) => void;
+  roomMasterLoading?: boolean;
+  roomMasterError?: string | null;
+  onRetryRooms?: () => void;
 };
 
-export function TaskPreview({ task, onCancel, onCreateTask, disabled, roomOptions = [], onRoomChange }: TaskPreviewProps) {
+export function TaskPreview({ task, onCancel, onCreateTask, disabled, roomOptions = [], onRoomChange, roomMasterLoading, roomMasterError, onRetryRooms }: TaskPreviewProps) {
   const [room, setRoom] = useState(task.room || "");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -30,7 +33,7 @@ export function TaskPreview({ task, onCancel, onCreateTask, disabled, roomOption
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <Text style={styles.fieldLabel}>Room</Text>
             <Pressable style={styles.selectField} onPress={() => setPickerOpen(true)}><Text style={styles.selectValue}>{room || "Select room"}</Text><Text style={styles.selectChevron}>⌄</Text></Pressable>
-            {pickerOpen ? <View style={styles.picker}><TextInput autoFocus value={query} onChangeText={setQuery} placeholder="Search room..." style={styles.search} /><ScrollView style={styles.pickerList}>{rooms.map((value) => <Pressable key={value} style={styles.roomOption} onPress={() => chooseRoom(value)}><Text style={styles.value}>ROOM {value.replace(/^ROOM\s+/i, "")}</Text></Pressable>)}</ScrollView></View> : null}
+            {pickerOpen ? <View style={styles.picker}>{roomMasterLoading ? <View style={styles.roomStatus}><ActivityIndicator size="small" /><Text>Loading rooms...</Text></View> : roomMasterError ? <View style={styles.roomStatus}><Text style={styles.error}>{roomMasterError}</Text><Pressable onPress={onRetryRooms}><Text style={styles.retry}>Retry</Text></Pressable></View> : <><TextInput autoFocus value={query} onChangeText={setQuery} placeholder="Search room..." style={styles.search} /><ScrollView style={styles.pickerList}>{rooms.map((value) => <Pressable key={value} style={styles.roomOption} onPress={() => chooseRoom(value)}><Text style={styles.value}>ROOM {value.replace(/^ROOM\s+/i, "")}</Text></Pressable>)}</ScrollView></>}</View> : null}
             <PreviewRow label="Issue" value={task.intent || task.type} />
             <PreviewRow label="Category" value={friendlyCategory(task.type)} />
             <PreviewRow label="Priority" value={friendlyPriority(task.priority)} />
@@ -109,6 +112,9 @@ const styles = StyleSheet.create({
   search: { borderWidth: 1, borderColor: colors.cardBorder, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 7, color: colors.text },
   pickerList: { maxHeight: 150 },
   roomOption: { paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  roomStatus: { paddingVertical: 12, alignItems: "center", gap: 6 },
+  error: { color: colors.red, fontSize: typography.caption },
+  retry: { color: colors.green, fontWeight: "800" },
   assignment: { marginTop: 12, color: colors.textMuted, fontSize: typography.caption, lineHeight: 18 },
   title: {
     marginBottom: 5,

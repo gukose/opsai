@@ -243,7 +243,9 @@ class AssistantConversationService(
                 now = now
             )
 
+            logger.info("TASK_CREATE_REQUEST_RECEIVED hotelId={} room={} intent={} source={} priority={}", createCommand.hotelId, createCommand.roomNumber, createCommand.intentType, createCommand.source, createCommand.priority)
             val createdTask = taskApplicationPort.createTask(createCommand)
+            logger.info("TASK_CREATED taskId={} hotelId={} state={} intent={} source={} assigneeEmployeeId={}", createdTask.id, createdTask.hotelId, createdTask.status, createdTask.intentType, createdTask.source, createdTask.assignment?.assigneeId)
             taskAttachmentLinker.linkConfirmedTask(
                 conversation = conversation,
                 taskId = createdTask.id,
