@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { colors } from "../../theme/tokens";
 import { assistantBackendEnabled } from "../../config/assistantConfig";
@@ -66,6 +66,8 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
   const [imageObservations, setImageObservations] = useState<LocalImageObservationMetadata[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [voiceRecorderVisible, setVoiceRecorderVisible] = useState(false);
+  const [visionAnalyzing, setVisionAnalyzing] = useState(false);
+  const [taskCreateFeedback, setTaskCreateFeedback] = useState<string | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const {
     conversationId,
@@ -174,9 +176,9 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
     });
   }, [composerText, conversationId, draftHydrated, imageObservations, offlineScope, selectedAttachments, voiceTranscript]);
 
-  const registerSelectedAttachment = async (attachment: LocalAttachmentMetadata) => {
+  const registerSelectedAttachment = async (attachment: LocalAttachmentMetadata): Promise<LocalAttachmentMetadata | null> => {
     if (!assistantBackendEnabled) {
-      return;
+      return attachment;
     }
 
     setSelectedAttachments((current) =>
@@ -201,6 +203,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
             : observation
         )
       );
+      return registered;
     } catch (error) {
       setSelectedAttachments((current) =>
         current.map((item) =>
@@ -213,6 +216,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
             : item
         )
       );
+      return null;
     }
   };
 
@@ -231,8 +235,23 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
     await sendTextMessage(proposal.transcript, selectedAttachments, transcript, imageObservations);
   };
 
-  const addImageAttachment = async (source: "camera" | "gallery") => {
+  const handlePreviewCreate = async () => {
+    if (assistantActionDisabled) return;
+    if (typeof __DEV__ !== "undefined" && __DEV__) console.debug("TASK_PREVIEW_CREATE_TAP");
+    setTaskCreateFeedback(null);
+    const createdTaskId = await confirmTask();
+    if (!createdTaskId) {
+      setTaskCreateFeedback("Task could not be created. Check the details and try again.");
+      return;
+    }
+    await refreshTasks();
+    await resetConversation();
+    setTaskCreateFeedback("Task created");
+  };
+
+  const addImageAttachment = async (source: "camera" | "gallery", roomContext?: string | null) => {
     try {
+      if (source === "camera") setVisionAnalyzing(true);
       const selected = source === "camera"
         ? await selectImageFromCamera(selectedAttachments)
         : await selectImageFromGallery(selectedAttachments);
@@ -241,9 +260,14 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
       }
       setSelectedAttachments((current) => [...current, selected]);
       setAttachmentError(null);
-      void registerSelectedAttachment(selected);
+      const registered = await registerSelectedAttachment(selected);
+      if (source === "camera" && roomContext && registered) {
+        await sendTextMessage(`Report the issue shown in this photo for ${roomContext}.`, [registered]);
+      }
     } catch (error) {
       setAttachmentError(error instanceof Error ? error.message : "Attachment could not be selected.");
+    } finally {
+      if (source === "camera") setVisionAnalyzing(false);
     }
   };
 
@@ -254,7 +278,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
         <AssistantHeader
           currentUser={currentUser}
           title={frontlineCompletionTask ? "Completed" : activeSection === "profile" ? "Profile" : activeSection === "tasks" && selectedTask ? frontlineRoomLabel(selectedTask.roomOrLocation) : activeSection === "tasks" ? "My Tasks" : experienceMode === "SUPERVISOR" ? "Supervisor" : experienceMode === "MANAGER" ? "Dashboard" : "Home"}
-          nested={Boolean(selectedTask) || Boolean(frontlineCompletionTask)}
+          nested={(activeSection === "tasks" && Boolean(selectedTask)) || Boolean(frontlineCompletionTask)}
           onBack={() => { clearSelectedTask(); setFrontlineCompletionTask(null); setActiveSection(frontlineDetailOrigin === "list" ? "tasks" : "home"); }}
           onMenu={() => { clearSelectedTask(); setFrontlineCompletionTask(null); setActiveSection("home"); }}
           unreadNotificationCount={dashboardSummary?.overview.unreadNotificationCount ?? 0}
@@ -288,16 +312,6 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
               onOpenTasks={() => { setFrontlineCompletionTask(null); clearSelectedTask(); setActiveSection("tasks"); }}
               onAssignTask={(taskId) => { void selectTask(taskId); setActiveSection("tasks"); }}
             />
-            {frontlineSimple && conversationItems.some((item) => item.type === "taskPreview") ? (
-              <View style={styles.taskPreviewSurface}>
-                <ConversationList
-                  items={conversationItems.filter((item) => item.type === "taskPreview")}
-                  onTaskPreviewCancel={() => { void resetConversation(); setComposerText(""); setVoiceTranscript(null); }}
-                  onTaskPreviewCreate={async () => { await confirmTask(); await refreshTasks(); }}
-                  isActionDisabled={assistantActionDisabled}
-                />
-              </View>
-            ) : null}
             {dashboardStaleReason ? (
               <TaskErrorBanner
                 title="Offline data"
@@ -325,7 +339,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
               onCancel={() => void cancelSelectedTask()}
               onInspectionDecision={refreshTasks}
               frontlineSimple
-              onReportIssue={() => { void addImageAttachment("camera"); }}
+              onReportIssue={() => { void addImageAttachment("camera", selectedTask.roomOrLocation); }}
             />
           </ScrollView>
         ) : activeSection === "tasks" ? (
@@ -372,6 +386,20 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
             message={`Operational tools for ${currentUser?.hotelName ?? "this hotel"} will appear here.`}
           />
         )}
+        {frontlineSimple && conversationItems.some((item) => item.type === "taskPreview") ? (
+          <View style={styles.taskPreviewSurface}>
+            <ConversationList
+              items={conversationItems.filter((item) => item.type === "taskPreview")}
+              roomOptions={Array.from(new Set(tasks.map((item) => item.roomOrLocation).filter((value): value is string => Boolean(value))))}
+              onTaskPreviewRoomChange={(room) => { void sendTextMessage(`Use room ${room}`, [], null, []); }}
+              onTaskPreviewCancel={() => { void resetConversation(); setComposerText(""); setVoiceTranscript(null); }}
+              onTaskPreviewCreate={() => { void handlePreviewCreate(); }}
+              isActionDisabled={assistantActionDisabled}
+            />
+          </View>
+        ) : null}
+        {frontlineSimple && taskCreateFeedback ? <View style={styles.taskCreateFeedback}><Text style={styles.taskCreateFeedbackText}>{taskCreateFeedback}</Text></View> : null}
+        {frontlineSimple && visionAnalyzing ? <View style={styles.visionStatus}><ActivityIndicator color={colors.green} size="small" /><Text style={styles.visionStatusText}>Analyzing issue…</Text></View> : null}
         <View style={[styles.footer, isDesktop ? styles.footerDesktop : null]}>
           {isHomeSurface && showAssistantComposer ? (
             <View style={isTablet && !isDesktop ? styles.composerTablet : null}>
@@ -580,6 +608,30 @@ const styles = StyleSheet.create({
     minHeight: 120,
     borderRadius: 16,
     overflow: "hidden"
+  },
+  visionStatus: {
+    marginHorizontal: 12,
+    marginTop: 8,
+    paddingVertical: 10,
+    alignItems: "center",
+    borderRadius: 12,
+    backgroundColor: "#eef8f1"
+  },
+  visionStatusText: {
+    color: colors.green,
+    fontWeight: "800"
+  },
+  taskCreateFeedback: {
+    marginHorizontal: 12,
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: "#e9f7ef"
+  },
+  taskCreateFeedbackText: {
+    color: colors.green,
+    fontWeight: "800",
+    textAlign: "center"
   },
   homeContentTablet: {
     paddingHorizontal: 12

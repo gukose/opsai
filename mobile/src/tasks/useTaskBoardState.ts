@@ -166,18 +166,16 @@ export function useTaskBoardState(
           return;
         }
 
-        const firstTask = nextTasks[0];
-        if (!firstTask) {
+        const resolvedId: string | null =
+          selectedTaskIdRef.current &&
+          nextTasks.some((task) => task.id === selectedTaskIdRef.current)
+            ? selectedTaskIdRef.current
+            : null;
+        if (!resolvedId) {
           setSelectedTaskId(null);
           setSelectedTask(null);
           return;
         }
-
-        const resolvedId: string =
-          selectedTaskIdRef.current &&
-          nextTasks.some((task) => task.id === selectedTaskIdRef.current)
-            ? selectedTaskIdRef.current
-            : selectHomeTask(nextTasks)?.id ?? firstTask.id;
         setSelectedTaskId(resolvedId);
         const detail = await service.getTask(resolvedId);
         setSelectedTask(detail);
@@ -198,8 +196,10 @@ export function useTaskBoardState(
             setTasks(cached.data);
             setCachedAt(cached.cachedAt);
             setStaleReason("Refresh failed. Showing last saved data.");
-            const firstTask = cached.data[0];
-            setSelectedTaskId(firstTask?.id ?? null);
+            const retainedId = selectedTaskIdRef.current && cached.data.some((task) => task.id === selectedTaskIdRef.current)
+              ? selectedTaskIdRef.current
+              : null;
+            setSelectedTaskId(retainedId);
             setSelectedTask(null);
           } else {
             setStaleReason("No saved data is available offline.");

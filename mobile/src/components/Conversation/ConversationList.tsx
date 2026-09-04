@@ -13,6 +13,8 @@ type ConversationListProps = {
   onQuestionActionPress?: (action: ActionQuestion["actions"][number]) => void;
   onTaskPreviewCancel?: () => void;
   onTaskPreviewCreate?: () => void;
+  roomOptions?: string[];
+  onTaskPreviewRoomChange?: (room: string) => void;
   isActionDisabled?: boolean;
 };
 
@@ -21,6 +23,8 @@ export function ConversationList({
   onQuestionActionPress,
   onTaskPreviewCancel,
   onTaskPreviewCreate,
+  roomOptions,
+  onTaskPreviewRoomChange,
   isActionDisabled
 }: ConversationListProps) {
   return (
@@ -70,6 +74,8 @@ export function ConversationList({
               task={item.task}
               onCancel={onTaskPreviewCancel}
               onCreateTask={onTaskPreviewCreate}
+              roomOptions={roomOptions}
+              onRoomChange={onTaskPreviewRoomChange}
               disabled={isActionDisabled}
             />
           ) : null}

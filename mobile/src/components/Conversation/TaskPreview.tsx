@@ -1,4 +1,6 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useMemo, useState } from "react";
+import { X } from "lucide-react-native";
 
 import { colors, shadow, typography } from "../../theme/tokens";
 import { TaskPreviewMessage } from "../../assistant/types";
@@ -8,20 +10,34 @@ type TaskPreviewProps = {
   onCancel?: () => void;
   onCreateTask?: () => void;
   disabled?: boolean;
+  roomOptions?: string[];
+  onRoomChange?: (room: string) => void;
 };
 
-export function TaskPreview({ task, onCancel, onCreateTask, disabled }: TaskPreviewProps) {
+export function TaskPreview({ task, onCancel, onCreateTask, disabled, roomOptions = [], onRoomChange }: TaskPreviewProps) {
+  const [room, setRoom] = useState(task.room || "");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const rooms = useMemo(() => roomOptions.filter((value) => value.toLowerCase().includes(query.trim().toLowerCase())), [roomOptions, query]);
+  const chooseRoom = (value: string) => { setRoom(value); setPickerOpen(false); onRoomChange?.(value); };
   return (
-    <View style={styles.card}>
-      <Text style={styles.title}>Task Preview</Text>
-      <PreviewRow label="Intent" value={task.intent} />
-      <PreviewRow label="Type" value={task.type} />
-      <PreviewRow label="Room" value={task.room} />
-      <PreviewRow label="Description" value={task.description} />
-      <PreviewRow label="Assigned to" value={task.assignedTo} />
-      <PreviewRow label="Priority" value={task.priority} />
-      <PreviewRow label="SLA" value={task.sla} />
-      <View style={styles.actions}>
+    <Modal transparent visible animationType="slide" onRequestClose={onCancel}>
+      <View style={styles.backdrop}>
+        <Pressable style={styles.dismissArea} onPress={onCancel} />
+        <View style={styles.sheet}>
+          <View style={styles.handle} />
+          <View style={styles.header}><Text style={styles.title}>Task Preview</Text><Pressable accessibilityRole="button" accessibilityLabel="Close task preview" onPress={onCancel}><X color={colors.nav} size={21} /></Pressable></View>
+          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            <Text style={styles.fieldLabel}>Room</Text>
+            <Pressable style={styles.selectField} onPress={() => setPickerOpen(true)}><Text style={styles.selectValue}>{room || "Select room"}</Text><Text style={styles.selectChevron}>⌄</Text></Pressable>
+            {pickerOpen ? <View style={styles.picker}><TextInput autoFocus value={query} onChangeText={setQuery} placeholder="Search room..." style={styles.search} /><ScrollView style={styles.pickerList}>{rooms.map((value) => <Pressable key={value} style={styles.roomOption} onPress={() => chooseRoom(value)}><Text style={styles.value}>ROOM {value.replace(/^ROOM\s+/i, "")}</Text></Pressable>)}</ScrollView></View> : null}
+            <PreviewRow label="Issue" value={task.intent || task.type} />
+            <PreviewRow label="Category" value={friendlyCategory(task.type)} />
+            <PreviewRow label="Priority" value={friendlyPriority(task.priority)} />
+            <PreviewRow label="Description" value={task.description} />
+            <Text style={styles.assignment}>Will be assigned automatically if a suitable employee is available.</Text>
+          </ScrollView>
+          <View style={styles.actions}>
         <Pressable
           accessibilityRole="button"
           disabled={disabled}
@@ -44,12 +60,17 @@ export function TaskPreview({ task, onCancel, onCreateTask, disabled }: TaskPrev
             disabled ? styles.disabled : null
           ]}
         >
-          <Text style={styles.createLabel}>Create Task</Text>
+          <Text style={styles.createLabel}>{disabled ? "Creating…" : "Create Task"}</Text>
         </Pressable>
+          </View>
+        </View>
       </View>
-    </View>
+    </Modal>
   );
 }
+
+function friendlyCategory(value: string): string { const normalized = value.toUpperCase(); if (normalized.includes("MINIBAR")) return "Minibar"; if (normalized.includes("HOUSE") || normalized.includes("CLEAN")) return "Housekeeping"; if (normalized.includes("GUEST")) return "Guest Request"; return "Technical Service"; }
+function friendlyPriority(value: string): string { const normalized = value.toUpperCase(); if (normalized.includes("URGENT")) return "Urgent"; if (normalized.includes("HIGH")) return "High"; if (normalized.includes("LOW")) return "Low"; return "Medium"; }
 
 function PreviewRow({ label, value }: { label: string; value: string }) {
   return (
@@ -74,6 +95,21 @@ const styles = StyleSheet.create({
     paddingBottom: 7,
     ...shadow.card
   },
+  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(15, 23, 42, 0.36)" },
+  dismissArea: { flex: 1 },
+  sheet: { maxHeight: "74%", borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: colors.surface, paddingTop: 8, paddingHorizontal: 18, paddingBottom: 20, ...shadow.card },
+  handle: { alignSelf: "center", width: 38, height: 4, borderRadius: 3, backgroundColor: colors.cardBorder, marginBottom: 12 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  content: { paddingVertical: 14, gap: 3 },
+  fieldLabel: { color: colors.textMuted, fontSize: typography.caption, fontWeight: "700", marginTop: 4 },
+  selectField: { minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: colors.cardBorder, borderRadius: 9, paddingHorizontal: 12, backgroundColor: colors.surface },
+  selectValue: { color: colors.text, fontSize: typography.caption, fontWeight: "900" },
+  selectChevron: { color: colors.textMuted, fontSize: 18 },
+  picker: { borderWidth: 1, borderColor: colors.cardBorder, borderRadius: 10, padding: 8, backgroundColor: colors.surface },
+  search: { borderWidth: 1, borderColor: colors.cardBorder, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 7, color: colors.text },
+  pickerList: { maxHeight: 150 },
+  roomOption: { paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  assignment: { marginTop: 12, color: colors.textMuted, fontSize: typography.caption, lineHeight: 18 },
   title: {
     marginBottom: 5,
     color: colors.text,

@@ -7,7 +7,7 @@ data class OperationalIntentResult(val intent:OperationalIntent,val confidence:D
   listOf("hvac","air condition","klima","leak","sızıntı","broken light","elektrik").any(n::contains)->OperationalIntent.MAINTENANCE_REQUEST to OperationalEntities(location,"TECHNICAL",if("urgent" in n||"acil" in n)"URGENT" else "HIGH","MAINTENANCE",if("hvac" in n||"air condition" in n||"klima" in n)"HVAC" else null)
   listOf("minibar","consumed","içildi","eksik ürün").any(n::contains)->OperationalIntent.MINIBAR_REPORT to OperationalEntities(location,"MINIBAR","HIGH","HOUSEKEEPING","MINIBAR")
   listOf("damage","damaged","hasar","kırık").any(n::contains)->OperationalIntent.DAMAGE_REPORT to OperationalEntities(location,"DAMAGE","HIGH","MAINTENANCE",null)
-  listOf("clean","housekeeping","temizlik").any(n::contains)->OperationalIntent.HOUSEKEEPING_REQUEST to OperationalEntities(location,"HOUSEKEEPING","MEDIUM","HOUSEKEEPING",null)
+  listOf("clean","housekeeping","temizlik","dirty","pis","kirli").any(n::contains)->OperationalIntent.HOUSEKEEPING_REQUEST to OperationalEntities(location,"HOUSEKEEPING","MEDIUM","HOUSEKEEPING",null)
   listOf("complaint","unhappy","şikayet","service recovery").any(n::contains)->OperationalIntent.SERVICE_RECOVERY to OperationalEntities(location,"COMPLAINT","HIGH","FRONT_OFFICE",null)
   listOf("towel","water","pillow","havlu","su","yastık").any(n::contains)->OperationalIntent.GUEST_REQUEST to OperationalEntities(location,"GUEST_REQUEST","MEDIUM","HOUSEKEEPING",null)
   n.length>=20->OperationalIntent.GENERAL_OPERATIONAL_NOTE to OperationalEntities(location,"NOTE","LOW",null,null)
