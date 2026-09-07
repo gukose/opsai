@@ -80,7 +80,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
     if (!frontlineSimple || !currentUser?.hotelId) return;
     let active = true;
     setRoomMasterLoading(true); setRoomMasterError(null);
-    void roomClient.call<{ items?: Array<{ roomNumber: string; active?: boolean }> }>("GET", (sdk, signal) => sdk.request({ method: "GET", path: `/api/v1/internal/admin/hotels/${currentUser.hotelId}/rooms`, auth: true, query: { page: 0, size: 200, active: true }, signal }))
+    void roomClient.call<{ items?: Array<{ roomNumber: string; active?: boolean }> }>("GET", (sdk, signal) => sdk.request({ method: "GET", path: `/api/v1/internal/admin/hotels/${currentUser.hotelId}/rooms/lookup`, auth: true, query: { page: 0, size: 200, active: true }, signal }))
       .then((response) => { if (active) setRoomMaster((response.items ?? []).filter((room) => room.active !== false).map((room) => room.roomNumber)); })
       .catch(() => { if (active) setRoomMasterError("Couldn’t load rooms."); })
       .finally(() => { if (active) setRoomMasterLoading(false); });
