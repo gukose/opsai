@@ -45,7 +45,7 @@ type TaskBoardState = {
   startHomeTask: () => Promise<void>;
   resumeHomeTask: () => Promise<void>;
   assignmentCandidates: AssignmentCandidate[];
-  refreshAssignmentCandidates: () => Promise<void>;
+  refreshAssignmentCandidates: (taskId?: string) => Promise<void>;
   assignSelectedTask: (candidate: AssignmentCandidate) => Promise<void>;
 };
 
@@ -91,7 +91,7 @@ export function useTaskBoardState(
     }
     setAssignmentCandidates([]);
     const candidates = await service.assignmentCandidates(taskId);
-    if (selectedTaskIdRef.current === taskId) {
+    if (selectedTaskIdRef.current === taskId || taskId !== undefined) {
       setAssignmentCandidates(candidates);
     }
   }, [currentUser?.permissions, service]);
@@ -368,8 +368,8 @@ export function useTaskBoardState(
     startHomeTask: async () => runHomeCommand((taskId) => service.startTask(taskId)),
     resumeHomeTask: async () => runHomeCommand((taskId) => service.resumeTask(taskId)),
     assignmentCandidates,
-    refreshAssignmentCandidates: async () => {
-      await refreshAssignmentCandidates();
+    refreshAssignmentCandidates: async (taskId?: string) => {
+      await refreshAssignmentCandidates(taskId);
     },
     assignSelectedTask: async (candidate) => {
       const succeeded = await runCommand(null, (taskId) => service.assignTask(taskId, candidate));

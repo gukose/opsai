@@ -47,10 +47,10 @@ export function BottomNavigation({ activeKey, currentUser, onSelect, onAssistant
   const items = mode === "FRONTLINE_SIMPLE"
     ? baseItems.filter((item) => item.key === "tasks" || item.key === "profile")
     : mode === "SUPERVISOR"
-      ? baseItems.filter((item) => item.key === "home" || item.key === "profile")
+      ? baseItems.filter((item) => item.key === "tasks" || item.key === "profile")
       : baseItems.filter((item) => item.key === "operations" || item.key === "profile");
   const visibleItems = items.map((item) => item.key === "home"
-    ? { ...item, label: mode === "SUPERVISOR" ? "Tasks" : "Home" }
+    ? { ...item, label: mode === "SUPERVISOR" ? "My Tasks" : "Home" }
     : item.key === "tasks" && mode === "FRONTLINE_SIMPLE" ? { ...item, label: "My Tasks" } : item);
   const centerSplitIndex = visibleItems.length <= 2 ? 1 : 2;
 

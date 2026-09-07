@@ -315,7 +315,7 @@ function frontlineTaskIcon(task: TaskDetail): ComponentType<LucideProps> {
   return BedDouble;
 }
 
-function AssignmentModal({
+export function AssignmentModal({
   visible, task, candidates, selectedCandidate, query, error, assigning, onQueryChange, onSelect, onCancel, onConfirm
 }: {
   visible: boolean;

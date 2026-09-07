@@ -37,7 +37,7 @@ import { KnowledgeAssistantScreen } from "../Knowledge/KnowledgeAssistantScreen"
 import { VoiceRecorderPanel } from "../Voice/VoiceRecorderPanel";
 import { resolveResponsiveLayout } from "../../layout/responsiveLayout";
 import { AdministrationScreen } from "../Admin/AdministrationScreen";
-import { TaskDetailCard } from "../Tasks/TaskDetailCard";
+import { AssignmentModal, TaskDetailCard } from "../Tasks/TaskDetailCard";
 import { ConversationList } from "../Conversation/ConversationList";
 import { resolveExperienceMode, UserExperienceMode } from "../../auth/experienceMode";
 import { FrontlineCompletionScreen, RoleAdaptiveHome } from "./RoleAdaptiveHome";
@@ -74,6 +74,12 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
   const [roomMasterError, setRoomMasterError] = useState<string | null>(null);
   const [roomMasterRetry, setRoomMasterRetry] = useState(0);
   const [voiceAnalyzing, setVoiceAnalyzing] = useState(false);
+  const [homeAssignmentOpen, setHomeAssignmentOpen] = useState(false);
+  const [homeAssignmentTaskId, setHomeAssignmentTaskId] = useState<string | null>(null);
+  const [homeAssignmentCandidate, setHomeAssignmentCandidate] = useState<import("../../tasks/types").AssignmentCandidate | null>(null);
+  const [homeAssignmentQuery, setHomeAssignmentQuery] = useState("");
+  const [homeAssignmentError, setHomeAssignmentError] = useState<string | null>(null);
+  const [homeAssigning, setHomeAssigning] = useState(false);
   const roomClient = useMemo(() => new MobileHotelOpAiClient({ accessTokenProvider: () => accessToken, refreshAccessToken }), [accessToken, refreshAccessToken]);
 
   useEffect(() => {
@@ -330,7 +336,14 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
               onResumeTask={() => void resumeHomeTask()}
               onOpenTask={async (taskId) => { setFrontlineDetailOrigin("home"); await selectTask(taskId); setActiveSection("tasks"); }}
               onOpenTasks={() => { setFrontlineCompletionTask(null); clearSelectedTask(); setActiveSection("tasks"); }}
-              onAssignTask={(taskId) => { void selectTask(taskId); setActiveSection("tasks"); }}
+              onAssignTask={(taskId) => {
+                setHomeAssignmentTaskId(taskId);
+                setHomeAssignmentCandidate(null);
+                setHomeAssignmentQuery("");
+                setHomeAssignmentError(null);
+                setHomeAssignmentOpen(true);
+                void (async () => { try { await selectTask(taskId); await refreshAssignmentCandidates(taskId); } catch { setHomeAssignmentError("Unable to load employees. Please try again."); } })();
+              }}
             />
             {dashboardStaleReason ? (
               <TaskErrorBanner
@@ -422,6 +435,21 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
           </View>
         ) : null}
         {frontlineSimple && taskCreateFeedback ? <View style={styles.taskCreateFeedback}><Text style={styles.taskCreateFeedbackText}>{taskCreateFeedback}</Text></View> : null}
+        {experienceMode === "SUPERVISOR" && homeAssignmentOpen && homeAssignmentTaskId && selectedTask?.id === homeAssignmentTaskId ? (
+          <AssignmentModal
+            visible
+            task={selectedTask}
+            candidates={assignmentCandidates.filter((candidate) => !homeAssignmentQuery.trim() || `${candidate.displayName} ${candidate.skillCodes.join(" ")}`.toLowerCase().includes(homeAssignmentQuery.trim().toLowerCase()))}
+            selectedCandidate={homeAssignmentCandidate}
+            query={homeAssignmentQuery}
+            error={homeAssignmentError}
+            assigning={homeAssigning}
+            onQueryChange={setHomeAssignmentQuery}
+            onSelect={setHomeAssignmentCandidate}
+            onCancel={() => { setHomeAssignmentOpen(false); setHomeAssignmentTaskId(null); setHomeAssignmentCandidate(null); }}
+            onConfirm={() => { if (!homeAssignmentCandidate || homeAssigning) return; setHomeAssigning(true); void assignSelectedTask(homeAssignmentCandidate).then(() => { setHomeAssignmentOpen(false); setHomeAssignmentTaskId(null); setHomeAssignmentCandidate(null); void refreshTasks(); }).catch((error) => setHomeAssignmentError(error instanceof Error ? error.message : "Assignment failed. Try again.")).finally(() => setHomeAssigning(false)); }}
+          />
+        ) : null}
         {frontlineSimple && (visionAnalyzing || voiceAnalyzing) ? <View style={styles.visionStatus}><ActivityIndicator color={colors.green} size="small" /><Text style={styles.visionStatusText}>{voiceAnalyzing ? "Understanding request…" : "Analyzing issue…"}</Text></View> : null}
         <View style={[styles.footer, isDesktop ? styles.footerDesktop : null]}>
           {isHomeSurface && showAssistantComposer ? (
