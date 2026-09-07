@@ -26,6 +26,11 @@ import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import com.hotelopai.housekeeping.application.HousekeepingRepository
 import com.hotelopai.housekeeping.domain.HousekeepingStatus
+import com.hotelopai.assistant.application.AttachmentObjectStorage
+import org.springframework.core.io.InputStreamResource
+import org.springframework.http.ResponseEntity
+import org.springframework.http.MediaType
+import java.util.UUID
 
 @RestController
 @RequestMapping("/api/v1/tasks")
@@ -36,7 +41,8 @@ class TaskController(
     private val supervisorTaskAssignmentService: SupervisorTaskAssignmentService,
     private val taskAssignmentCandidateQuery: TaskAssignmentCandidateQuery,
     private val taskResponseMapper: TaskResponseMapper,
-    private val housekeepingRepository: HousekeepingRepository? = null
+    private val housekeepingRepository: HousekeepingRepository? = null,
+    private val attachmentObjectStorage: AttachmentObjectStorage? = null
 ) {
     @PostMapping
     @PreAuthorize(PermissionExpressions.TASK_CREATE)
@@ -66,6 +72,21 @@ class TaskController(
         return taskAttachmentLinkService
             .listTaskAttachments(taskId, currentUser.hotelId)
             .map(TaskAttachmentResponse::from)
+    }
+
+    @GetMapping("/{taskId}/attachments/{attachmentId}/content")
+    @PreAuthorize(PermissionExpressions.TASK_ATTACHMENT_READ)
+    fun getTaskAttachmentContent(@PathVariable taskId: String, @PathVariable attachmentId: String): ResponseEntity<Any> {
+        val current = currentUserContextResolver.current()
+        taskLifecycleService.getTaskForScope(taskId, TaskVisibilityScope.from(current))
+        val link = taskAttachmentLinkService.listTaskAttachments(taskId, current.hotelId)
+            .firstOrNull { it.attachmentId == UUID.fromString(attachmentId) }
+            ?: return ResponseEntity.notFound().build()
+        val reference = link.storageReference ?: return ResponseEntity.notFound().build()
+        val storage = attachmentObjectStorage ?: return ResponseEntity.notFound().build()
+        val body = InputStreamResource(storage.read(reference))
+        return ResponseEntity.ok().contentType(MediaType.parseMediaType(link.declaredMimeType))
+            .contentLength(link.declaredSizeBytes).body(body)
     }
 
     @GetMapping

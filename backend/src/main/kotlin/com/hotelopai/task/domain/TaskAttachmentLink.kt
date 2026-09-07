@@ -46,6 +46,7 @@ data class TaskAttachmentLinkView(
     val widthPx: Int?,
     val heightPx: Int?,
     val storageStatus: String,
+    val storageReference: String?,
     val sourceType: TaskAttachmentSourceType,
     val analysisId: UUID?,
     val analysisImportId: UUID?,

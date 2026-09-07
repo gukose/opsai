@@ -10,7 +10,10 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.multipart.MultipartFile
+import java.util.UUID
 
 @RestController
 @RequestMapping("/api/v1/assistant/conversations")
@@ -93,6 +96,23 @@ class AssistantConversationController(
             )
         }
 
+    @PostMapping("/{conversationId}/attachments/{attachmentId}/content")
+    @PreAuthorize(PermissionExpressions.ASSISTANT_ATTACHMENT_REGISTER)
+    fun uploadAttachmentContent(
+        @PathVariable conversationId: String,
+        @PathVariable attachmentId: String,
+        @RequestPart("file") file: MultipartFile
+    ): RegisteredAssistantAttachmentResponse {
+        val current = currentUserContextResolver.current()
+        val attachment = assistantAttachmentRegistrationService.resolveMessageAttachmentReferences(
+            conversationId, current.hotelId.toString(), current.userId.toString(), listOf(attachmentId)
+        ).first()
+        val updated = assistantAttachmentRegistrationService.persistImage(
+            UUID.fromString(attachmentId), current.hotelId.toString(), file.bytes,
+            file.contentType ?: "application/octet-stream", file.originalFilename ?: "attachment"
+        )
+        return RegisteredAssistantAttachmentResponse.from(updated)
+    }
     @PostMapping("/{conversationId}/confirm")
     @PreAuthorize(PermissionExpressions.ASSISTANT_CONFIRM_TASK)
     fun confirmTask(

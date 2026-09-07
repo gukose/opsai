@@ -41,6 +41,10 @@ export interface AssistantApi {
 export class HttpAssistantApi implements AssistantApi {
   constructor(private readonly client: MobileHotelOpAiClient) {}
 
+  uploadAttachmentContent(conversationId: string, attachmentId: string, formData: FormData) {
+    return this.client.uploadMultipart<RegisteredAssistantAttachmentResponseDto>(`/api/v1/assistant/conversations/${encodeURIComponent(conversationId)}/attachments/${encodeURIComponent(attachmentId)}/content`, formData).then(toRegisteredAssistantAttachment);
+  }
+
   startConversation(
     request: AssistantStartConversationRequestDto
   ): Promise<AssistantConversationResponseDto> {

@@ -22,6 +22,8 @@ export interface AssistantDataSource {
     attachment: LocalAttachmentMetadata
   ): Promise<RegisteredAttachmentResponse>;
 
+  uploadAttachmentContent?(conversationId: string, attachmentId: string, attachment: LocalAttachmentMetadata): Promise<RegisteredAttachmentResponse>;
+
   sendVoiceMessage(
     conversationId: string,
     transcript: string,

@@ -98,6 +98,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
     conversationItems,
     sendTextMessage,
     registerAttachment,
+    uploadAttachmentContent,
     confirmTask,
     resetConversation,
     isSending,
@@ -217,6 +218,10 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
         throw new Error("Attachment registration is unavailable.");
       }
       const registered = applyRegisteredAttachment(attachment, response);
+      if (attachment.type === "IMAGE") {
+        const uploaded = await uploadAttachmentContent(registered.id, attachment);
+        if (!uploaded) throw new Error("Photo upload failed.");
+      }
       setSelectedAttachments((current) =>
         current.map((item) => (item.id === attachment.id ? registered : item))
       );

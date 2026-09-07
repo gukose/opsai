@@ -46,6 +46,18 @@ export class MobileHotelOpAiClient {
     this.delay = options.delay ?? sleep;
   }
 
+  async uploadMultipart<T>(path: string, formData: FormData): Promise<T> {
+    const token = this.accessTokenProvider?.();
+    if (!token) throw new Error("Authentication required");
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData
+    });
+    if (!response.ok) throw new Error(`Attachment upload failed with ${response.status}`);
+    return response.json() as Promise<T>;
+  }
+
   async call<T>(
     method: HttpMethod,
     operation: (client: HotelOpAiClient, signal: AbortSignal) => Promise<ApiResponse<T>>,

@@ -29,6 +29,7 @@ type AssistantHomeController = AssistantHomeState & {
     imageObservations?: LocalImageObservationMetadata[]
   ) => Promise<boolean>;
   registerAttachment: (attachment: LocalAttachmentMetadata) => Promise<RegisteredAttachmentResponse | null>;
+  uploadAttachmentContent: (attachmentId: string, attachment: LocalAttachmentMetadata) => Promise<boolean>;
   confirmTask: () => Promise<string | null>;
   resetConversation: () => Promise<void>;
 };
@@ -219,6 +220,10 @@ export function useAssistantHomeState({
     },
     [dataSource, ensureConversation]
   );
+  const uploadAttachmentContent = useCallback(async (attachmentId: string, attachment: LocalAttachmentMetadata) => {
+    try { const conversationId = await ensureConversation(); if (!conversationId || !dataSource.uploadAttachmentContent) return false; await dataSource.uploadAttachmentContent(conversationId, attachmentId, attachment); return true; }
+    catch (error) { handleError(error); return false; }
+  }, [dataSource, ensureConversation, handleError]);
 
   const confirmTask = useCallback(async () => {
     if (assistantStaticMockEnabled) {
@@ -297,6 +302,7 @@ export function useAssistantHomeState({
     errorMessage,
     sendTextMessage,
     registerAttachment,
+    uploadAttachmentContent,
     confirmTask,
     resetConversation
   };

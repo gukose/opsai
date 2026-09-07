@@ -77,6 +77,7 @@ export type TaskAttachmentMetadata = {
   analysisId: string | null;
   analysisImportId: string | null;
   createdAt: string;
+  previewAvailable: boolean;
 };
 
 export function taskSummaryFromResponse(task: TaskResponseDto): TaskSummary {
@@ -138,7 +139,8 @@ export function taskAttachmentFromResponse(attachment: TaskAttachmentResponseDto
     sourceType: taskAttachmentSourceType(attachment.sourceType),
     analysisId: attachment.analysisId ?? null,
     analysisImportId: attachment.analysisImportId ?? null,
-    createdAt: attachment.createdAt
+    createdAt: attachment.createdAt,
+    previewAvailable: Boolean((attachment as TaskAttachmentResponseDto & { previewAvailable?: boolean }).previewAvailable)
   };
 }
 

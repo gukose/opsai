@@ -11,6 +11,7 @@ import {
   TaskSummary,
   TaskAttachmentMetadata
 } from "./types";
+import * as FileSystem from "expo-file-system/legacy";
 
 export class TaskService {
   private readonly taskApi: HttpTaskApi;
@@ -62,6 +63,19 @@ export class TaskService {
       }
       throw error;
     }
+  }
+
+  async downloadTaskAttachment(taskId: string, attachmentId: string): Promise<string> {
+    const token = this.accessTokenProvider();
+    if (!token) throw new Error("Authentication required");
+    const destination = `${FileSystem.cacheDirectory ?? FileSystem.documentDirectory}task-${taskId}-${attachmentId}`;
+    const result = await FileSystem.downloadAsync(
+      `${appApiBaseUrl}/api/v1/tasks/${encodeURIComponent(taskId)}/attachments/${encodeURIComponent(attachmentId)}/content`,
+      destination,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (result.status < 200 || result.status >= 300) throw new Error(`Attachment request failed with ${result.status}`);
+    return result.uri;
   }
 
   async startTask(taskId: string): Promise<TaskDetail> {

@@ -82,6 +82,12 @@ export class BackendAssistantDataSource implements AssistantDataSource {
     return this.api.registerAttachment(conversationId, buildAttachmentRegistrationRequest(attachment));
   }
 
+  async uploadAttachmentContent(conversationId: string, attachmentId: string, attachment: LocalAttachmentMetadata): Promise<RegisteredAttachmentResponse> {
+    const form = new FormData();
+    form.append("file", { uri: attachment.localUri ?? attachment.localReference, name: attachment.originalFileName, type: attachment.mimeType } as unknown as Blob);
+    return this.api.uploadAttachmentContent(conversationId, attachmentId, form) as Promise<RegisteredAttachmentResponse>;
+  }
+
   async sendVoiceMessage(
     conversationId: string,
     transcript: string,

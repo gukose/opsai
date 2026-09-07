@@ -19,6 +19,8 @@ interface AssistantAttachmentRepository {
         userId: String,
         registrationIdempotencyKey: String
     ): RegisteredConversationAttachment?
+
+    fun updateStorageReference(id: UUID, hotelId: String, reference: String): RegisteredConversationAttachment
 }
 
 class AssistantAttachmentIdempotencyConflictException(message: String) : RuntimeException(message)

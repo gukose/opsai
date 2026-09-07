@@ -1,6 +1,6 @@
 import { ComponentType } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { AppState, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { AppState, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View, Image, ActivityIndicator } from "react-native";
 import { CalendarDays, Clock3, Flag, MapPin, Play, Pause, RotateCcw, Ban, CheckCheck, Image as ImageIcon, FileText, BedDouble, Wrench, ShoppingBasket } from "lucide-react-native";
 import { LucideProps } from "lucide-react-native";
 
@@ -14,6 +14,8 @@ import { hasPermission } from "../../auth/currentUserHelpers";
 import { InspectionApi, InspectionDetail } from "../../api/housekeeping/InspectionApi";
 import { createMobileHotelOpAiClient } from "../../api/hotelOpAiClient";
 import { calculateSlaRemainingSeconds, formatDurationShort, targetDurationSeconds } from "../../tasks/taskSlaPolicy";
+import * as FileSystem from "expo-file-system/legacy";
+import { appApiBaseUrl } from "../../config/appConfig";
 
 type TaskDetailCardProps = {
   task: TaskDetail;
@@ -129,6 +131,7 @@ export function TaskDetailCard({
       onResume={onResume}
       onComplete={onComplete}
       onReportIssue={onReportIssue}
+      accessToken={accessToken}
       canAssign={Boolean(onAssign)}
       assignmentLabel={task.assignmentLabel}
       assignmentOpen={assignmentOpen}
@@ -213,7 +216,7 @@ export function TaskDetailCard({
         <InfoChip label="Assignee" value={task.assigneeType ?? "N/A"} />
       </View> : null}
 
-      {!frontlineSimple ? <TaskAttachmentSection task={task} /> : null}
+      {!frontlineSimple ? <TaskAttachmentSection task={task} accessToken={accessToken} /> : null}
 
       <View style={styles.actions}>
         {actions.start ? (
@@ -271,7 +274,7 @@ export function TaskDetailCard({
   );
 }
 
-function FrontlineTaskExecution({ task, productiveSeconds, targetSeconds, actions, disabled, onStart, onPause, onResume, onComplete, onReportIssue, canAssign, assignmentLabel, assignmentOpen, assignmentCandidates, selectedCandidate, candidateQuery, assignmentError, assigning, onAssignmentOpen, onCandidateQueryChange, onCandidateSelect, onAssignmentCancel, onAssignmentConfirm }: {
+function FrontlineTaskExecution({ task, productiveSeconds, targetSeconds, actions, disabled, onStart, onPause, onResume, onComplete, onReportIssue, canAssign, assignmentLabel, assignmentOpen, assignmentCandidates, selectedCandidate, candidateQuery, assignmentError, assigning, onAssignmentOpen, onCandidateQueryChange, onCandidateSelect, onAssignmentCancel, onAssignmentConfirm, accessToken }: {
   task: TaskDetail;
   productiveSeconds: number;
   targetSeconds: number;
@@ -283,6 +286,7 @@ function FrontlineTaskExecution({ task, productiveSeconds, targetSeconds, action
   onComplete?: () => void;
   onReportIssue?: () => void;
   canAssign?: boolean; assignmentLabel?: string | null; assignmentOpen?: boolean; assignmentCandidates?: AssignmentCandidate[]; selectedCandidate?: AssignmentCandidate | null; candidateQuery?: string; assignmentError?: string | null; assigning?: boolean; onAssignmentOpen?: () => void; onCandidateQueryChange?: (value: string) => void; onCandidateSelect?: (candidate: AssignmentCandidate) => void; onAssignmentCancel?: () => void; onAssignmentConfirm?: () => void;
+  accessToken?: string | null;
 }) {
   const status = frontlineState(task);
   const remaining = Math.max(0, targetSeconds - productiveSeconds);
@@ -321,7 +325,7 @@ function FrontlineTaskExecution({ task, productiveSeconds, targetSeconds, action
     </View>
     {canAssign ? <View style={styles.assignmentPanel}><View style={styles.assignmentHeader}><Text style={styles.attachmentSectionTitle}>{assignmentLabel ? "Assigned" : "Needs Assignment"}</Text><Pressable onPress={onAssignmentOpen} disabled={disabled} style={styles.assignButton}><Text style={styles.assignButtonLabel}>{assignmentLabel ? "Reassign" : "Assign"}</Text></Pressable></View></View> : null}
     {canAssign ? <AssignmentModal visible={Boolean(assignmentOpen)} task={task} candidates={assignmentCandidates ?? []} selectedCandidate={selectedCandidate ?? null} query={candidateQuery ?? ""} error={assignmentError ?? null} assigning={Boolean(assigning)} onQueryChange={onCandidateQueryChange ?? (() => undefined)} onSelect={onCandidateSelect ?? (() => undefined)} onCancel={onAssignmentCancel ?? (() => undefined)} onConfirm={onAssignmentConfirm ?? (() => undefined)} /> : null}
-    <TaskAttachmentSection task={task} />
+    <TaskAttachmentSection task={task} accessToken={accessToken} />
   </View>;
 }
 
@@ -407,14 +411,30 @@ export function AssignmentModal({
   );
 }
 
-function TaskAttachmentSection({ task }: { task: TaskDetail }) {
+function TaskAttachmentSection({ task, accessToken }: { task: TaskDetail; accessToken?: string | null }) {
   const attachments = task.attachments ?? [];
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [loadingPhoto, setLoadingPhoto] = useState(false);
+  const [photoModal, setPhotoModal] = useState(false);
+  const image = attachments.find((item) => item.type === "IMAGE" && item.previewAvailable);
+  const loadPhoto = async () => {
+    if (!image || !accessToken || loadingPhoto) return;
+    setLoadingPhoto(true); setPhotoError(null);
+    try {
+      const target = `${FileSystem.cacheDirectory ?? FileSystem.documentDirectory}task-attachment-${image.attachmentId}`;
+      const result = await FileSystem.downloadAsync(`${appApiBaseUrl}/api/v1/tasks/${encodeURIComponent(task.id)}/attachments/${encodeURIComponent(image.attachmentId)}/content`, target, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (result.status < 200 || result.status >= 300) throw new Error(`Attachment request failed with ${result.status}`);
+      setPhotoUri(result.uri); setPhotoModal(true);
+    } catch { setPhotoError("Unable to load photo."); } finally { setLoadingPhoto(false); }
+  };
   if (attachments.length === 0) return null;
   return (
     <View style={styles.attachmentSection}>
       <Text style={styles.attachmentSectionTitle}>Attachments</Text>
       {attachments.map((attachment) => (
           <View key={`${attachment.attachmentId}-${attachment.sourceType}`} style={styles.attachmentRow}>
+            {attachment.type === "IMAGE" && attachment.previewAvailable ? <Pressable onPress={() => photoUri ? setPhotoModal(true) : void loadPhoto()} accessibilityRole="button" accessibilityLabel="Open attachment photo"><View style={styles.attachmentThumbnail}>{photoUri ? <Image source={{ uri: photoUri }} style={styles.attachmentImage} /> : loadingPhoto ? <ActivityIndicator color={colors.blue} /> : <ImageIcon color={colors.blue} size={22} />}</View></Pressable> : null}
             <View style={styles.detailIcon}>
               {attachment.transcript ? <FileText color={colors.blue} size={12} strokeWidth={2.2} /> : <ImageIcon color={colors.blue} size={12} strokeWidth={2.2} />}
             </View>
@@ -430,11 +450,13 @@ function TaskAttachmentSection({ task }: { task: TaskDetail }) {
                 </Text>
               ) : null}
               <Text style={styles.attachmentMeta} numberOfLines={1}>
-                Registered metadata · {attachment.sourceType === "VISION_ANALYSIS" ? "Vision provenance" : "Assistant message"}
+                {attachment.previewAvailable ? "Photo available" : "Metadata only"} · {attachment.sourceType === "VISION_ANALYSIS" ? "Vision provenance" : "Assistant message"}
               </Text>
+              {photoError ? <Text style={styles.modalError}>{photoError}</Text> : null}
             </View>
           </View>
         ))}
+      {image && photoUri ? <Modal visible={photoModal} transparent animationType="fade" onRequestClose={() => setPhotoModal(false)}><View style={styles.photoModal}><Pressable accessibilityRole="button" accessibilityLabel="Close photo" onPress={() => setPhotoModal(false)} style={styles.photoClose}><Text style={styles.photoCloseText}>×</Text></Pressable><Image source={{ uri: photoUri }} style={styles.photoFull} /></View></Modal> : null}
     </View>
   );
 }
@@ -732,6 +754,24 @@ const styles = StyleSheet.create({
     backgroundColor: "#f7f8fa",
     padding: 7
   },
+  attachmentThumbnail: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.sm,
+    backgroundColor: "#eaf2ff",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden"
+  },
+  attachmentImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover"
+  },
+  photoModal: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", alignItems: "center", justifyContent: "center", padding: 16 },
+  photoFull: { width: "100%", height: "80%", resizeMode: "contain" },
+  photoClose: { position: "absolute", top: 48, right: 20, zIndex: 2, width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
+  photoCloseText: { color: "#fff", fontSize: 28, lineHeight: 30 },
   attachmentBody: {
     flex: 1,
     minWidth: 0

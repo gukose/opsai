@@ -17,8 +17,16 @@ import java.util.UUID
 class AssistantAttachmentRegistrationService(
     private val conversationRepository: ConversationRepository,
     private val attachmentRepository: AssistantAttachmentRepository,
-    private val observability: OperationalObservability = OperationalObservability.noop()
+    private val observability: OperationalObservability = OperationalObservability.noop(),
+    private val objectStorage: AttachmentObjectStorage? = null
 ) {
+    fun persistImage(id: UUID, hotelId: String, bytes: ByteArray, contentType: String, fileName: String): RegisteredConversationAttachment {
+        require(bytes.isNotEmpty() && bytes.size <= 10_000_000) { "Attachment must be between 1 byte and 10 MB" }
+        require(contentType in setOf("image/jpeg", "image/png", "image/webp")) { "Unsupported image type" }
+        val reference = "hotels/$hotelId/attachments/$id/${fileName.replace(Regex("[^A-Za-z0-9._-]"), "_")}"
+        objectStorage?.store(reference, bytes, contentType) ?: error("Attachment storage is not configured")
+        return attachmentRepository.updateStorageReference(id, hotelId, reference)
+    }
     @Transactional
     fun register(
         conversationId: String,

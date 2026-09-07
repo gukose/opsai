@@ -19,6 +19,16 @@ import java.util.UUID
 class AssistantAttachmentPersistenceRepository(
     private val jdbcTemplate: NamedParameterJdbcTemplate
 ) : AssistantAttachmentRepository {
+    override fun updateStorageReference(id: UUID, hotelId: String, reference: String): RegisteredConversationAttachment {
+        jdbcTemplate.update(
+            "update assistant_attachment set storage_reference = :reference, updated_at = now() where id = :id and hotel_id = :hotelId",
+            mapOf("id" to id, "hotelId" to hotelId, "reference" to reference)
+        ).also { check(it == 1) { "Attachment not found while storing media" } }
+        return jdbcTemplate.queryForObject(
+            "select id, conversation_id, hotel_id, user_id, type, original_file_name, declared_mime_type, declared_size_bytes, width_px, height_px, storage_status, storage_reference, transcript_text, registration_idempotency_key, created_at, updated_at from assistant_attachment where id = :id",
+            mapOf("id" to id)
+        ) { rs, _ -> rs.toRegisteredAttachment() }!!
+    }
     override fun save(attachment: RegisteredConversationAttachment): RegisteredConversationAttachment {
         val normalized = attachment.normalizedForPersistence()
         val inserted = jdbcTemplate.update(
