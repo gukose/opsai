@@ -359,7 +359,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
           <ScrollView style={styles.homeScroll} contentContainerStyle={styles.homeContent}>
             <FrontlineCompletionScreen task={frontlineCompletionTask} tasks={tasks} onOpenTask={(taskId) => { setFrontlineCompletionTask(null); setFrontlineDetailOrigin("home"); void selectTask(taskId); setActiveSection("tasks"); }} onViewTasks={() => { setFrontlineCompletionTask(null); clearSelectedTask(); setActiveSection("tasks"); }} />
           </ScrollView>
-        ) : activeSection === "tasks" && experienceMode === "FRONTLINE_SIMPLE" && selectedTask ? (
+        ) : activeSection === "tasks" && selectedTask ? (
           <ScrollView style={styles.homeScroll} contentContainerStyle={styles.taskDetailContent}>
             <TaskDetailCard
               task={selectedTask}
@@ -373,6 +373,9 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
               onCancel={() => void cancelSelectedTask()}
               onInspectionDecision={refreshTasks}
               frontlineSimple
+              assignmentCandidates={assignmentCandidates}
+              onAssignmentOpen={refreshAssignmentCandidates}
+              onAssign={experienceMode !== "FRONTLINE_SIMPLE" && hasPermission(currentUser, "TASK_ASSIGN") ? assignSelectedTask : undefined}
               onReportIssue={() => { void addImageAttachment("camera", selectedTask.roomOrLocation); }}
             />
           </ScrollView>

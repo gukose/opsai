@@ -132,34 +132,6 @@ export function TasksScreen({
             ))}
           </View>
 
-          {selectedTask ? (
-            <TaskDetailCard
-              task={selectedTask}
-              onStart={() => {
-                void onStartTask();
-              }}
-              onPause={() => {
-                void onPauseTask();
-              }}
-              onResume={() => {
-                void onResumeTask();
-              }}
-              onComplete={() => {
-                void onCompleteTask();
-              }}
-              onCancel={() => {
-                void onCancelTask();
-              }}
-              disabled={isRefreshing}
-              assignmentCandidates={assignmentCandidates}
-              onAssignmentOpen={onAssignmentOpen}
-              onAssign={canAssignTasks ? onAssignTask : undefined}
-              accessToken={accessToken}
-              currentUser={currentUser}
-              onInspectionDecision={onRefresh}
-              frontlineSimple
-            />
-          ) : null}
         </ScrollView>
       ) : null}
 
