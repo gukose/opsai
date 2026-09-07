@@ -48,7 +48,7 @@ export function BottomNavigation({ activeKey, currentUser, onSelect, onAssistant
     ? baseItems.filter((item) => item.key === "tasks" || item.key === "profile")
     : mode === "SUPERVISOR"
       ? baseItems.filter((item) => item.key === "tasks" || item.key === "profile")
-      : [{ key: "tasks" as const, icon: CheckSquare, label: "Tasks" }, { key: "home" as const, icon: Home, label: "Overview" }, { key: "reports" as const, icon: BarChart3, label: "Reports" }, { key: "profile" as const, icon: User, label: "Profile" }];
+      : [{ key: "tasks" as const, icon: CheckSquare, label: "My Tasks" }, { key: "operations" as const, icon: Settings, label: "Operations" }, { key: "reports" as const, icon: BarChart3, label: "Report" }, { key: "profile" as const, icon: User, label: "Profile" }];
   const visibleItems = items.map((item) => item.key === "home"
     ? { ...item, label: mode === "SUPERVISOR" ? "My Tasks" : mode === "MANAGER" ? "Overview" : "Home" }
     : item.key === "tasks" && mode === "FRONTLINE_SIMPLE" ? { ...item, label: "My Tasks" } : item);

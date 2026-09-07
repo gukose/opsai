@@ -168,7 +168,14 @@ class ConfirmedTaskAttachmentLinkService(
             .distinctBy { it.attachmentId }
             .sortedWith(compareBy<TaskAttachmentLink> { it.createdAt }.thenBy { it.attachmentId })
 
-        return taskAttachmentLinkRepository.saveAll(links).also {
+        return taskAttachmentLinkRepository.saveAll(links).also { savedLinks ->
+            logger.info(
+                "event=TASK_ATTACHMENT_LINKED taskId={} sourceType={} attachmentCount={} attachmentIds={}",
+                taskId,
+                sourceType,
+                savedLinks.size,
+                savedLinks.joinToString(",") { it.attachmentId.toString() }
+            )
             recordLink(outcome = "success", sourceType = sourceType, reasonCode = "none")
         }
         } catch (exception: RuntimeException) {

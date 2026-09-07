@@ -48,8 +48,20 @@ export class TaskService {
   }
 
   async getTaskAttachments(taskId: string): Promise<TaskAttachmentMetadata[]> {
-    const attachments = await this.taskApi.getTaskAttachments(taskId);
-    return attachments.map(taskAttachmentFromResponse);
+    try {
+      const attachments = await this.taskApi.getTaskAttachments(taskId);
+      const mapped = attachments.map(taskAttachmentFromResponse);
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        console.debug("TASK_DETAIL_ATTACHMENTS", { taskId, attachmentCount: mapped.length });
+        console.debug("MOBILE_TASK_ATTACHMENTS", { taskId, attachmentCount: mapped.length });
+      }
+      return mapped;
+    } catch (error) {
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        console.debug("TASK_DETAIL_ATTACHMENTS", { taskId, attachmentCount: 0, error: error instanceof Error ? error.message : "request_failed" });
+      }
+      throw error;
+    }
   }
 
   async startTask(taskId: string): Promise<TaskDetail> {

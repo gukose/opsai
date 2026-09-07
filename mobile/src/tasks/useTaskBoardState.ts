@@ -99,6 +99,9 @@ export function useTaskBoardState(
   const loadAttachments = useCallback(async (taskId: string) => {
     try {
       const attachments = await service.getTaskAttachments(taskId);
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        console.debug("MOBILE_TASK_ATTACHMENTS", { taskId, attachmentCount: attachments.length });
+      }
       setSelectedTask((current) => current?.id === taskId ? { ...current, attachments } : current);
     } catch {
       // Attachments are secondary detail data and must not block task actions.

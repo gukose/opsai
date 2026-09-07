@@ -303,11 +303,11 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
       <View style={styles.screen}>
         <AssistantHeader
           currentUser={currentUser}
-          title={frontlineCompletionTask ? "Completed" : activeSection === "profile" ? "Profile" : activeSection === "tasks" && selectedTask ? frontlineRoomLabel(selectedTask.roomOrLocation) : activeSection === "tasks" ? "My Tasks" : experienceMode === "SUPERVISOR" ? "Supervisor" : experienceMode === "MANAGER" ? "Dashboard" : "Home"}
+          title={frontlineCompletionTask ? "Completed" : activeSection === "profile" ? "Profile" : activeSection === "reports" ? "Report" : activeSection === "operations" ? "Operations" : activeSection === "tasks" && selectedTask ? frontlineRoomLabel(selectedTask.roomOrLocation) : activeSection === "tasks" ? "My Tasks" : experienceMode === "SUPERVISOR" ? "Supervisor" : experienceMode === "MANAGER" ? "Dashboard" : "Home"}
           nested={(activeSection === "tasks" && Boolean(selectedTask)) || Boolean(frontlineCompletionTask)}
           onBack={() => { clearSelectedTask(); setFrontlineCompletionTask(null); setActiveSection(frontlineDetailOrigin === "list" ? "tasks" : "home"); }}
           onMenu={() => { clearSelectedTask(); setFrontlineCompletionTask(null); setActiveSection("home"); }}
-          showHomeIcon={experienceMode === "FRONTLINE_SIMPLE" || experienceMode === "SUPERVISOR"}
+          showHomeIcon={experienceMode === "FRONTLINE_SIMPLE" || experienceMode === "SUPERVISOR" || experienceMode === "MANAGER"}
           unreadNotificationCount={dashboardSummary?.overview.unreadNotificationCount ?? 0}
           recentNotifications={dashboardSummary?.recentNotifications ?? []}
           notificationsStaleReason={dashboardStaleReason}
