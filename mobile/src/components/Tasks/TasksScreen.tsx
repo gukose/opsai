@@ -123,18 +123,11 @@ export function TasksScreen({
 
           <View style={styles.cards}>
             {tasks.map((task) => (
-              frontlineSimple ? <FrontlineTaskListItem
+              <FrontlineTaskListItem
                 key={task.id}
                 task={task}
                 active={task.id === selectedTaskId}
                 onPress={() => { void onSelectTask(task.id); }}
-              /> : <TaskListItem
-                key={task.id}
-                task={task}
-                active={task.id === selectedTaskId}
-                onPress={() => {
-                  void onSelectTask(task.id);
-                }}
               />
             ))}
           </View>
@@ -164,6 +157,7 @@ export function TasksScreen({
               accessToken={accessToken}
               currentUser={currentUser}
               onInspectionDecision={onRefresh}
+              frontlineSimple
             />
           ) : null}
         </ScrollView>

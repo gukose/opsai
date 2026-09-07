@@ -129,6 +129,19 @@ export function TaskDetailCard({
       onResume={onResume}
       onComplete={onComplete}
       onReportIssue={onReportIssue}
+      canAssign={Boolean(onAssign)}
+      assignmentLabel={task.assignmentLabel}
+      assignmentOpen={assignmentOpen}
+      assignmentCandidates={filteredCandidates}
+      selectedCandidate={selectedCandidate}
+      candidateQuery={candidateQuery}
+      assignmentError={assignmentError}
+      assigning={assigning}
+      onAssignmentOpen={openAssignment}
+      onCandidateQueryChange={setCandidateQuery}
+      onCandidateSelect={setSelectedCandidate}
+      onAssignmentCancel={() => setAssignmentOpen(false)}
+      onAssignmentConfirm={() => { void confirmAssignment(); }}
     />;
   }
 
@@ -258,7 +271,7 @@ export function TaskDetailCard({
   );
 }
 
-function FrontlineTaskExecution({ task, productiveSeconds, targetSeconds, actions, disabled, onStart, onPause, onResume, onComplete, onReportIssue }: {
+function FrontlineTaskExecution({ task, productiveSeconds, targetSeconds, actions, disabled, onStart, onPause, onResume, onComplete, onReportIssue, canAssign, assignmentLabel, assignmentOpen, assignmentCandidates, selectedCandidate, candidateQuery, assignmentError, assigning, onAssignmentOpen, onCandidateQueryChange, onCandidateSelect, onAssignmentCancel, onAssignmentConfirm }: {
   task: TaskDetail;
   productiveSeconds: number;
   targetSeconds: number;
@@ -269,6 +282,7 @@ function FrontlineTaskExecution({ task, productiveSeconds, targetSeconds, action
   onResume?: () => void;
   onComplete?: () => void;
   onReportIssue?: () => void;
+  canAssign?: boolean; assignmentLabel?: string | null; assignmentOpen?: boolean; assignmentCandidates?: AssignmentCandidate[]; selectedCandidate?: AssignmentCandidate | null; candidateQuery?: string; assignmentError?: string | null; assigning?: boolean; onAssignmentOpen?: () => void; onCandidateQueryChange?: (value: string) => void; onCandidateSelect?: (candidate: AssignmentCandidate) => void; onAssignmentCancel?: () => void; onAssignmentConfirm?: () => void;
 }) {
   const status = frontlineState(task);
   const remaining = Math.max(0, targetSeconds - productiveSeconds);
@@ -305,6 +319,9 @@ function FrontlineTaskExecution({ task, productiveSeconds, targetSeconds, action
       {paused && actions.resume ? <ActionButton icon={RotateCcw} label="Resume" onPress={onResume} tone="primary" disabled={disabled} large frontline /> : null}
       {(active || actions.start || paused || rework) ? <ActionButton icon={ImageIcon} label="Report Issue" onPress={onReportIssue} tone="secondary" disabled={disabled} large frontline vertical /> : null}
     </View>
+    {canAssign ? <View style={styles.assignmentPanel}><View style={styles.assignmentHeader}><Text style={styles.attachmentSectionTitle}>{assignmentLabel ? "Assigned" : "Needs Assignment"}</Text><Pressable onPress={onAssignmentOpen} disabled={disabled} style={styles.assignButton}><Text style={styles.assignButtonLabel}>{assignmentLabel ? "Reassign" : "Assign"}</Text></Pressable></View></View> : null}
+    {canAssign ? <AssignmentModal visible={Boolean(assignmentOpen)} task={task} candidates={assignmentCandidates ?? []} selectedCandidate={selectedCandidate ?? null} query={candidateQuery ?? ""} error={assignmentError ?? null} assigning={Boolean(assigning)} onQueryChange={onCandidateQueryChange ?? (() => undefined)} onSelect={onCandidateSelect ?? (() => undefined)} onCancel={onAssignmentCancel ?? (() => undefined)} onConfirm={onAssignmentConfirm ?? (() => undefined)} /> : null}
+    <TaskAttachmentSection task={task} />
   </View>;
 }
 
@@ -392,13 +409,11 @@ export function AssignmentModal({
 
 function TaskAttachmentSection({ task }: { task: TaskDetail }) {
   const attachments = task.attachments ?? [];
+  if (attachments.length === 0) return null;
   return (
     <View style={styles.attachmentSection}>
       <Text style={styles.attachmentSectionTitle}>Attachments</Text>
-      {attachments.length === 0 ? (
-        <Text style={styles.attachmentEmpty}>No registered attachment metadata.</Text>
-      ) : (
-        attachments.map((attachment) => (
+      {attachments.map((attachment) => (
           <View key={`${attachment.attachmentId}-${attachment.sourceType}`} style={styles.attachmentRow}>
             <View style={styles.detailIcon}>
               {attachment.transcript ? <FileText color={colors.blue} size={12} strokeWidth={2.2} /> : <ImageIcon color={colors.blue} size={12} strokeWidth={2.2} />}
@@ -419,8 +434,7 @@ function TaskAttachmentSection({ task }: { task: TaskDetail }) {
               </Text>
             </View>
           </View>
-        ))
-      )}
+        ))}
     </View>
   );
 }

@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Bell, Menu, ArrowLeft } from "lucide-react-native";
+import { Bell, Menu, ArrowLeft, Home } from "lucide-react-native";
 import { useMemo, useState } from "react";
 
 import { CurrentUserSnapshot } from "../../session/sessionTypes";
@@ -23,6 +23,7 @@ type AssistantHeaderProps = {
   nested?: boolean;
   onBack?: () => void;
   onMenu?: () => void;
+  showHomeIcon?: boolean;
 };
 
 export function AssistantHeader({
@@ -36,7 +37,8 @@ export function AssistantHeader({
   title = "Home",
   nested = false,
   onBack,
-  onMenu
+  onMenu,
+  showHomeIcon = false
 }: AssistantHeaderProps) {
   const [isNotificationPanelOpen, setNotificationPanelOpen] = useState(false);
   const visibleNotifications = useMemo(
@@ -48,8 +50,8 @@ export function AssistantHeader({
   return (
     <View style={styles.header}>
       <View style={styles.content}>
-        <Pressable accessibilityRole="button" accessibilityLabel={nested ? "Back" : "Open menu"} onPress={nested ? onBack : onMenu} style={styles.headerControl}>
-          {nested ? <ArrowLeft color={colors.text} size={20} /> : <Menu color={colors.text} size={20} />}
+        <Pressable accessibilityRole="button" accessibilityLabel={nested ? "Back" : showHomeIcon ? "Go to Home" : "Open menu"} onPress={nested ? onBack : showHomeIcon ? onMenu : onMenu} style={styles.headerControl}>
+          {nested ? <ArrowLeft color={colors.text} size={20} /> : showHomeIcon ? <Home color={colors.text} size={20} /> : <Menu color={colors.text} size={20} />}
         </Pressable>
         <Text style={styles.pageTitle} numberOfLines={1}>{title}</Text>
         <View style={styles.actions}>

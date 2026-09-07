@@ -307,6 +307,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
           nested={(activeSection === "tasks" && Boolean(selectedTask)) || Boolean(frontlineCompletionTask)}
           onBack={() => { clearSelectedTask(); setFrontlineCompletionTask(null); setActiveSection(frontlineDetailOrigin === "list" ? "tasks" : "home"); }}
           onMenu={() => { clearSelectedTask(); setFrontlineCompletionTask(null); setActiveSection("home"); }}
+          showHomeIcon={experienceMode === "FRONTLINE_SIMPLE" || experienceMode === "SUPERVISOR"}
           unreadNotificationCount={dashboardSummary?.overview.unreadNotificationCount ?? 0}
           recentNotifications={dashboardSummary?.recentNotifications ?? []}
           notificationsStaleReason={dashboardStaleReason}
@@ -411,6 +412,8 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
               onLogout?.();
             }}
           />
+        ) : activeSection === "reports" ? (
+          <View style={styles.placeholder}><Text style={styles.placeholderTitle}>Reports</Text><Text style={styles.placeholderBody}>Reporting and analytics will be available here.</Text></View>
         ) : activeSection === "operations" ? (
           <AdministrationScreen accessToken={accessToken} currentUser={currentUser} refreshAccessToken={refreshAccessToken} />
         ) : (
@@ -596,6 +599,10 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
               } else if (key === "assistant" || key === "knowledge" || key === "operations" || key === "profile") {
                 if (key === "profile") setFrontlineCompletionTask(null);
                 setActiveSection(key);
+              } else if (key === "reports") {
+                clearSelectedTask();
+                setFrontlineCompletionTask(null);
+                setActiveSection("reports");
               }
             }}
           />
@@ -801,5 +808,8 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 10,
     fontWeight: "700"
-  }
+  },
+  placeholder: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+  placeholderTitle: { color: colors.text, fontSize: 22, fontWeight: "900" },
+  placeholderBody: { marginTop: 8, color: colors.textMuted, fontSize: 14, textAlign: "center" }
 });
