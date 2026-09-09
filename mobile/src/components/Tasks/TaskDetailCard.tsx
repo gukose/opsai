@@ -62,7 +62,13 @@ export function TaskDetailCard({
   const [inspectionBusy, setInspectionBusy] = useState(false);
   const [inspectionError, setInspectionError] = useState<string | null>(null);
   const [timingObservedAt, setTimingObservedAt] = useState(() => Date.now());
+  // Presentation timing is driven exclusively by persisted active lifecycle
+  // states. Merely opening a task (or having an SLA/deadline) must never make
+  // an ASSIGNED task tick.
   const running = task.status === "STARTED" || task.status === "IN_PROGRESS" || task.status === "OVERDUE";
+  if (typeof __DEV__ !== "undefined" && __DEV__) {
+    console.debug("TASK_EXECUTION_TIMER_STATE", { taskId: task.id, taskStatus: task.status, startedAt: task.startedAt, accumulatedActiveMs: Math.max(0, Math.floor((task.actualWorkingDurationSeconds ?? 0) * 1000)), timerShouldRun: running });
+  }
   useEffect(() => {
     if (!running) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
