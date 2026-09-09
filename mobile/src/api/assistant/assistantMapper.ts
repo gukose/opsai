@@ -103,6 +103,30 @@ function mapConversationItems(
     });
   }
 
+  // Report Issue may return a successful Vision narrative without structured
+  // task fields. Keep the confirmed-create contract deterministic by exposing
+  // a conservative General Issue proposal (technical failures are still
+  // surfaced by isAssistantInterpretationFailureResponse).
+  const hasImageEvidence = response.messages.some((message) =>
+    message.attachments.some((attachment) => attachment.type === "IMAGE")
+  );
+  if (!response.taskPreview && hasImageEvidence && response.assistantMessage.trim()) {
+    const room = response.assistantMessage.match(/(?:room|oda)\s*#?\s*(\d{3,4})/i)?.[1] ?? "";
+    items.push({
+      id: `task-preview-${response.conversationId}`,
+      type: "taskPreview",
+      task: {
+        intent: "General Issue",
+        type: "General Issue",
+        room: room || "Pending",
+        description: response.assistantMessage.trim(),
+        assignedTo: "Unassigned",
+        priority: "Medium",
+        sla: "N/A"
+      }
+    });
+  }
+
   return items;
 }
 

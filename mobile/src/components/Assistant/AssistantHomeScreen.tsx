@@ -284,9 +284,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
     try {
       if (source === "camera" && typeof __DEV__ !== "undefined" && __DEV__) console.debug("REPORT_ISSUE_BUTTON_PRESSED", { taskId: selectedTask?.id ?? null });
       if (source === "camera") setVisionAnalyzing(true);
-      const selected = source === "camera"
-        ? await selectImageFromCamera(selectedAttachments)
-        : await selectImageFromGallery(selectedAttachments);
+      const selected = source === "camera" ? await selectImageFromCamera(selectedAttachments) : await selectImageFromGallery(selectedAttachments);
       if (!selected) {
         return;
       }
@@ -312,6 +310,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
       if (source === "camera") setVisionAnalyzing(false);
     }
   };
+  const reportIssueFromPhoto = (roomContext?: string | null) => addImageAttachment("camera", roomContext);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -392,7 +391,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
               assignmentCandidates={assignmentCandidates}
               onAssignmentOpen={refreshAssignmentCandidates}
               onAssign={experienceMode !== "FRONTLINE_SIMPLE" && hasPermission(currentUser, "TASK_ASSIGN") ? assignSelectedTask : undefined}
-              onReportIssue={() => { void addImageAttachment("camera", selectedTask.roomOrLocation); }}
+              onReportIssue={() => { void reportIssueFromPhoto(selectedTask.roomOrLocation); }}
             />
           </ScrollView>
         ) : activeSection === "tasks" ? (
