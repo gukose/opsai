@@ -66,6 +66,7 @@ export function TaskDetailCard({
   // states. Merely opening a task (or having an SLA/deadline) must never make
   // an ASSIGNED task tick.
   const running = task.status === "STARTED" || task.status === "IN_PROGRESS" || task.status === "OVERDUE";
+  if (typeof __DEV__ !== "undefined" && __DEV__) console.debug("TASK_EXECUTION_LIFECYCLE_TRACE", { taskId: task.id, apiStatus: task.status, mappedStatus: task.status, startedAt: task.startedAt, activeWorkingSeconds: task.actualWorkingDurationSeconds ?? 0, timerShouldRun: running, renderedPrimaryAction: actions.start ? "START" : actions.complete ? "COMPLETE" : actions.resume ? "RESUME" : "NONE" });
   if (typeof __DEV__ !== "undefined" && __DEV__) {
     console.debug("TASK_EXECUTION_TIMER_STATE", { taskId: task.id, taskStatus: task.status, startedAt: task.startedAt, accumulatedActiveMs: Math.max(0, Math.floor((task.actualWorkingDurationSeconds ?? 0) * 1000)), timerShouldRun: running });
   }
