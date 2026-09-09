@@ -94,7 +94,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
     return () => { active = false; };
   }, [currentUser?.hotelId, frontlineSimple, roomClient, roomMasterRetry]);
   const [draftHydrated, setDraftHydrated] = useState(false);
-  const [reportPreview, setReportPreview] = useState<{ room: string; description: string }>({ room: "", description: "" });
+  const [reportPreview, setReportPreview] = useState<{ room: string; description: string; source: "LOCAL_REPORT_ISSUE" }>({ room: "", description: "", source: "LOCAL_REPORT_ISSUE" });
   const [reportPreviewVisible, setReportPreviewVisible] = useState(false);
   const {
     conversationId,
@@ -292,7 +292,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
         return;
       }
       if (source === "camera") {
-        setReportPreview({ room: roomContext ?? "", description: roomContext ? `Issue reported from ${roomContext}.` : "" });
+        setReportPreview({ room: roomContext ?? "", description: roomContext ? `Issue reported from ${roomContext}.` : "", source: "LOCAL_REPORT_ISSUE" });
         setReportPreviewVisible(true);
       }
       if (source === "camera" && typeof __DEV__ !== "undefined" && __DEV__) console.debug("REPORT_ISSUE_CAMERA_CAPTURED", { uriPresent: Boolean(selected.localUri ?? selected.localReference) });
@@ -447,7 +447,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
             message={`Operational tools for ${currentUser?.hotelName ?? "this hotel"} will appear here.`}
           />
         )}
-        {reportPreviewVisible ? <TaskPreview task={{ intent: "General Issue", type: "General Issue", room: reportPreview.room || "Pending", description: reportPreview.description, assignedTo: "Unassigned", priority: "Medium", sla: "N/A" }} onCancel={() => setReportPreviewVisible(false)} onCreateTask={() => { setReportPreviewVisible(false); void handlePreviewCreate(); }} disabled={assistantActionDisabled} /> : null}
+        {reportPreviewVisible ? <TaskPreview task={{ intent: "General Issue", type: "General Issue", room: reportPreview.room || "Pending", description: reportPreview.description, assignedTo: "Unassigned", priority: "Medium", sla: "N/A" }} onCancel={() => setReportPreviewVisible(false)} onCreateTask={() => { if (typeof __DEV__ !== "undefined" && __DEV__) console.debug("REPORT_ISSUE_CREATE_BEGIN", { source: reportPreview.source }); setReportPreviewVisible(false); void handlePreviewCreate(); }} disabled={assistantActionDisabled} /> : null}
         {!reportPreviewVisible && conversationItems.some((item) => item.type === "taskPreview") ? (() => { if (typeof __DEV__ !== "undefined" && __DEV__) console.debug("REPORT_ISSUE_PREVIEW_OPEN", { source: "VISION" }); return (
           <View style={styles.taskPreviewSurface}>
             <ConversationList
