@@ -5,6 +5,7 @@ import com.hotelopai.assistant.application.StoredObject
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.http.MediaType
 import org.springframework.web.client.RestClient
 import java.io.InputStream
@@ -18,6 +19,7 @@ data class AttachmentStorageProperties(
 )
 
 @Configuration
+@EnableConfigurationProperties(AttachmentStorageProperties::class)
 class AttachmentStorageConfiguration {
     @Bean fun attachmentObjectStorage(properties: AttachmentStorageProperties): AttachmentObjectStorage =
         SupabaseAttachmentObjectStorage(properties)
