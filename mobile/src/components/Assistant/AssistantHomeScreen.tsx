@@ -282,6 +282,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
 
   const addImageAttachment = async (source: "camera" | "gallery", roomContext?: string | null) => {
     try {
+      if (source === "camera" && typeof __DEV__ !== "undefined" && __DEV__) console.debug("REPORT_ISSUE_BUTTON_PRESSED", { taskId: selectedTask?.id ?? null });
       if (source === "camera") setVisionAnalyzing(true);
       const selected = source === "camera"
         ? await selectImageFromCamera(selectedAttachments)
@@ -289,18 +290,23 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
       if (!selected) {
         return;
       }
+      if (source === "camera" && typeof __DEV__ !== "undefined" && __DEV__) console.debug("REPORT_ISSUE_CAMERA_CAPTURED", { uriPresent: Boolean(selected.localUri ?? selected.localReference) });
       setSelectedAttachments((current) => [...current, selected]);
       setAttachmentError(null);
       const registered = await registerSelectedAttachment(selected);
+      if (source === "camera" && typeof __DEV__ !== "undefined" && __DEV__) console.debug("REPORT_ISSUE_MOBILE_REGISTERED", { attachmentId: registered?.id ?? null });
       if (source === "camera" && registered) {
         // Report Issue supplies the current room as context, but the attachment
         // is deliberately sent to the assistant conversation. The confirmed
         // task linker will associate it with the NEW task created from the
         // preview; the source task is never an attachment owner.
         const context = roomContext ? ` for ${roomContext}` : "";
-        await sendTextMessage(`Report the issue shown in this photo${context}.`, [registered]);
+        if (typeof __DEV__ !== "undefined" && __DEV__) console.debug("REPORT_ISSUE_VISION_BEGIN", { attachmentId: registered.id });
+        const sent = await sendTextMessage(`Report the issue shown in this photo${context}.`, [registered]);
+        if (typeof __DEV__ !== "undefined" && __DEV__) console.debug("REPORT_ISSUE_VISION_SUCCESS", { attachmentId: registered.id, success: sent });
       }
     } catch (error) {
+      if (source === "camera" && typeof __DEV__ !== "undefined" && __DEV__) console.debug("REPORT_ISSUE_FAILED", { error: error instanceof Error ? error.message : "camera_flow_failed" });
       setAttachmentError(error instanceof Error ? error.message : "Attachment could not be selected.");
     } finally {
       if (source === "camera") setVisionAnalyzing(false);
@@ -435,7 +441,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
             message={`Operational tools for ${currentUser?.hotelName ?? "this hotel"} will appear here.`}
           />
         )}
-        {conversationItems.some((item) => item.type === "taskPreview") ? (
+        {conversationItems.some((item) => item.type === "taskPreview") ? (() => { if (typeof __DEV__ !== "undefined" && __DEV__) console.debug("REPORT_ISSUE_PREVIEW_OPEN", { source: "VISION" }); return (
           <View style={styles.taskPreviewSurface}>
             <ConversationList
               items={conversationItems.filter((item) => item.type === "taskPreview")}
@@ -449,7 +455,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
               isActionDisabled={assistantActionDisabled}
             />
           </View>
-        ) : null}
+        ); })() : null}
         {taskCreateFeedback ? <View style={styles.taskCreateFeedback}><Text style={styles.taskCreateFeedbackText}>{taskCreateFeedback}</Text></View> : null}
         {experienceMode === "SUPERVISOR" && homeAssignmentOpen && homeAssignmentTaskId && selectedTask?.id === homeAssignmentTaskId ? (
           <AssignmentModal

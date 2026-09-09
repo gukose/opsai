@@ -72,6 +72,7 @@ class TaskController(
         return taskAttachmentLinkService
             .listTaskAttachments(taskId, currentUser.hotelId)
             .map(TaskAttachmentResponse::from)
+            .also { attachments -> logger.info("event=TASK_ATTACHMENT_READ requestedTaskId={} hotelId={} attachmentIds={}", taskId, currentUser.hotelId, attachments.joinToString(",") { it.attachmentId }) }
     }
 
     @GetMapping("/{taskId}/attachments/{attachmentId}/content")

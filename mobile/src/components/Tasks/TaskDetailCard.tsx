@@ -413,6 +413,7 @@ export function AssignmentModal({
 
 function TaskAttachmentSection({ task, accessToken }: { task: TaskDetail; accessToken?: string | null }) {
   const attachments = task.attachments ?? [];
+  if (typeof __DEV__ !== "undefined" && __DEV__) attachments.forEach((attachment) => console.debug("TASK_EXECUTION_RENDER_ATTACHMENT", { taskId: task.id, attachmentId: attachment.attachmentId, origin: "PERSISTED_TASK_ATTACHMENT" }));
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [loadingPhoto, setLoadingPhoto] = useState(false);
