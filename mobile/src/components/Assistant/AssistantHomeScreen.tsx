@@ -302,7 +302,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
         // preview; the source task is never an attachment owner.
         const context = roomContext ? ` for ${roomContext}` : "";
         if (typeof __DEV__ !== "undefined" && __DEV__) console.debug("REPORT_ISSUE_VISION_BEGIN", { attachmentId: registered.id });
-        const sent = await sendTextMessage(`Report the issue shown in this photo${context}.`, [registered]);
+        const sent = await sendTextMessage(`Create a new task for the issue shown in this photo${context}. Return a task proposal for confirmation.`, [registered]);
         if (typeof __DEV__ !== "undefined" && __DEV__) console.debug("REPORT_ISSUE_VISION_SUCCESS", { attachmentId: registered.id, success: sent });
       }
     } catch (error) {
