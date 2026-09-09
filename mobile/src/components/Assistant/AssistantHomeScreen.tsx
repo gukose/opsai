@@ -292,8 +292,13 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
       setSelectedAttachments((current) => [...current, selected]);
       setAttachmentError(null);
       const registered = await registerSelectedAttachment(selected);
-      if (source === "camera" && roomContext && registered) {
-        await sendTextMessage(`Report the issue shown in this photo for ${roomContext}.`, [registered]);
+      if (source === "camera" && registered) {
+        // Report Issue supplies the current room as context, but the attachment
+        // is deliberately sent to the assistant conversation. The confirmed
+        // task linker will associate it with the NEW task created from the
+        // preview; the source task is never an attachment owner.
+        const context = roomContext ? ` for ${roomContext}` : "";
+        await sendTextMessage(`Report the issue shown in this photo${context}.`, [registered]);
       }
     } catch (error) {
       setAttachmentError(error instanceof Error ? error.message : "Attachment could not be selected.");
@@ -430,7 +435,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
             message={`Operational tools for ${currentUser?.hotelName ?? "this hotel"} will appear here.`}
           />
         )}
-        {frontlineSimple && conversationItems.some((item) => item.type === "taskPreview") ? (
+        {conversationItems.some((item) => item.type === "taskPreview") ? (
           <View style={styles.taskPreviewSurface}>
             <ConversationList
               items={conversationItems.filter((item) => item.type === "taskPreview")}
@@ -445,7 +450,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
             />
           </View>
         ) : null}
-        {frontlineSimple && taskCreateFeedback ? <View style={styles.taskCreateFeedback}><Text style={styles.taskCreateFeedbackText}>{taskCreateFeedback}</Text></View> : null}
+        {taskCreateFeedback ? <View style={styles.taskCreateFeedback}><Text style={styles.taskCreateFeedbackText}>{taskCreateFeedback}</Text></View> : null}
         {experienceMode === "SUPERVISOR" && homeAssignmentOpen && homeAssignmentTaskId && selectedTask?.id === homeAssignmentTaskId ? (
           <AssignmentModal
             visible
@@ -461,7 +466,7 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
             onConfirm={() => { if (!homeAssignmentCandidate || homeAssigning) return; setHomeAssigning(true); void assignSelectedTask(homeAssignmentCandidate).then(() => { setHomeAssignmentOpen(false); setHomeAssignmentTaskId(null); setHomeAssignmentCandidate(null); void refreshTasks(); }).catch((error) => setHomeAssignmentError(error instanceof Error ? error.message : "Assignment failed. Try again.")).finally(() => setHomeAssigning(false)); }}
           />
         ) : null}
-        {frontlineSimple && (visionAnalyzing || voiceAnalyzing) ? <View style={styles.visionStatus}><ActivityIndicator color={colors.green} size="small" /><Text style={styles.visionStatusText}>{voiceAnalyzing ? "Understanding request…" : "Analyzing issue…"}</Text></View> : null}
+        {(visionAnalyzing || voiceAnalyzing) ? <View style={styles.visionStatus}><ActivityIndicator color={colors.green} size="small" /><Text style={styles.visionStatusText}>{voiceAnalyzing ? "Understanding request…" : "Analyzing issue…"}</Text></View> : null}
         <View style={[styles.footer, isDesktop ? styles.footerDesktop : null]}>
           {isHomeSurface && showAssistantComposer ? (
             <View style={isTablet && !isDesktop ? styles.composerTablet : null}>
