@@ -39,6 +39,7 @@ import { resolveResponsiveLayout } from "../../layout/responsiveLayout";
 import { AdministrationScreen } from "../Admin/AdministrationScreen";
 import { AssignmentModal, TaskDetailCard } from "../Tasks/TaskDetailCard";
 import { ConversationList } from "../Conversation/ConversationList";
+import { TaskPreview } from "../Conversation/TaskPreview";
 import { resolveExperienceMode, UserExperienceMode } from "../../auth/experienceMode";
 import { FrontlineCompletionScreen, RoleAdaptiveHome } from "./RoleAdaptiveHome";
 import { TaskDetail } from "../../tasks/types";
@@ -93,6 +94,8 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
     return () => { active = false; };
   }, [currentUser?.hotelId, frontlineSimple, roomClient, roomMasterRetry]);
   const [draftHydrated, setDraftHydrated] = useState(false);
+  const [reportPreview, setReportPreview] = useState<{ room: string; description: string }>({ room: "", description: "" });
+  const [reportPreviewVisible, setReportPreviewVisible] = useState(false);
   const {
     conversationId,
     conversationItems,
@@ -288,6 +291,10 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
       if (!selected) {
         return;
       }
+      if (source === "camera") {
+        setReportPreview({ room: roomContext ?? "", description: roomContext ? `Issue reported from ${roomContext}.` : "" });
+        setReportPreviewVisible(true);
+      }
       if (source === "camera" && typeof __DEV__ !== "undefined" && __DEV__) console.debug("REPORT_ISSUE_CAMERA_CAPTURED", { uriPresent: Boolean(selected.localUri ?? selected.localReference) });
       setSelectedAttachments((current) => [...current, selected]);
       setAttachmentError(null);
@@ -440,7 +447,8 @@ export function AssistantHomeScreen({ accessToken, currentUser, refreshAccessTok
             message={`Operational tools for ${currentUser?.hotelName ?? "this hotel"} will appear here.`}
           />
         )}
-        {conversationItems.some((item) => item.type === "taskPreview") ? (() => { if (typeof __DEV__ !== "undefined" && __DEV__) console.debug("REPORT_ISSUE_PREVIEW_OPEN", { source: "VISION" }); return (
+        {reportPreviewVisible ? <TaskPreview task={{ intent: "General Issue", type: "General Issue", room: reportPreview.room || "Pending", description: reportPreview.description, assignedTo: "Unassigned", priority: "Medium", sla: "N/A" }} onCancel={() => setReportPreviewVisible(false)} onCreateTask={() => { setReportPreviewVisible(false); void handlePreviewCreate(); }} disabled={assistantActionDisabled} /> : null}
+        {!reportPreviewVisible && conversationItems.some((item) => item.type === "taskPreview") ? (() => { if (typeof __DEV__ !== "undefined" && __DEV__) console.debug("REPORT_ISSUE_PREVIEW_OPEN", { source: "VISION" }); return (
           <View style={styles.taskPreviewSurface}>
             <ConversationList
               items={conversationItems.filter((item) => item.type === "taskPreview")}
